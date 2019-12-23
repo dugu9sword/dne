@@ -26,6 +26,9 @@ from allennlpx.interpret.hotflip import HotFlip
 from allennlpx.predictors.predictor import PredictorX
 from allennlpx import allenutil
 from luna import auto_create, flt2str
+from loc import is_cn
+
+import uuid
 
 train_reader = StanfordSentimentTreeBankDatasetReader(
     token_indexers={"tokens": SingleIdTokenIndexer(lowercase_tokens=True)},
@@ -48,9 +51,12 @@ train_data, dev_data, test_data = auto_create("sst", load_data, True)
 vocab = Vocabulary.from_instances(train_data)
 
 # embedding_path = None
-# embedding_path = "/disks/sdb/zjiehang/embeddings/fasttext/crawl-300d-2M.vec"
-embedding_path = "/disks/sdb/zjiehang/embeddings/gensim_sgns_gnews/model.txt"
-# embedding_path = "/disks/sdb/zjiehang/embeddings/glove/glove.42B.300d.txt"
+if is_cn():
+    # embedding_path = "/disks/sdb/zjiehang/embeddings/fasttext/crawl-300d-2M.vec"
+    embedding_path = "/disks/sdb/zjiehang/embeddings/gensim_sgns_gnews/model.txt"
+    # embedding_path = "/disks/sdb/zjiehang/embeddings/glove/glove.42B.300d.txt"
+else:
+    embedding_path = "https://dl.fbaipublicfiles.com/fasttext/vectors-english/crawl-300d-2M.vec.zip"
 
 if embedding_path:
     cache_embed_path = hashlib.md5(embedding_path.encode()).hexdigest()
