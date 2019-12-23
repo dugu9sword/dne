@@ -1,0 +1,17 @@
+*.pt
+nogit/*
+.idea/
+*.json
+.vscode/*
+**/__pycache__/*
+                         *.logs/*
+                         *.pstat
+                         *.tbz
+                         *.tgz
+                         *.zip
+  *.rar
+
+saved/*
+universal-triggers-master/
+.ipynb_checkpoints 
+
