@@ -119,8 +119,9 @@ class EmbeddingSearcher:
         # checking args
         assert (topk is None) ^ (rho is None), "You must set one of topk/rho to be None"
         assert measure in ['euc', 'cos']
-        assert (measure == 'euc' and rho > 0) or (
-            measure == 'cos' and 0 < rho < 1), "threshold for euc distance must be larger than 0, for cos distance must be between 0 and 1"
+        if rho is not None:
+            assert (measure == 'euc' and rho > 0) or (
+                measure == 'cos' and 0 < rho < 1), "threshold for euc distance must be larger than 0, for cos distance must be between 0 and 1"
 
         measure_fn = cos_dist if measure == 'cos' else euc_dist
         if isinstance(element, int):

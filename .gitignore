@@ -4,12 +4,12 @@ nogit/*
 *.json
 .vscode/*
 **/__pycache__/*
-                         *.logs/*
-                         *.pstat
-                         *.tbz
-                         *.tgz
-                         *.zip
-  *.rar
+*.logs/*
+*.pstat
+*.tbz
+*.tgz
+*.zip
+*.rar
 *.txt
 saved/*
 universal-triggers-master/

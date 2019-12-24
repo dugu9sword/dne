@@ -51,12 +51,6 @@ train_data, dev_data, test_data = auto_create("sst", load_data, True)
 
 vocab = Vocabulary.from_instances(train_data)
 
-
-# src_words = ['the', 'place', 'start', 'as', 'rare', 'an', 'that', 'that', 'rare', 'entertainment', 'the', 'road', 'is', 'with', 'at', 'it', 'so', 'want', 'he', 'pulls', 'it', 'off', 'refreshingly', 'different', 'slice', 'talking', 'singing', 'all', 'surprises', 'is', 'its', 'low', 'the', 'the', 'the']
-# tgt_words = ['only', 'places', 'stop', 'though', 'seldom', 'another', 'sort', 'merely', 'rarely', 'sports', 'which', 'lane', 'includes', 'had', 'near', 'someone', 'sure', 'decide', 'someone', 'earns', 'whole', 'out', 'schticky', 'similar', 'helpings', 'spoken', 'dancers', 'that', 'letdown', 'contributes', 'company', 'highest', 'entire', 'any', 'only']
-# frequency_analysis(Counter(dict(vocab._retained_counter['tokens'])), src_words, tgt_words)
-# exit()
-
 # embedding_path = None
 if pathlib.Path("/disks/sdb/zjiehang").exists():
     print("CN")
@@ -78,6 +72,28 @@ if embedding_path:
 
 else:
     token_embedding = Embedding(num_embeddings=vocab.get_vocab_size('tokens'), embedding_dim=300)
+
+# from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
+# from luna import load_word2vec
+# emb_searcher = EmbeddingSearcher(token_embedding.weight,
+#                                  word2idx=vocab.get_token_index,
+#                                  idx2word=vocab.get_token_from_index)
+
+# cf_embedding = torch.nn.Embedding(num_embeddings=vocab.get_vocab_size('tokens'),
+#                                   embedding_dim=300)
+# load_word2vec(cf_embedding, vocab._token_to_index["tokens"],
+#               "../counter-fitting/results/counter_fitted_vectors.txt")
+# cf_searcher = EmbeddingSearcher(cf_embedding.weight,
+#                                 word2idx=vocab.get_token_index,
+#                                 idx2word=vocab.get_token_from_index)
+
+# emb_searcher.find_neighbours("happy", "euc", topk=20, verbose=True)
+
+pass
+# with open('sst_vocab.txt', 'w') as f:
+#     for word in vocab._index_to_token['tokens'].values():
+#         f.write(word + '\n')
+# exit()
 
 word_embeddings = BasicTextFieldEmbedder({"tokens": token_embedding})
 encoder = PytorchSeq2VecWrapper(
