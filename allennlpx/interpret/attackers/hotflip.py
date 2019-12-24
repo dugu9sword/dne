@@ -9,85 +9,25 @@ from allennlp.common.util import JsonDict, sanitize
 from allennlp.data.fields import TextField
 from allennlp.data.token_indexers import ELMoTokenCharactersIndexer, TokenCharactersIndexer
 from allennlp.data.tokenizers import Token
-from allennlp.interpret.attackers import utils
-from allennlp.interpret.attackers.attacker import Attacker
 from allennlp.modules.text_field_embedders.text_field_embedder import TextFieldEmbedder
 from allennlp.modules.token_embedders import Embedding
 from allennlp.predictors.predictor import Predictor
-from luna.pytorch import cast_list
+from luna import cast_list
+
+from allennlpx.interpret.attackers.attacker import EmbedAttacker, DEFAULT_IGNORE_TOKENS
 
 
-DEFAULT_IGNORE_TOKENS = ["@@NULL@@", ".", ",", ";", "!", "?", "[MASK]", "[SEP]", "[CLS]"]
 
-
-class HotFlip(Attacker):
+class HotFlip(EmbedAttacker):
     """
     Runs the HotFlip style attack at the word-level https://arxiv.org/abs/1712.06751.  We use the
     first-order taylor approximation described in https://arxiv.org/abs/1903.06620, in the function
     _first_order_taylor(). Constructing this object is expensive due to the construction of the
     embedding matrix.
     """
-    def __init__(self, predictor: Predictor) -> None:
-        super().__init__(predictor)
-        self.vocab = self.predictor._model.vocab
-        self.token_embedding = None
-
-    def initialize(self):
-        """
-        Call this function before running attack_from_json(). We put the call to
-        ``_construct_embedding_matrix()`` in this function to prevent a large amount of compute
-        being done when __init__() is called.
-        """
-        self.token_embedding = self._construct_embedding_matrix()
-
-    def _construct_embedding_matrix(self):
-        """
-        For HotFlip, we need a word embedding matrix to search over. The below is necessary for
-        models such as ELMo, character-level models, or for models that use a projection layer
-        after their word embeddings.
-
-        We run all of the tokens from the vocabulary through the TextFieldEmbedder, and save the
-        final output embedding. We then group all of those output embeddings into an "embedding
-        matrix".
-        """
-        # Gets all tokens in the vocab and their corresponding IDs
-        all_tokens = self.vocab._token_to_index["tokens"]
-        all_indices = list(self.vocab._index_to_token["tokens"].keys())
-        all_inputs = {"tokens": torch.LongTensor(all_indices).unsqueeze(0)}
-        for token_indexer in self.predictor._dataset_reader._token_indexers.values():
-            # handle when a model uses character-level inputs, e.g., a CharCNN
-            if isinstance(token_indexer, TokenCharactersIndexer):
-                tokens = [Token(x) for x in all_tokens]
-                max_token_length = max(len(x) for x in all_tokens)
-                indexed_tokens = token_indexer.tokens_to_indices(tokens, self.vocab, "token_characters")
-                padded_tokens = token_indexer.as_padded_tensor(indexed_tokens,
-                                                               {"token_characters": len(tokens)},
-                                                               {"num_token_characters": max_token_length})
-                all_inputs['token_characters'] = torch.LongTensor(padded_tokens['token_characters']).unsqueeze(0)
-            # for ELMo models
-            if isinstance(token_indexer, ELMoTokenCharactersIndexer):
-                elmo_tokens = []
-                for token in all_tokens:
-                    elmo_indexed_token = token_indexer.tokens_to_indices([Token(text=token)],
-                                                                         self.vocab,
-                                                                         "sentence")["sentence"]
-                    elmo_tokens.append(elmo_indexed_token[0])
-                all_inputs["elmo"] = torch.LongTensor(elmo_tokens).unsqueeze(0)
-
-        # find the TextFieldEmbedder
-        for module in self.predictor._model.modules():
-            if isinstance(module, TextFieldEmbedder):
-                embedder = module
-        # pass all tokens through the fake matrix and create an embedding out of it.
-        embedding_matrix = embedder(all_inputs).squeeze()
-        return Embedding(num_embeddings=self.vocab.get_vocab_size('tokens'),
-                         embedding_dim=embedding_matrix.shape[1],
-                         weight=embedding_matrix,
-                         trainable=False)
-
     def attack_from_json(self,
                          inputs: JsonDict = None,
-                         input_field_to_attack: str = 'tokens',
+                         field_to_change: str = 'tokens',
                          field_to_attack: str = 'label',
                          grad_input_field: str = 'grad_input_1',
                          ignore_tokens: List[str] = DEFAULT_IGNORE_TOKENS,
@@ -96,13 +36,13 @@ class HotFlip(Attacker):
             self.initialize()
 
         raw_instance = self.predictor.json_to_labeled_instances(inputs)[0]
-        raw_text_field: TextField = raw_instance[input_field_to_attack]  # type: ignore
+        raw_text_field: TextField = raw_instance[field_to_change]  # type: ignore
         raw_tokens = deepcopy(raw_text_field.tokens)
 
         att_instance = deepcopy(raw_instance)
 
         # Gets a list of the fields that we want to check to see if they change.
-        att_text_field: TextField = att_instance[input_field_to_attack]  # type: ignore
+        att_text_field: TextField = att_instance[field_to_change]  # type: ignore
         att_tokens = att_text_field.tokens
         grads, outputs = self.predictor.get_gradients([att_instance])
 
@@ -112,6 +52,7 @@ class HotFlip(Attacker):
             if token.text in ignore_tokens:
                 ignored_positions.append(index)
                 
+        successful=False
         while True:
             # Compute L2 norm of all grads.
             grad = grads[grad_input_field]
@@ -149,11 +90,13 @@ class HotFlip(Attacker):
                                                                                         outputs)[0]
             # if the prediction has changed, then stop
             if current_instance_labeled[field_to_attack] != raw_instance[field_to_attack]:
+                successful = True
                 break
 
         return sanitize({"att": att_tokens,
                          "raw": raw_tokens,
-                         "outputs": outputs})
+                         "outputs": outputs,
+                         "success": 1 if successful else 0})
 
 
 def _first_order_taylor(grad: numpy.ndarray,

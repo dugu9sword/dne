@@ -1,0 +1,817 @@
+cache for sst exists
+*** load sst from cache cost 2.72 seconds
+CN
+cache for 56535d284eb7cd13b6db568702bda8f0 exists
+*** load 56535d284eb7cd13b6db568702bda8f0 from cache cost 0.0361 seconds
+If you sometimes like to go to the movies to have fun , Wasabi is a good place to start .
+	 ['  0.9995', '  0.0005']
+If you sometimes like to go to the pornographic to have fun , Wasabi is a good spot to start .
+	 ['  0.9993', '  0.0007']
+
+Emerges as something rare , an issue movie that 's so honest and keenly observed that it does n't feel like one .
+	 ['  0.9889', '  0.0111']
+Emerges too much rare , an issue movie that 's only honest and keenly observed that here does n't feel like one .
+	 ['  0.0120', '  0.9880']
+
+Offers that rare combination of entertainment and education .
+	 ['  0.9995', '  0.0005']
+Offers why seldom combined of entertainment and academic .
+	 ['  0.2219', '  0.7781']
+
+Perhaps no picture ever made has more literally showed that the road to hell is paved with good intentions .
+	 ['  0.9290', '  0.0710']
+Perhaps no picture ever came has more literally showed that that paths to hell is paved with good intentions .
+	 ['  0.2297', '  0.7703']
+
+Steers turns in a snappy screenplay that curls at the edges ; it 's so clever you want to hate it .
+	 ['  0.9698', '  0.0302']
+Steers ensues in a snappy cinematic that curls at the edges ; it 's so clever them want to hate it .
+	 ['  0.8997', '  0.1003']
+
+But he somehow pulls it off .
+	 ['  0.2732', '  0.7268']
+But if easily seduces way around .
+	 ['  0.7535', '  0.2465']
+
+Take Care of My Cat offers a refreshingly different slice of Asian cinema .
+	 ['  0.9992', '  0.0008']
+Take Care of My Cat serves a eschews overlapping slice of Asian cinema .
+	 ['  0.2330', '  0.7670']
+
+This is a film well worth seeing , talking and singing heads and all .
+	 ['  0.9999', '  0.0001']
+This defines a film well worth see , moaning and performing heads and basically .
+	 ['  0.4851', '  0.5149']
+
+What really surprises about Wisegirls is its low-key quality and genuine tenderness .
+	 ['  0.9994', '  0.0006']
+What really letdown about Wisegirls provides the lower - key standards and genuine tenderness .
+	 ['  0.3694', '  0.6306']
+
+-LRB- Wendigo is -RRB- why we go to the cinema : to be fed through the eye , the heart , the mind .
+	 ['  0.9993', '  0.0007']
+-LRB- Wendigo is -RRB- why us go to only cinema : to be fed beyond the eye , any heart , the mind .
+	 ['  0.0153', '  0.9847']
+
+One of the greatest family-oriented , fantasy-adventure movies ever .
+	 ['  0.9991', '  0.0009']
+One of the greatest family - oriented , storylines - tale flops 've .
+	 ['  0.4975', '  0.5025']
+
+An utterly compelling ` who wrote it ' in which the reputation of the most famous author who ever lived comes into question .
+	 ['  0.9997', '  0.0003']
+An utterly uncompelling ` who wrote it ' in which then reputation of particular most famous novel who ever lived comes into question .
+	 ['  0.1371', '  0.8629']
+
+A masterpiece four years in the making .
+	 ['  0.9994', '  0.0006']
+A masterpiece fewer twenty during the make .
+	 ['  0.1791', '  0.8209']
+
+The movie 's ripe , enrapturing beauty will tempt those willing to probe its inscrutable mysteries .
+	 ['  0.9985', '  0.0015']
+The movie 's overripe , enrapturing beauty will tempt themselves willing to probe its inscrutable unsolved .
+	 ['  0.3719', '  0.6281']
+
+Offers a breath of the fresh air of true sophistication .
+	 ['  0.9998', '  0.0002']
+Offers a breath of only fresh air of true hipness .
+	 ['  0.2574', '  0.7426']
+
+A thoughtful , provocative , insistently humanizing film .
+	 ['  0.9999', '  0.0001']
+A thoughtful , provocative , insistently sentimentalizing theatrically .
+	 ['  0.9977', '  0.0023']
+
+With a cast that includes some of the top actors working in independent film , Lovely & Amazing involves us because it is so incisive , so bleakly amusing about how we go about our lives .
+	 ['  0.9995', '  0.0005']
+With a cast that includes some of the top actors working in independent film , Lovely & Amazing involves us because it is so incisive , so bleakly amusing about how somebody know talking yours lives .
+	 ['  0.9992', '  0.0008']
+
+Not for everyone , but for those with whom it will connect , it 's a nice departure from standard moviegoing fare .
+	 ['  0.9960', '  0.0040']
+Not giving everyone , anyway for those with whom it expect connect , someone 's a nice departure after standard moviegoing fare .
+	 ['  0.2452', '  0.7548']
+
+Scores a few points for doing what it does with a dedicated and good-hearted professionalism .
+	 ['  0.9996', '  0.0004']
+Scores a four goals for doing sort everyone anything with a dedicated and good - hearted professionalism .
+	 ['  0.4244', '  0.5756']
+
+Occasionally melodramatic , it 's also extremely effective .
+	 ['  0.9995', '  0.0005']
+Occasionally melodramatic , matter 's initially overly effective .
+	 ['  0.3691', '  0.6309']
+
+An idealistic love story that brings out the latent 15-year-old romantic in everyone .
+	 ['  0.6110', '  0.3890']
+An idealistic love saga that brings just the latent 15-year - old romantic the whole .
+	 ['  0.4492', '  0.5508']
+
+At about 95 minutes , Treasure Planet maintains a brisk pace as it races through the familiar story .
+	 ['  0.9993', '  0.0007']
+At more 95 halftime , Treasure Planet feels a brisk plodding as happen races through the familiar story .
+	 ['  0.0197', '  0.9803']
+
+However , it lacks grandeur and that epic quality often associated with Stevenson 's tale as well as with earlier Disney efforts .
+	 ['  0.8709', '  0.1291']
+However , it lacks grandeur and should adventure consistency often associated in Stevenson 's tale as well as with earlier Disney efforts .
+	 ['  0.1994', '  0.8006']
+
+It helps that Lil Bow Wow ... tones down his pint-sized gangsta act to play someone who resembles a real kid .
+	 ['  0.8593', '  0.1407']
+It helps ultimately Lil Bow Wow ... dirgelike down his pint - sized gangsta acting to play someone who resembles a whatsoever kid .
+	 ['  0.2869', '  0.7131']
+
+Guaranteed to move anyone who ever shook , rattled , or rolled .
+	 ['  0.8119', '  0.1881']
+Guaranteed to switch else who imaginable shook , rattled , or rolled .
+	 ['  0.4592', '  0.5408']
+
+A masterful film from a master filmmaker , unique in its deceptive grimness , compelling in its fatalist worldview .
+	 ['  0.9998', '  0.0002']
+A masterful film from a master poet , unique in its deceptive grimness , compelling into its fatalist worldview .
+	 ['  0.9997', '  0.0003']
+
+If there 's a way to effectively teach kids about the dangers of drugs , I think it 's in projects like the -LRB- unfortunately R-rated -RRB- Paid .
+	 ['  0.8459', '  0.1541']
+If there 's a route to effectively teach kids about the dangers of drugs , I think anybody 's in projects like another -LRB- unfortunately R - rated -RRB- Paid .
+	 ['  0.4641', '  0.5359']
+
+While it would be easy to give Crush the new title of Two Weddings and a Funeral , it 's a far more thoughtful film than any slice of Hugh Grant whimsy .
+	 ['  0.9942', '  0.0058']
+While it would be easy to give Crush another new title of Two Weddings and a Funeral , it 's a so less thoughtful film than any helpings of Hugh Grant whimsy .
+	 ['  0.1144', '  0.8856']
+
+Though everything might be literate and smart , it never took off and always seemed static .
+	 ['  0.6074', '  0.3926']
+Though everything might are literate and smart , it never started off and historically seemed static .
+	 ['  0.3902', '  0.6098']
+
+Cantet perfectly captures the hotel lobbies , two-lane highways , and roadside cafes that permeate Vincent 's days
+	 ['  0.9969', '  0.0031']
+Cantet perfectly captures only hotel lobbies , various - lane highways , and roadside cafes that permeate Vincent 's weeks
+	 ['  0.2979', '  0.7021']
+
+Ms. Fulford-Wierzbicki is almost spooky in her sulky , calculating Lolita turn .
+	 ['  0.1021', '  0.8979']
+Ms. Fulford - Wierzbicki comes virtually spooky the her sulky , calculated Lolita turn .
+	 ['  0.7661', '  0.2339']
+
+Though it is by no means his best work , Laissez-Passer is a distinguished and distinctive effort by a bona-fide master , a fascinating film replete with rewards to be had by all willing to make the effort to reap them .
+	 ['  0.9921', '  0.0079']
+Though because happens by no can his best work , Laissez - Passer is a distinguished and distinctive effort by a bona - fide master , a fascinating film replete with rewards to be had by all willing to make the effort to reap them .
+	 ['  0.9913', '  0.0087']
+
+Like most Bond outings in recent years , some of the stunts are so outlandish that they border on being cartoonlike .
+	 ['  0.8348', '  0.1652']
+Like most Bond outings near recent years , some of particular stunts are so concocted that he border on being cartoonlike .
+	 ['  0.1544', '  0.8456']
+
+Newton draws our attention like a magnet , and acts circles around her better known co-star , Mark Wahlberg .
+	 ['  0.8042', '  0.1958']
+Newton draws our publicity like a magnet , and acts parlance around lady better recognized co - singer , Mark Wahlberg .
+	 ['  0.2882', '  0.7118']
+
+The story loses its bite in a last-minute happy ending that 's even less plausible than the rest of the picture .
+	 ['  0.0081', '  0.9919']
+The story loses the wallop in a last - hour happy ending that 's even typically plausible than the rest of the portraits .
+	 ['  0.0280', '  0.9720']
+
+Much of the way , though , this is a refreshingly novel ride .
+	 ['  0.9996', '  0.0004']
+Much of the way , just , this is a schticky novel jaunt .
+	 ['  0.2982', '  0.7018']
+
+Fuller would surely have called this gutsy and at times exhilarating movie a great yarn .
+	 ['  0.9994', '  0.0006']
+Fuller would surely have calling this gutsy and in times exhilarating movie a great woven .
+	 ['  0.9987', '  0.0013']
+
+The film makes a strong case for the importance of the musicians in creating the Motown sound .
+	 ['  0.9998', '  0.0002']
+The moviegoers smacks a strong verdict for the importance of the musicians with creating only Motown sound .
+	 ['  0.1012', '  0.8988']
+
+Gosling provides an amazing performance that dwarfs everything else in the film .
+	 ['  0.9994', '  0.0006']
+Gosling provides an amazing performance that staggering stuff else in only miniseries .
+	 ['  0.9993', '  0.0007']
+
+A real movie , about real people , that gives us a rare glimpse into a culture most of us do n't know .
+	 ['  0.9998', '  0.0002']
+A real movie , about real someone , that squanders ourselves a rarely glimpse into a culture most of us do n't know .
+	 ['  0.3341', '  0.6659']
+
+Tender yet lacerating and darkly funny fable .
+	 ['  0.9997', '  0.0003']
+Tender yet lacerating and subtly funny suspenseful .
+	 ['  0.9998', '  0.0002']
+
+May be spoofing an easy target -- those old ' 50 's giant creature features -- but ... it acknowledges and celebrates their cheesiness as the reason why people get a kick out of watching them today .
+	 ['  0.9908', '  0.0092']
+May be spoofing an easy target -- those old ' 50 's giant creature features -- as ... it avoids and celebrates their cheesiness as the reason why those get a kick out of watching them week .
+	 ['  0.2978', '  0.7022']
+
+An engaging overview of Johnson 's eccentric career .
+	 ['  0.9998', '  0.0002']
+An engaging examines of Johnson 's eccentric season .
+	 ['  0.9999', '  0.0001']
+
+In its ragged , cheap and unassuming way , the movie works .
+	 ['  0.9731', '  0.0269']
+In its ragged , cheap and spry way , only movie works .
+	 ['  0.3571', '  0.6429']
+
+Some actors have so much charisma that you 'd be happy to listen to them reading the phone book .
+	 ['  0.9223', '  0.0777']
+Some actors have so much charisma that know 'd be happy to listen to simply civics the phone poetry .
+	 ['  0.2696', '  0.7304']
+
+Hugh Grant and Sandra Bullock are two such likeable actors .
+	 ['  0.9989', '  0.0011']
+Hugh Grant and Sandra Bullock were two kinds phlegmatic actors .
+	 ['  0.1136', '  0.8864']
+
+Sandra Nettelbeck beautifully orchestrates the transformation of the chilly , neurotic , and self-absorbed Martha as her heart begins to open .
+	 ['  0.9223', '  0.0777']
+Sandra Nettelbeck beautifully orchestrates their transformation of the chilly , neurotic , and narcissistic - absorbed Martha as her soul begins to closed .
+	 ['  0.4311', '  0.5689']
+
+Behind the snow games and lovable Siberian huskies -LRB- plus one sheep dog -RRB- , the picture hosts a parka-wrapped dose of heart .
+	 ['  0.9981', '  0.0019']
+Behind the snow games and lovable Siberian huskies -LRB- eight one sheep dog -RRB- , one picture hosts a parka - gussied dose of stroke .
+	 ['  0.1003', '  0.8997']
+
+Everytime you think Undercover Brother has run out of steam , it finds a new way to surprise and amuse .
+	 ['  0.9978', '  0.0022']
+Everytime you think Undercover Brother yet running out of steam , only thinks a new everybody to surprise and amuse .
+	 ['  0.0496', '  0.9504']
+
+A pleasant enough movie , held together by skilled ensemble actors .
+	 ['  1.0000', '  0.0000']
+A pleasant enough movie , held apart by skilled cast actors .
+	 ['  1.0000', '  0.0000']
+
+This is the best American movie about troubled teens since 1998 's Whatever .
+	 ['  0.9977', '  0.0023']
+This is only best American movie about troubled adolescent after 1998 's Whatever .
+	 ['  0.1299', '  0.8701']
+
+The animated subplot keenly depicts the inner struggles of our adolescent heroes - insecure , uncontrolled , and intense .
+	 ['  0.9848', '  0.0152']
+The animated subplot keenly depicts the outer struggles of my infantile heroes - insecure , uncontrolled , and intense .
+	 ['  0.2699', '  0.7301']
+
+The invincible Werner Herzog is alive and well and living in LA
+	 ['  0.9969', '  0.0031']
+The invincible Werner Herzog remains alive and well and living where LA
+	 ['  0.9945', '  0.0055']
+
+Son of the Bride may be a good half-hour too long but comes replete with a flattering sense of mystery and quietness .
+	 ['  0.9987', '  0.0013']
+Son of the Bride necessarily be a good half - hour actually long but comes replete with a flattering sense of mystery and quietness .
+	 ['  0.9988', '  0.0012']
+
+A simmering psychological drama in which the bursts of sudden violence are all the more startling for the slow buildup that has preceded them .
+	 ['  0.8579', '  0.1421']
+A simmering pyschological drama in which the flashes of sudden violence are all the more startling given the slow buildup that was preceded them .
+	 ['  0.4440', '  0.5560']
+
+A taut , intelligent psychological drama .
+	 ['  0.9992', '  0.0008']
+A taut , intelligent psychological bravura .
+	 ['  0.9995', '  0.0005']
+
+A truly moving experience , and a perfect example of how art -- when done right -- can help heal , clarify , and comfort .
+	 ['  0.9996', '  0.0004']
+A truly moving understanding , and a perfect example of how art -- seldom done right -- can help heal , establish , and comfort .
+	 ['  0.9994', '  0.0006']
+
+This delicately observed story , deeply felt and masterfully stylized , is a triumph for its maverick director .
+	 ['  0.9994', '  0.0006']
+This delicately described story , deeply felt and masterfully stylized , is a triumph for its maverick director .
+	 ['  0.9995', '  0.0005']
+
+At heart the movie is a deftly wrought suspense yarn whose richer shadings work as coloring rather than substance .
+	 ['  0.9983', '  0.0017']
+At lungs only movie is a deftly wrought storyline yarn whose richer shadings work as coloring rather than substance .
+	 ['  0.2933', '  0.7067']
+
+I loved it !
+	 ['  0.9873', '  0.0127']
+I loved too !
+	 ['  0.3968', '  0.6032']
+
+Gollum 's ` performance ' is incredible !
+	 ['  0.9964', '  0.0036']
+Gollum 's ` results ' sees incredible !
+	 ['  0.9949', '  0.0051']
+
+If this movie were a book , it would be a page-turner , you ca n't wait to see what happens next .
+	 ['  0.8340', '  0.1660']
+If this movie remained a book , it would by a pages - turner , you ca disneyland wait to see what happens next .
+	 ['  0.2259', '  0.7741']
+
+Haneke challenges us to confront the reality of sexual aberration .
+	 ['  0.9605', '  0.0395']
+Haneke challenges hopefully to confront only reality of lesbian aberration .
+	 ['  0.1888', '  0.8112']
+
+Absorbing and disturbing -- perhaps more disturbing than originally intended -- but a little clarity would have gone a long way .
+	 ['  0.9962', '  0.0038']
+Absorbing and disturbing -- perhaps more disturbing infinitely originally intended -- but a so clarity would have gone a long it .
+	 ['  0.9953', '  0.0047']
+
+It 's the best film of the year so far , the benchmark against which all other Best Picture contenders should be measured .
+	 ['  0.9907', '  0.0093']
+It 's only best biopic of the year so far , the yields against which have other Best Picture contenders should be assesses .
+	 ['  0.4071', '  0.5929']
+
+Painful to watch , but viewers willing to take a chance will be rewarded with two of the year 's most accomplished and riveting film performances .
+	 ['  0.9979', '  0.0021']
+Painful to watch , even viewers willing to took a chance will be compensated with two of the year 's most accomplished and overwrought film performances .
+	 ['  0.1121', '  0.8879']
+
+This is a startling film that gives you a fascinating , albeit depressing view of Iranian rural life close to the Iraqi border .
+	 ['  0.9870', '  0.0130']
+This is a startling film that transforms you a fascinating , decidedly depressing view of Iranian rural life close to the Iraqi border .
+	 ['  0.9907', '  0.0093']
+
+While The Isle is both preposterous and thoroughly misogynistic , its vistas are incredibly beautiful to look at .
+	 ['  0.9986', '  0.0014']
+While The Isle is both preposterous and thoroughly misogynistic , its possibilities are incredibly beautiful to evaluate at .
+	 ['  0.9982', '  0.0018']
+
+Together , Tok and O orchestrate a buoyant , darkly funny dance of death .
+	 ['  0.9990', '  0.0010']
+Together , Tok and O orchestrate a buoyant , darkly funny waltz of death .
+	 ['  0.9988', '  0.0012']
+
+In the process , they demonstrate that there 's still a lot of life in Hong Kong cinema .
+	 ['  0.9992', '  0.0008']
+In the process , they reflect that there 's only a lot of life in Hong Kong cinema .
+	 ['  0.3179', '  0.6821']
+
+Director Kapur is a filmmaker with a real flair for epic landscapes and adventure , and this is a better film than his earlier English-language movie , the overpraised Elizabeth .
+	 ['  0.9888', '  0.0112']
+Director Kapur is a filmmaker had a real flair for interminable landscapes and trek , and the is a better film than his earlier English - language movie , the overpraised Elizabeth .
+	 ['  0.2970', '  0.7030']
+
+The movie is a blast of educational energy , as bouncy animation and catchy songs escort you through the entire 85 minutes .
+	 ['  0.8354', '  0.1646']
+The movie becomes a grenade of educational wind , as bouncy animation and catchy songs escort you through the complete 85 minutes .
+	 ['  0.3912', '  0.6088']
+
+A sports movie with action that 's exciting on the field and a story you care about off it .
+	 ['  0.9782', '  0.0218']
+A sports plotless with action that 's exciting on the field and a story you geriatric about off it .
+	 ['  0.2323', '  0.7677']
+
+Doug Liman , the director of Bourne , directs the traffic well , gets a nice wintry look from his locations , absorbs us with the movie 's spycraft and uses Damon 's ability to be focused and sincere .
+	 ['  0.9999', '  0.0001']
+Doug Liman , its director of Bourne , directs whole traffic well , gets a nice wintry look from his locations , absorbs us with in movie 's spycraft and uses Damon 's able to be focused and sincere .
+	 ['  0.9999', '  0.0001']
+
+The tenderness of the piece is still intact .
+	 ['  0.9996', '  0.0004']
+The tenderness of one piece will still tatters .
+	 ['  0.0151', '  0.9849']
+
+Katz uses archival footage , horrifying documents of lynchings , still photographs and charming old reel-to-reel recordings of Meeropol entertaining his children to create his song history , but most powerful of all is the song itself
+	 ['  0.9940', '  0.0060']
+Katz uses archival footage , horrifying documents of lynchings , still photographs and charming old reel - to - reel recordings of Meeropol entertaining his children to create her song history , but most powerful of anyway is one dirgelike itself
+	 ['  0.9883', '  0.0117']
+
+Like the film 's almost anthropologically detailed realization of early - '80s suburbia , it 's significant without being overstated .
+	 ['  0.9736', '  0.0264']
+Like the film 's almost anthropologically descriptions realizing of late - ' 80s suburbia , it 's significant while were overstated .
+	 ['  0.0569', '  0.9431']
+
+While McFarlane 's animation lifts the film firmly above the level of other coming-of-age films ... it 's also so jarring that it 's hard to get back into the boys ' story .
+	 ['  0.9058', '  0.0942']
+While McFarlane 's animation lifts any documentarians firmly above this level of other coming - of - age films ... it 's which so jarring that it 's hard to get back into the boys ' script .
+	 ['  0.2067', '  0.7933']
+
+If nothing else , this movie introduces a promising , unusual kind of psychological horror .
+	 ['  0.9937', '  0.0063']
+If nothing else , this porno introduces a promising , unusual kid of psychological horror .
+	 ['  0.4324', '  0.5676']
+
+In a normal screen process , these bromides would be barely enough to sustain an interstitial program on the Discovery Channel .
+	 ['  0.6993', '  0.3007']
+In a normal screen process , these bromides dared that barely enough to sustain this interstitial program on the Discovery Channel .
+	 ['  0.1609', '  0.8391']
+
+But in Imax 3-D , the clichés disappear into the vertiginous perspectives opened up by the photography .
+	 ['  0.9990', '  0.0010']
+But in Imax 3-D , entire clichés disappear before the vertiginous backgrounds opened ups by only photography .
+	 ['  0.0447', '  0.9553']
+
+Writer-director Burger imaginatively fans the embers of a dormant national grief and curiosity that has calcified into chronic cynicism and fear .
+	 ['  0.8493', '  0.1507']
+Writer - director Burger imaginatively fans any embers of a dormant national grief and curiosity really already calcified into chronic cynicism and fear .
+	 ['  0.4734', '  0.5266']
+
+... a roller-coaster ride of a movie
+	 ['  0.9564', '  0.0436']
+... a rails - coaster riding of a movie
+	 ['  0.0767', '  0.9233']
+
+Chicago is sophisticated , brash , sardonic , completely joyful in its execution .
+	 ['  0.9983', '  0.0017']
+Chicago is sophisticated , brash , sardonic , thoroughly joyful in his execution .
+	 ['  0.9953', '  0.0047']
+
+Steve Irwin 's method is Ernest Hemmingway at accelerated speed and volume .
+	 ['  0.8732', '  0.1268']
+Steve Irwin 's method is Ernest Hemmingway at accelerated speeds and volume .
+	 ['  0.2858', '  0.7142']
+
+A refreshing Korean film about five female high school friends who face an uphill battle when they try to take their relationships into deeper waters .
+	 ['  0.9995', '  0.0005']
+A refreshing Korean film about five males high school girlfriends who face an uphill battle when did try to take their relationships into deeper waters .
+	 ['  0.9993', '  0.0007']
+
+On the surface , it 's a lovers-on-the-run crime flick , but it has a lot in common with Piesiewicz 's and Kieslowski 's earlier work , films like The Double Life of Veronique .
+	 ['  0.9126', '  0.0874']
+On the surface , only 's a lovers - on - the - run crime flick , but it already a gotten in common with Piesiewicz 's and Kieslowski 's earlier work , films like The Double Life of Veronique .
+	 ['  0.3898', '  0.6102']
+
+The values that have held the Enterprise crew together through previous adventures and perils do so again-courage , self-sacrifice and patience under pressure .
+	 ['  0.9589', '  0.0411']
+The ethos that some held the Enterprise crew together through previous adventures and perils do so start - courage , self - sacrifice and patience under pressure .
+	 ['  0.9513', '  0.0487']
+
+If it 's possible for a sequel to outshine the original , then SL2 does just that .
+	 ['  0.1359', '  0.8641']
+If it 's as giving a sequel to outshine its original , then SL2 does just truly .
+	 ['  0.8216', '  0.1784']
+
+A romantic comedy that operates by the rules of its own self-contained universe .
+	 ['  0.9970', '  0.0030']
+A romantic funniness that operates being it rules of which own narcissistic - contained universe .
+	 ['  0.3329', '  0.6671']
+
+4 friends , 2 couples , 2000 miles , and all the Pabst Blue Ribbon beer they can drink - it 's the ultimate redneck road-trip .
+	 ['  0.9922', '  0.0078']
+4 friends , 2 couples , 2000 miles , and all the Pabst Blue Ribbon beer they can drink - things 's the ultimate redneck lane - flight .
+	 ['  0.4081', '  0.5919']
+
+The film is often filled with a sense of pure wonderment and excitement not often seen in today 's cinema du sarcasm
+	 ['  0.9915', '  0.0085']
+The film is often empty in a sense of pure wonderment and excitement not often shown in today 's cinema du sarcasm
+	 ['  0.2635', '  0.7365']
+
+It might be tempting to regard Mr. Andrew and his collaborators as oddballs , but Mr. Earnhart 's quizzical , charming movie allows us to see them , finally , as artists .
+	 ['  0.9982', '  0.0018']
+It might be tempting to regard Mr. Andrew and his collaborators as oddballs , but Mr. Earnhart 's quizzical , charming movie allows us to see everyone , finally , but artists .
+	 ['  0.9996', '  0.0004']
+
+A feel-good picture in the best sense of the term .
+	 ['  0.9998', '  0.0002']
+A anything - good poster in our best sense of our term .
+	 ['  0.3461', '  0.6539']
+
+Edited and shot with a syncopated style mimicking the work of his subjects , Pray turns the idea of the documentary on its head , making it rousing , invigorating fun lacking any MTV puffery .
+	 ['  0.0723', '  0.9277']
+Edited and shot with a syncopated style mimicking the work of him subjects , Pray turns our idea of the documentary on its head , making somebody rousing , invigorating fun lacking any MTV puffery .
+	 ['  0.0948', '  0.9052']
+
+A mostly intelligent , engrossing and psychologically resonant suspenser .
+	 ['  0.9995', '  0.0005']
+A mostly intelligent , engrossing and psychological sound suspenser .
+	 ['  0.9991', '  0.0009']
+
+In scope , ambition and accomplishment , Children of the Century ... takes Kurys ' career to a whole new level .
+	 ['  0.9996', '  0.0004']
+In scope , ambition and accomplishment , Children of the Century ... takes Kurys ' careers to a whole new level .
+	 ['  0.9994', '  0.0006']
+
+This may not have the dramatic gut-wrenching impact of other Holocaust films , but it 's a compelling story , mainly because of the way it 's told by the people who were there .
+	 ['  0.9768', '  0.0232']
+This may not have the dramatic guts - wrenching impact of other Holocaust films , but too 's a compelling story , mainly because of the way it 's told by the people whom were there .
+	 ['  0.1633', '  0.8367']
+
+s personal revelations regarding what the shop means in the big picture , iconic characters gambol fluidly through the story , with charming results .
+	 ['  0.9999', '  0.0001']
+s personal revelations regarding what the garage means in the large picture , iconic dislikable gambol fluidly through the story , with charming results .
+	 ['  0.9996', '  0.0004']
+
+A gentle , compassionate drama about grief and healing .
+	 ['  0.9996', '  0.0004']
+A gentle , compassionate hilarity about grief and cleansing .
+	 ['  0.9987', '  0.0013']
+
+Somewhere short of Tremors on the modern B-scene : neither as funny nor as clever , though an agreeably unpretentious way to spend ninety minutes .
+	 ['  0.0092', '  0.9908']
+Somewhere term of Tremors on the modern B - scene : neither as funny but as clever , though an agreeably oozes way to invested ninety minutes .
+	 ['  0.7395', '  0.2605']
+
+Digital-video documentary about stand-up comedians is a great glimpse into a very different world .
+	 ['  0.9995', '  0.0005']
+Digital - photos documentary about sit - up comedians is a great glimpse into a very different world .
+	 ['  0.9996', '  0.0004']
+
+An enthralling , playful film that constantly frustrates our desire to know the ` truth ' about this man , while deconstructing the very format of the biography in a manner that Derrida would doubtless give his blessing to .
+	 ['  0.9980', '  0.0020']
+An enthralling , playful film that constantly frustrates our desire to know the ` charade ' about this man , while deconstructing particular deeply format of the biography in a manner that Derrida would doubtless give his blessing to .
+	 ['  0.9988', '  0.0012']
+
+It 's obviously struck a responsive chord with many South Koreans , and should work its magic in other parts of the world .
+	 ['  0.9554', '  0.0446']
+It 's surely struck a responsive chord with fewer South Koreans , and should work its magic in other parts of they world .
+	 ['  0.4662', '  0.5338']
+
+Run , do n't walk , to see this barbed and bracing comedy on the big screen .
+	 ['  0.9168', '  0.0832']
+Run , we n't go , to see this barbed and bracing productions off the big screen .
+	 ['  0.1703', '  0.8297']
+
+A classy item by a legend who may have nothing left to prove but still has the chops and drive to show how its done .
+	 ['  0.9984', '  0.0016']
+A classy item by a legend who may have nothing left to demonstrate but too past the chops and drive to show how its done .
+	 ['  0.4838', '  0.5162']
+
+In Fessenden 's horror trilogy , this theme has proved important to him and is especially so in the finale .
+	 ['  0.9974', '  0.0026']
+In Fessenden 's horror subtitled , this theme has proved important to him and is too so in the finale .
+	 ['  0.3790', '  0.6210']
+
+It 's not exactly a gourmet meal but the fare is fair , even coming from the drive-thru .
+	 ['  0.9845', '  0.0155']
+It 's not exactly a macaroni meal have the fare is fair , even coming from on drive - thru .
+	 ['  0.3497', '  0.6503']
+
+This is what IMAX was made for : Strap on a pair of 3-D goggles , shut out the real world , and take a vicarious voyage to the last frontier -- space .
+	 ['  0.9885', '  0.0115']
+This is what IMAX was made for : Strap on a pair of 3-D goggles , shut off the really world , and take a vicarious freighter to only next frontier -- space .
+	 ['  0.1051', '  0.8949']
+
+Merely as a technical , logistical feat , Russian Ark marks a cinematic milestone .
+	 ['  0.9484', '  0.0516']
+Merely such a technical , logistical feat , Russian Ark marks a movie milestone .
+	 ['  0.4801', '  0.5199']
+
+-LRB- Schweiger is -RRB- talented and terribly charismatic , qualities essential to both movie stars and social anarchists .
+	 ['  0.9939', '  0.0061']
+-LRB- Schweiger keeps -RRB- talented and terribly charismatic , qualities essential to both movie stars and sociological anarchists .
+	 ['  0.9940', '  0.0060']
+
+It 's a great deal of sizzle and very little steak .
+	 ['  0.9544', '  0.0456']
+It 's a great acquire of sizzle and too little steak .
+	 ['  0.4293', '  0.5707']
+
+But what spectacular sizzle it is !
+	 ['  0.9982', '  0.0018']
+But anything spectacular panache do includes !
+	 ['  0.4082', '  0.5918']
+
+... In this incarnation its fizz is infectious .
+	 ['  0.9997', '  0.0003']
+... In just incarnation itself juice exists disease .
+	 ['  0.2767', '  0.7233']
+
+An original gem about an obsession with time .
+	 ['  0.9975', '  0.0025']
+An original gem just another obsession in week .
+	 ['  0.2279', '  0.7721']
+
+It will delight newcomers to the story and those who know it from bygone days .
+	 ['  0.9994', '  0.0006']
+It able delight newcomers to only story and those who thing it from bygone days .
+	 ['  0.4456', '  0.5544']
+
+Gloriously goofy -LRB- and gory -RRB- midnight movie stuff .
+	 ['  0.9968', '  0.0032']
+Gloriously goofy -LRB- and gratuitous -RRB- evening talky stuff .
+	 ['  0.4171', '  0.5829']
+
+The film overcomes the regular minefield of coming-of-age cliches with potent doses of honesty and sensitivity .
+	 ['  0.9996', '  0.0004']
+The tearjerker overcomes the frequent minefield of coming - of - aged cliches with potent doses of honesty and sensitivity .
+	 ['  0.9998', '  0.0002']
+
+If your senses have n't been dulled by slasher films and gorefests , if you 're a connoisseur of psychological horror , this is your ticket .
+	 ['  0.9837', '  0.0163']
+If your senses have russell been dulled by slasher scripts and gorefests , if just can a connoisseur of mental horror , this is your ticket .
+	 ['  0.4414', '  0.5586']
+
+It 's a minor comedy that tries to balance sweetness with coarseness , while it paints a sad picture of the singles scene .
+	 ['  0.8955', '  0.1045']
+It 's a trifling screenwriting that tries to balance sweetness with coarseness , while it paints a sad picture of the doubles scene .
+	 ['  0.0864', '  0.9136']
+
+It is intensely personal and yet -- unlike Quills -- deftly shows us the temper of the times .
+	 ['  0.9926', '  0.0074']
+It is intensely personal and yet -- alas Quills -- satisfyingly shows us only temper of the hours .
+	 ['  0.3916', '  0.6084']
+
+As lo-fi as the special effects are , the folks who cobbled Nemesis together indulge the force of humanity over hardware in a way that George Lucas has long forgotten .
+	 ['  0.8734', '  0.1266']
+As lo - ah as the special effects still , the guys who cobbled Nemesis together indulge the force of humanity over hardware in a way that George Lucas has long discarded .
+	 ['  0.2503', '  0.7497']
+
+Like Mike does n't win any points for originality .
+	 ['  0.2508', '  0.7492']
+Like Mike wants europe win any points in originality .
+	 ['  0.8503', '  0.1497']
+
+It does succeed by following a feel-good formula with a winning style , and by offering its target audience of urban kids some welcome role models and optimism .
+	 ['  0.9999', '  0.0001']
+It does succeed be following a feel - good methodology with a winning style , and by offering its target audience of urban kids some welcome role models and optimism .
+	 ['  0.9999', '  0.0001']
+
+It 's a hoot and a half , and a great way for the American people to see what a candidate is like when he 's not giving the same 15-cent stump speech .
+	 ['  0.9951', '  0.0049']
+It 's a barf and a half , and a great way given they American people to see what a candidate is like when if 's not giving its same 15-cent stump speech .
+	 ['  0.3536', '  0.6464']
+
+Far from perfect , but its heart is in the right place ... innocent and well-meaning .
+	 ['  0.9918', '  0.0082']
+Far from perfect , little its heart involves at the right place ... innocent and well - imply .
+	 ['  0.3691', '  0.6309']
+
+A sad , superior human comedy played out on the back roads of life .
+	 ['  0.9935', '  0.0065']
+A sad , superior animal suspenser played out on the back roads of everyday .
+	 ['  0.9940', '  0.0060']
+
+Waydowntown is by no means a perfect film , but its boasts a huge charm factor and smacks of originality .
+	 ['  0.6472', '  0.3528']
+Waydowntown is be no means a perfect film , only company boasts a huge charm factor and smacks of originality .
+	 ['  0.4748', '  0.5252']
+
+Tim Allen is great in his role but never hogs the scenes from his fellow cast , as there are plenty of laughs and good lines for everyone in this comedy .
+	 ['  0.9769', '  0.0231']
+Tim Allen is great in his duties but never hogs the scenes from his fellow cast , too there are minimal of laughs and good lines for everyone in this comedy .
+	 ['  0.3921', '  0.6079']
+
+More a load of enjoyable , Conan-esque claptrap than the punishing , special-effects soul assaults the Mummy pictures represent .
+	 ['  0.8424', '  0.1576']
+More a load of enjoyable , Conan - esque claptrap than the punishing , special - effect soul assaults the Mummy cameras represent .
+	 ['  0.4893', '  0.5107']
+
+Enormously likable , partly because it is aware of its own grasp of the absurd .
+	 ['  0.9306', '  0.0694']
+Enormously likable , partly but it is warn of its own grasping of the absurd .
+	 ['  0.0826', '  0.9174']
+
+Here 's a British flick gleefully unconcerned with plausibility , yet just as determined to entertain you .
+	 ['  0.9903', '  0.0097']
+Here 's a British flick gleefully unconcerned having plausibility , immediately let as determination to entertain ought .
+	 ['  0.3898', '  0.6102']
+
+It 's an old story , but a lively script , sharp acting and partially animated interludes make Just a Kiss seem minty fresh .
+	 ['  0.9994', '  0.0006']
+It 's an old story , but a lively script , sharp act and partially animated interludes make Just a Kiss seem minty fresh .
+	 ['  0.9993', '  0.0007']
+
+Must be seen to be believed .
+	 ['  0.9210', '  0.0790']
+Must that watched to have reportedly .
+	 ['  0.1356', '  0.8644']
+
+Ray Liotta and Jason Patric do some of their best work in their underwritten roles , but do n't be fooled : Nobody deserves any prizes here .
+	 ['  0.5358', '  0.4642']
+Ray Liotta and Jason Patric do bunch of their best work in their underwritten roles , but do holland should fooled : Nobody deserves any prizes here .
+	 ['  0.0961', '  0.9039']
+
+Everything that has to do with Yvan and Charlotte , and everything that has to do with Yvan 's rambunctious , Jewish sister and her non-Jew husband , feels funny and true .
+	 ['  0.9998', '  0.0002']
+Everything that has to do with Yvan and Charlotte , and stuff that has to do with Yvan 's rambunctious , Jewish family and her non - Jew husband , feels funny and true .
+	 ['  0.9998', '  0.0002']
+
+The year 's happiest surprise , a movie that deals with a real subject in an always surprising way .
+	 ['  0.9997', '  0.0003']
+The weeks 's happiest surprise , a movie that deals in a whatsoever subject in another always surprising way .
+	 ['  0.1152', '  0.8848']
+
+Fans of Behan 's work and of Irish movies in general will be rewarded by Borstal Boy .
+	 ['  0.9842', '  0.0158']
+Fans of Behan 's work and of Irish movies in general expects be paid duly Borstal Boy .
+	 ['  0.4296', '  0.5704']
+
+Its mysteries are transparently obvious , and it 's too slowly paced to be a thriller .
+	 ['  0.0054', '  0.9946']
+Its enigma are transparently obvious , and it 's very slowly paced to be a thriller .
+	 ['  0.7017', '  0.2983']
+
+-LRB- But it 's -RRB- worth recommending because of two marvelous performances by Michael Caine and Brendan Fraser .
+	 ['  0.9992', '  0.0008']
+-LRB- But us 's -RRB- worth recommending mainly of fewer marvelous performances being Michael Caine and Brendan Fraser .
+	 ['  0.4371', '  0.5629']
+
+The film is faithful to what one presumes are the book 's twin premises -- that we become who we are on the backs of our parents , but we have no idea who they were at our age ; and that time is a fleeting and precious commodity no matter how old you are .
+	 ['  0.8624', '  0.1376']
+The film is faithful to what one presumes many the book 's twin premises -- that we be who we are on the backs of our parents , but we have no idea who they were at our age ; and that time makes a fleeting and precious commodity no matter how precocious you are .
+	 ['  0.4591', '  0.5409']
+
+Stephen Earnhart 's homespun documentary Mule Skinner Blues has nothing but love for its posse of trailer park denizens .
+	 ['  0.0134', '  0.9866']
+Stephen Earnhart 's homespun documentaries Mule Skinner Blues has nothing but love for its posse of vehicle picnic bohos .
+	 ['  0.0369', '  0.9631']
+
+A solidly seaworthy chiller .
+	 ['  0.9991', '  0.0009']
+A squarely seaworthy suspenser .
+	 ['  0.4631', '  0.5369']
+
+If you can get past the fantastical aspects and harsh realities of `` The Isle '' you 'll get a sock-you-in-the-eye flick that is a visual tour-de-force and a story that is unlike any you will likely see anywhere else .
+	 ['  0.1431', '  0.8569']
+If you can get past the fantastical aspects and harsh realities of ` ` The Isle '' you wanna get a sock - you - in - the - eye flick that demonstrates a visual tour - de - force and a story that is thankfully any you will likely see anywhere else .
+	 ['  0.7852', '  0.2148']
+
+There are as many misses as hits , but ultimately , it finds humor in the foibles of human behavior , and it 's a welcome return to the roots of a genre that should depend on surprises .
+	 ['  0.9949', '  0.0051']
+There are as two misses as hits , but ultimately , it finds humor in the slights of human behavior , and it 's a welcome return to only roots of a genre that should decide on surprises .
+	 ['  0.0647', '  0.9353']
+
+A well-made thriller with a certain level of intelligence and non-reactionary morality .
+	 ['  0.9917', '  0.0083']
+A well - made adaptation with a any level of intelligence and non - reactionary morality .
+	 ['  0.4353', '  0.5647']
+
+There 's enough science to make it count as educational , and enough beauty to make it unforgettable .
+	 ['  0.9995', '  0.0005']
+There 's enough science to create it count as workshops , and enough beauty to made it unforgettable .
+	 ['  0.9987', '  0.0013']
+
+Makmalbaf follows a resolutely realistic path in this uncompromising insight into the harsh existence of the Kurdish refugees of Iran 's borderlands .
+	 ['  0.9953', '  0.0047']
+Makmalbaf follows a resolutely realistic path the this uncompromising insight into the harsh existence of the Kurdish prisoners of Iran 's borderlands .
+	 ['  0.9933', '  0.0067']
+
+For a good chunk of its running time , Trapped is an effective and claustrophobic thriller .
+	 ['  0.9966', '  0.0034']
+For a good chunk of its running time , Trapped achieves an effective and dreamy trilogy .
+	 ['  0.9997', '  0.0003']
+
+Most of Crush is a clever and captivating romantic comedy with a welcome pinch of tartness .
+	 ['  0.9998', '  0.0002']
+Most of Crush is a clever and captivating romantic comedian with a welcome pinch of tartness .
+	 ['  0.9997', '  0.0003']
+
+Nair does capture the complexity of a big family and its trials and tribulations ...
+	 ['  0.9986', '  0.0014']
+Nair does elude the complexity of a big family and his testing and tribulations ...
+	 ['  0.1436', '  0.8564']
+
+Rare is the ` urban comedy ' that even attempts the insight and honesty of this disarming indie .
+	 ['  0.9227', '  0.0773']
+Rare is the ` urban comedy ' one even attempts the detailed and honesty of you disarming comics .
+	 ['  0.3374', '  0.6626']
+
+Ranks among Willams ' best screen work .
+	 ['  0.9998', '  0.0002']
+Ranks including Willams ' best screen work .
+	 ['  0.9999', '  0.0001']
+
+Engagingly captures the maddening and magnetic ebb and flow of friendship .
+	 ['  0.9999', '  0.0001']
+Engagingly captures the maddening and shear ebb and flow of friendship .
+	 ['  0.9999', '  0.0001']
+
+An experience so engrossing it is like being buried in a new environment .
+	 ['  0.9998', '  0.0002']
+An experience tad engrossing he is like being missing in a new landscape .
+	 ['  0.3367', '  0.6633']
+
+It 's traditional moviemaking all the way , but it 's done with a lot of careful period attention as well as some very welcome wit .
+	 ['  0.9928', '  0.0072']
+It 's conventional moviemaking all the way , except it 's done with a anymore of careful period publicity as well as some very welcome wit .
+	 ['  0.4916', '  0.5084']
+
+A droll , well-acted , character-driven comedy with unexpected deposits of feeling .
+	 ['  0.9942', '  0.0058']
+A droll , well - behaving , unlikeable - driven comedy with unexpected deposits of woozy .
+	 ['  0.2551', '  0.7449']
+
+This is simply the most fun you 'll ever have with a documentary !
+	 ['  0.9942', '  0.0058']
+This is supposedly the enormously fun yourselves 'll ever have with a documentary !
+	 ['  0.4129', '  0.5871']
+
+A very funny movie .
+	 ['  1.0000', '  0.0000']
+A totally funny movie .
+	 ['  1.0000', '  0.0000']
+
+Watching Haneke 's film is , aptly enough , a challenge and a punishment .
+	 ['  0.9691', '  0.0309']
+Watching Haneke 's film does , wherein enough , a challenged and a punishment .
+	 ['  0.4706', '  0.5294']
+
+But watching Huppert , a great actress tearing into a landmark role , is riveting .
+	 ['  0.9999', '  0.0001']
+But watching Huppert , a great ballerina tearing into a landmark role , is uncinematic .
+	 ['  0.4452', '  0.5548']
+
+A cop story that understands the medium amazingly well .
+	 ['  0.9992', '  0.0008']
+A hardass story any embraces their medium amazingly well .
+	 ['  0.2013', '  0.7987']
+
+Britney has been delivered to the big screen safe and sound , the way we like our 20-year-old superstar girls to travel on the fame freeway .
+	 ['  0.8897', '  0.1103']

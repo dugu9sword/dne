@@ -10,7 +10,7 @@ nogit/*
                          *.tgz
                          *.zip
   *.rar
-
+*.txt
 saved/*
 universal-triggers-master/
 .ipynb_checkpoints 

@@ -5,22 +5,24 @@ from typing import Union
 
 
 class EmbeddingSearcher:
-    def __init__(self,
-                 embed: torch.Tensor,
-                 word2idx: callable,
-                 idx2word: callable,
-                 ):
+    def __init__(
+        self,
+        embed: torch.Tensor,
+        word2idx: callable,
+        idx2word: callable,
+    ):
         self.embed = embed
         self.word2idx = word2idx
         self.idx2word = idx2word
         self.faiss_index = None
 
-    def use_faiss_backend(self,
-                          gpu=False,
-                          ann=False,
-                          ann_center=10,
-                          ann_nprob=1,
-                          ):
+    def use_faiss_backend(
+        self,
+        gpu=False,
+        ann=False,
+        ann_center=10,
+        ann_nprob=1,
+    ):
         # The method is just a running example of the faiss library which supports
         #   - batch queries
         #   - approximate nearest neighbours
@@ -60,7 +62,7 @@ class EmbeddingSearcher:
         print('*** Statistics of distances in a N-nearest neighbourhood ***')
         nbr_num = [5, 10, 20, 50, 100, 200, 500, 10000, 20000]
         dists = {nbr: [] for nbr in nbr_num}
-        for ele in cast_list(torch.randint(self.embed.size(0), (50,))):
+        for ele in cast_list(torch.randint(self.embed.size(0), (50, ))):
             if self.embed[ele].sum() == 0.:
                 continue
             idxs, vals = self.find_neighbours(ele, -1, 'euc', False)
@@ -69,9 +71,7 @@ class EmbeddingSearcher:
         table = []
         for nbr in nbr_num:
             dists[nbr] = torch.cat(dists[nbr])
-            table.append([nbr,
-                          dists[nbr].mean().item(),
-                          dists[nbr].std().item()])
+            table.append([nbr, dists[nbr].mean().item(), dists[nbr].std().item()])
         print(tabulate(table, headers=['N', 'mean', 'std'], floatfmt='.2f'))
         # exit()
 
@@ -81,15 +81,14 @@ class EmbeddingSearcher:
         nbr_num = [5, 10, 20, 50, 100, 500]
         dists = {mve: {nbr: [] for nbr in nbr_num} for mve in mve_nom}
         cover = {mve: {nbr: [] for nbr in nbr_num} for mve in mve_nom}
-        for ele in cast_list(torch.randint(self.embed.size(0), (50,))):
+        for ele in cast_list(torch.randint(self.embed.size(0), (50, ))):
             if self.embed[ele].sum() == 0.:
                 continue
             vect = torch.rand_like(self.embed[ele])
             vect = vect / torch.norm(vect)
             ridxs, rvals = self.find_neighbours(self.embed[ele], -1, 'euc', False)
             for mve in mve_nom:
-                idxs, vals = self.find_neighbours(self.embed[ele] + vect * mve,
-                                                  500, 'euc', False)
+                idxs, vals = self.find_neighbours(self.embed[ele] + vect * mve, 500, 'euc', False)
                 for nbr in nbr_num:
                     dists[mve][nbr].append(vals[1:nbr + 1])
                     cover[mve][nbr].append(compare_idxes(idxs[1:nbr + 1], ridxs[1:nbr + 1]))
@@ -102,22 +101,27 @@ class EmbeddingSearcher:
                 row.append("{:.1f}%".format(np.mean(cover[mve][nbr]) / nbr * 100))
             table.append(row)
 
-        print(tabulate(table,
-                       headers=['Step',
-                                'D-5', 'I-5',
-                                'D-10', 'I-10',
-                                'D-20', 'I-20',
-                                'D-50', 'I-50',
-                                'D-100', 'I-100'],
-                       floatfmt='.2f'))
+        print(
+            tabulate(table,
+                     headers=[
+                         'Step', 'D-5', 'I-5', 'D-10', 'I-10', 'D-20', 'I-20', 'D-50', 'I-50',
+                         'D-100', 'I-100'
+                     ],
+                     floatfmt='.2f'))
 
     @torch.no_grad()
     def find_neighbours(self,
                         element: Union[int, str, torch.Tensor],
-                        topk=-1,
                         measure='euc',
+                        topk=None,
+                        rho=None,
                         verbose=False):
+        # checking args
+        assert (topk is None) ^ (rho is None), "You must set one of topk/rho to be None"
         assert measure in ['euc', 'cos']
+        assert (measure == 'euc' and rho > 0) or (
+            measure == 'cos' and 0 < rho < 1), "threshold for euc distance must be larger than 0, for cos distance must be between 0 and 1"
+
         measure_fn = cos_dist if measure == 'cos' else euc_dist
         if isinstance(element, int):
             idx = element
@@ -128,27 +132,30 @@ class EmbeddingSearcher:
         elif isinstance(element, torch.Tensor):
             query_vector = element
         else:
-            raise TypeError('You passed a {}, int/str/torch.Tensor required'.
-                            format(type(element)))
+            raise TypeError('You passed a {}, int/str/torch.Tensor required'.format(type(element)))
+
+        if topk is None:
+            _topk = self.embed.size(0)
+        else:
+            _topk = topk
 
         if self.faiss_index is None:
             dists = measure_fn(query_vector, self.embed)
-            if topk == -1:
-                topk = dists.numel()
-            tk_vals, tk_idxs = torch.topk(dists, topk, largest=False)
+            tk_vals, tk_idxs = torch.topk(dists, _topk, largest=False)
         else:
             if measure == 'cos':
                 raise Exception("cos still not compatible with faiss (since I am lazy)")
-            D, I = self.faiss_index.search(query_vector.unsqueeze(0).cpu().numpy(),
-                                           topk)
-            # tk_vals = D[0]
-            # tk_idxs = I[0]
+            D, I = self.faiss_index.search(query_vector.unsqueeze(0).cpu().numpy(), _topk)
             tk_vals = torch.tensor(D[0], device=self.embed.device)
             tk_idxs = torch.tensor(I[0], device=self.embed.device)
+        if rho is not None:
+            mask_idx = tk_vals < rho
+            tk_vals = tk_vals[mask_idx]
+            tk_idxs = tk_idxs[mask_idx]
+            
         if verbose:
             table = []
-            print('Top-{} closest word measured by {}'.format(
-                topk, measure))
+            print('Neariest neighbours measured by {}, topk={}, rho={}'.format(measure, topk, rho))
             for i in tk_idxs:
                 i = i.item()
                 table.append([i, self.idx2word(i), dists[i].item()])
@@ -161,8 +168,11 @@ class EmbeddingSearcher:
 # torch.tensor([100]).expand(2000, 1):
 #   return a copied tensor
 def cos_dist(qry, mem):
-    return - torch.nn.functional.cosine_similarity(
-        mem, qry.expand(mem.size(0), mem.size(1)), dim=1)
+    return 1 - cos_sim(qry, mem)
+
+
+def cos_sim(qry, mem):
+    return torch.nn.functional.cosine_similarity(mem, qry.expand(mem.size(0), mem.size(1)), dim=1)
 
 
 def euc_dist(qry, mem):
@@ -182,7 +192,8 @@ if __name__ == '__main__':
     from dpattack.utils.vocab import Vocab
 
     vocab = torch.load("/disks/sdb/zjiehang/zhou_data/ptb/vocab")  # type: Vocab
-    parser = load_parser(fetch_best_ckpt_name("/disks/sdb/zjiehang/zhou_data/saved_models/word_tag/lzynb"))
+    parser = load_parser(
+        fetch_best_ckpt_name("/disks/sdb/zjiehang/zhou_data/saved_models/word_tag/lzynb"))
     # print(type(vocab))
     esglv = EmbeddingSearcher(embed=vocab.embeddings,
                               idx2word=lambda x: vocab.words[x],
@@ -227,5 +238,3 @@ if __name__ == '__main__':
     #     print(vocab.words[ele], '\t\t', compare_idxes(mdl_idxes, glv_idxes))
     #     total += compare_idxes(mdl_idxes, glv_idxes)
     # print(total, '\n')
-
-

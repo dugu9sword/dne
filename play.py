@@ -21,14 +21,15 @@ from torch.nn.utils.rnn import pad_packed_sequence
 import torch.nn.functional as F
 import pathlib
 import hashlib
-from allennlpx.interpret.pgd import PGD, DEFAULT_IGNORE_TOKENS
-from allennlpx.interpret.hotflip import HotFlip
+from allennlpx.interpret.attackers.attacker import DEFAULT_IGNORE_TOKENS
+from allennlpx.interpret.attackers.pgd import PGD
+from allennlpx.interpret.attackers.hotflip import HotFlip
+from allennlpx.interpret.attackers.bruteforce import BruteForce
 from allennlpx.predictors.predictor import PredictorX
 from allennlpx import allenutil
 from luna import auto_create, flt2str
-from loc import is_cn
-
-import uuid
+from freq import frequency_analysis
+from collections import Counter
 
 train_reader = StanfordSentimentTreeBankDatasetReader(
     token_indexers={"tokens": SingleIdTokenIndexer(lowercase_tokens=True)},
@@ -50,8 +51,15 @@ train_data, dev_data, test_data = auto_create("sst", load_data, True)
 
 vocab = Vocabulary.from_instances(train_data)
 
+
+# src_words = ['the', 'place', 'start', 'as', 'rare', 'an', 'that', 'that', 'rare', 'entertainment', 'the', 'road', 'is', 'with', 'at', 'it', 'so', 'want', 'he', 'pulls', 'it', 'off', 'refreshingly', 'different', 'slice', 'talking', 'singing', 'all', 'surprises', 'is', 'its', 'low', 'the', 'the', 'the']
+# tgt_words = ['only', 'places', 'stop', 'though', 'seldom', 'another', 'sort', 'merely', 'rarely', 'sports', 'which', 'lane', 'includes', 'had', 'near', 'someone', 'sure', 'decide', 'someone', 'earns', 'whole', 'out', 'schticky', 'similar', 'helpings', 'spoken', 'dancers', 'that', 'letdown', 'contributes', 'company', 'highest', 'entire', 'any', 'only']
+# frequency_analysis(Counter(dict(vocab._retained_counter['tokens'])), src_words, tgt_words)
+# exit()
+
 # embedding_path = None
-if is_cn():
+if pathlib.Path("/disks/sdb/zjiehang").exists():
+    print("CN")
     # embedding_path = "/disks/sdb/zjiehang/embeddings/fasttext/crawl-300d-2M.vec"
     embedding_path = "/disks/sdb/zjiehang/embeddings/gensim_sgns_gnews/model.txt"
     # embedding_path = "/disks/sdb/zjiehang/embeddings/glove/glove.42B.300d.txt"
@@ -152,21 +160,46 @@ from allennlpx.predictors.text_classifier import TextClassifierPredictorX
 
 predictor = TextClassifierPredictorX(model.cpu(), reader)
 # attacker = HotFlip(predictor)
-attacker = PGD(predictor)
+attacker = BruteForce(predictor)
 attacker.initialize()
 
-for i in range(10):
+total_num = len(test_data)
+succ_num = 0
+src_words = []
+tgt_words = []
+for i in range(total_num):
     raw_text = allenutil.as_sentence(test_data[i])
     print(raw_text)
     print("\t", flt2str(predictor.predict(raw_text)['probs']))
 
+    # result = attacker.attack_from_json({"sentence": raw_text},
+    #                                    ignore_tokens=forbidden_words,
+    #                                    forbidden_tokens=forbidden_words,
+    #                                    step_size=100,
+    #                                    max_change_num=3,
+    #                                    iter_change_num=2)
+
     result = attacker.attack_from_json({"sentence": raw_text},
                                        ignore_tokens=forbidden_words,
                                        forbidden_tokens=forbidden_words,
-                                       step_size=100,
-                                       max_change_num=3,
-                                       iter_change_num=2)
+                                       max_change_num=5,
+                                       search_num=512)
+    if result['success'] == 1:
+        succ_num += 1
+
     att_text = allenutil.as_sentence(result['att'])
     print(att_text)
     print('\t', flt2str(predictor.predict(att_text)['probs']))
     print()
+
+    raw_tokens = result['raw']
+    att_tokens = result['att']
+    for i in range(len(raw_tokens)):
+        if raw_tokens[i] != att_tokens[i]:
+            src_words.append(raw_tokens[i])
+            tgt_words.append(att_tokens[i])
+
+print(f'Succ rate {succ_num/total_num*100}')
+print(src_words)
+print(tgt_words)
+frequency_analysis(Counter(dict(vocab._retained_counter['tokens'])), src_words, tgt_words)
