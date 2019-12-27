@@ -14,9 +14,9 @@ from allennlp.models.archival import Archive, load_archive
 from allennlp.modules.text_field_embedders import TextFieldEmbedder
 from allennlp.data.dataset import Batch
 
-from allennlp.predictors.predictor import Predictor
+from allennlp.predictors.predictor import Predictor as Predictor_
 
-class PredictorX(Predictor):
+class Predictor(Predictor_):
     # """
     # a ``Predictor`` is a thin wrapper around an AllenNLP model that handles JSON -> JSON predictions
     # that can be used for serving models through the web API or making predictions in bulk.

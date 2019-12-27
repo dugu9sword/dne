@@ -8,7 +8,7 @@ from allennlp.data.token_indexers.token_characters_indexer import TokenCharacter
 from allennlp.data.tokenizers.token import Token
 from allennlp.data.token_indexers.elmo_indexer import ELMoTokenCharactersIndexer
 from allennlp.modules.text_field_embedders.text_field_embedder import TextFieldEmbedder
-from allennlpx.predictors.predictor import PredictorX
+from allennlpx.predictors.predictor import Predictor
 
 DEFAULT_IGNORE_TOKENS = [
     "@@NULL@@", "@@UNKNOWN@@", ".", ",", ";", "!", "?", "[MASK]", "[SEP]", "[CLS]", "-LRB-", "-RRB-"
@@ -20,7 +20,7 @@ class Attacker(Registrable):
     An ``Attacker`` will modify an input (e.g., add or delete tokens) to try to change an AllenNLP
     Predictor's output in a desired manner (e.g., make it incorrect).
     """
-    def __init__(self, predictor: PredictorX) -> None:
+    def __init__(self, predictor: Predictor) -> None:
         self.predictor = predictor
 
     def initialize(self):
@@ -62,7 +62,7 @@ class Attacker(Registrable):
 
 
 class EmbedAttacker(Attacker):
-    def __init__(self, predictor: PredictorX):
+    def __init__(self, predictor: Predictor):
         super().__init__(predictor)
         self.vocab = self.predictor._model.vocab
         self.token_embedding: Embedding = None

@@ -9,9 +9,9 @@ from allennlp.data import Instance
 from allennlp.predictors.predictor import Predictor
 from allennlp.data.fields import LabelField
 from allennlp.data.tokenizers.word_tokenizer import WordTokenizer
-from .predictor import PredictorX
+from .predictor import Predictor
 
-class TextClassifierPredictorX(PredictorX):
+class TextClassifierPredictor(Predictor):
     """
     Predictor for any model that takes in a sentence and returns
     a single class for it.  In particular, it can be used with

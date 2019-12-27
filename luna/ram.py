@@ -27,6 +27,11 @@ def ram_append(k, v):
     __global_ram[k].append(v)
 
 
+def ram_inc(k):
+    if k not in __global_ram:
+        __global_ram[k] = 0
+    __global_ram[k] = __global_ram[k] + 1
+
 def ram_read(k):
     return __global_ram[k]
 
