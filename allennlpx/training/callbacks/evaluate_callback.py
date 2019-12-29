@@ -1,14 +1,9 @@
 from allennlp.training.callbacks.callback import Callback
 from allennlp.training.callbacks.callback import handle_event
 from allennlp.training.callbacks.events import Events
-# from allennlpx.training.util import evaluate
 from typing import Iterable
-from allennlp.training.util import evaluate
 from allennlp.data import Instance
-from allennlp.common.checks import check_for_gpu
-import torch
-from allennlp.common.tqdm import Tqdm
-
+from allennlpx.training.util import evaluate
 
 class EvaluateCallback(Callback):
     def __init__(self, eval_data: Iterable[Instance]):
