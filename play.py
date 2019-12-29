@@ -19,10 +19,8 @@ from allennlp.data.token_indexers.token_characters_indexer import \
     TokenCharactersIndexer
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.models import Model
-from allennlp.modules.seq2vec_encoders import (PytorchSeq2VecWrapper,
-                                               Seq2VecEncoder)
-from allennlp.modules.text_field_embedders import (BasicTextFieldEmbedder,
-                                                   TextFieldEmbedder)
+from allennlp.modules.seq2vec_encoders import (PytorchSeq2VecWrapper, Seq2VecEncoder)
+from allennlp.modules.text_field_embedders import (BasicTextFieldEmbedder, TextFieldEmbedder)
 from allennlp.modules.token_embedders import Embedding, TokenEmbedder
 from allennlp.modules.token_embedders.embedding import \
     _read_pretrained_embeddings_file
@@ -43,8 +41,7 @@ from allennlpx.predictors.text_classifier import TextClassifierPredictor
 from allennlpx.training.callback_trainer import CallbackTrainer
 from allennlpx.training.callbacks.evaluate_callback import EvaluateCallback
 from freq_util import analyze_frequency, frequency_analysis
-from luna import (auto_create, flt2str, log, log_config, ram_read, ram_reset,
-                  ram_write)
+from luna import (auto_create, flt2str, log, log_config, ram_read, ram_reset, ram_write)
 from sst_model import LstmClassifier
 
 log_config("log", "cf")
@@ -70,7 +67,8 @@ def load_data():
 
 sub_train_data, train_data, dev_data, test_data = auto_create("sst", load_data, True)
 
-vocab = auto_create("sst_vocab", lambda: Vocabulary.from_instances(sub_train_data + dev_data + test_data))
+vocab = auto_create("sst_vocab",
+                    lambda: Vocabulary.from_instances(sub_train_data + dev_data + test_data))
 
 counter = Counter(dict(vocab._retained_counter['tokens']))
 freq_threshold = 1000
@@ -85,8 +83,7 @@ ram_write("low_freq_words", low_freq_words)
 # analyze_frequency(vocab)
 # exit()
 
-
-model = LstmClassifier(vocab)
+model = LstmClassifier(vocab).cuda()
 
 model_path = 'sst_model.pt'
 if pathlib.Path(model_path).exists():
@@ -173,12 +170,10 @@ for i in tqdm(range(total_num)):
     # log(tabulate(table, floatfmt=".2f"))
     # log()
 
-
-
     att_text = allenutil.as_sentence(result['att'])
-    
+
     if result["success"] == 1:
-        succ_num += 1    
+        succ_num += 1
         log("[raw]", raw_text)
         log("\t", flt2str(predictor.predict(raw_text)['probs']))
         log("[att]", att_text)
