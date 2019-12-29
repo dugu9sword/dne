@@ -42,18 +42,26 @@ from allennlpx.training.callback_trainer import CallbackTrainer
 from allennlpx.training.callbacks.evaluate_callback import EvaluateCallback
 from freq_util import analyze_frequency, frequency_analysis
 from luna import (auto_create, flt2str, log, log_config, ram_read, ram_reset, ram_write)
-from sst_model import LstmClassifier
+from sst_model import LstmClassifier, WORD2VECS
+from allennlp.data.token_indexers.elmo_indexer import ELMoTokenCharactersIndexer
 
 log_config("log", "cf")
 FORMAT = '%(asctime)-15s %(message)s'
 # logging.basicConfig(format=FORMAT, level=logging.INFO)
 
-sub_reader = StanfordSentimentTreeBankDatasetReader(
-    token_indexers={"tokens": SingleIdTokenIndexer(lowercase_tokens=True)},
-    granularity='2-class',
-    use_subtrees=True)
-reader = StanfordSentimentTreeBankDatasetReader(
-    token_indexers={"tokens": SingleIdTokenIndexer(lowercase_tokens=True)}, granularity='2-class')
+pretrain = "elmo"
+cache_prefix = "sst_elmo" if pretrain == "elmo" else "sst"
+
+if pretrain == 'elmo':
+    token_indexer = ELMoTokenCharactersIndexer()
+else:
+    token_indexer = SingleIdTokenIndexer(lowercase_tokens=True)
+
+sub_reader = StanfordSentimentTreeBankDatasetReader(token_indexers={"tokens": token_indexer},
+                                                    granularity='2-class',
+                                                    use_subtrees=True)
+reader = StanfordSentimentTreeBankDatasetReader(token_indexers={"tokens": token_indexer},
+                                                granularity='2-class')
 
 
 def load_data():
@@ -65,27 +73,28 @@ def load_data():
     return sub_train_data, train_data, dev_data, test_data
 
 
-sub_train_data, train_data, dev_data, test_data = auto_create("sst", load_data, True)
+sub_train_data, train_data, dev_data, test_data = auto_create(f"{cache_prefix}_data", load_data,
+                                                              True)
 
-vocab = auto_create("sst_vocab",
+vocab = auto_create(f"{cache_prefix}_vocab",
                     lambda: Vocabulary.from_instances(sub_train_data + dev_data + test_data))
 
-counter = Counter(dict(vocab._retained_counter['tokens']))
-freq_threshold = 1000
-high_freq_words, high_freq_counts = list(zip(*counter.most_common()[:freq_threshold]))
-high_freq_words = list(high_freq_words)
-low_freq_words, low_freq_counts = list(zip(*counter.most_common()[:freq_threshold - 1:-1]))
-low_freq_words = list(low_freq_words)
-print("Threshold is set to {}, #high_freq_words={}, #low_freq_words={}".format(
-    freq_threshold, sum(high_freq_counts), sum(low_freq_counts)))
-ram_write("high_freq_words", high_freq_words)
-ram_write("low_freq_words", low_freq_words)
+# counter = Counter(dict(vocab._retained_counter['tokens']))
+# freq_threshold = 1000
+# high_freq_words, high_freq_counts = list(zip(*counter.most_common()[:freq_threshold]))
+# high_freq_words = list(high_freq_words)
+# low_freq_words, low_freq_counts = list(zip(*counter.most_common()[:freq_threshold - 1:-1]))
+# low_freq_words = list(low_freq_words)
+# print("Threshold is set to {}, #high_freq_words={}, #low_freq_words={}".format(
+#     freq_threshold, sum(high_freq_counts), sum(low_freq_counts)))
+# ram_write("high_freq_words", high_freq_words)
+# ram_write("low_freq_words", low_freq_words)
 # analyze_frequency(vocab)
 # exit()
 
-model = LstmClassifier(vocab).cuda()
+model = LstmClassifier(vocab, pretrain).cuda()
 
-model_path = 'sst_model.pt'
+model_path = f'{cache_prefix}_model.pt'
 if pathlib.Path(model_path).exists():
     with open(model_path, 'rb') as f:
         model.load_state_dict(torch.load(f))
