@@ -44,12 +44,13 @@ from freq_util import analyze_frequency, frequency_analysis
 from luna import (auto_create, flt2str, log, log_config, ram_read, ram_reset, ram_write)
 from sst_model import LstmClassifier, WORD2VECS
 from allennlp.data.token_indexers.elmo_indexer import ELMoTokenCharactersIndexer
+from luna.pytorch import load_model, save_model, exist_model
 
 log_config("log", "cf")
 FORMAT = '%(asctime)-15s %(message)s'
 # logging.basicConfig(format=FORMAT, level=logging.INFO)
 
-pretrain = "elmo"
+pretrain = "fasttext"
 cache_prefix = "sst_elmo" if pretrain == "elmo" else "sst"
 
 if pretrain == 'elmo':
@@ -93,11 +94,12 @@ vocab = auto_create(f"{cache_prefix}_vocab",
 # exit()
 
 model = LstmClassifier(vocab, pretrain).cuda()
+log(model)
 
-model_path = f'{cache_prefix}_model.pt'
-if pathlib.Path(model_path).exists():
-    with open(model_path, 'rb') as f:
-        model.load_state_dict(torch.load(f))
+model_path = f'{cache_prefix}_model'
+
+if exist_model(model_path):
+    load_model(model, model_path)
 else:
     iterator = BucketIterator(batch_size=32, sorting_keys=[("tokens", "num_tokens")])
     # iterator = BasicIterator(batch_size=32)
@@ -116,9 +118,7 @@ else:
                               cuda_device=0,
                               callbacks=[EvaluateCallback(test_data)])
     trainer.train()
-
-    with open(model_path, 'wb') as f:
-        torch.save(model.state_dict(), f)
+    save_model(model, model_path)
 
 for module in model.modules():
     if isinstance(module, TextFieldEmbedder):

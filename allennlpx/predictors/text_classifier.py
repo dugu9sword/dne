@@ -6,10 +6,9 @@ import numpy
 
 from allennlp.common.util import JsonDict
 from allennlp.data import Instance
-from allennlp.predictors.predictor import Predictor
 from allennlp.data.fields import LabelField
 from allennlp.data.tokenizers.word_tokenizer import WordTokenizer
-from .predictor import Predictor
+from allennlpx.predictors.predictor import Predictor
 
 class TextClassifierPredictor(Predictor):
     """

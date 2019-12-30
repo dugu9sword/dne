@@ -60,6 +60,16 @@ def gpu(*x):
         else:
             return x
 
+def exist_model(saved_model_name):
+    if not os.path.exists(__model_path__):
+        os.makedirs(__model_path__, exist_ok=True)
+    for file in os.listdir(__model_path__):
+        file = file[:-5]
+        name = file.split('@')[0]
+        ckpt = int(file.split('@')[1])
+        if name == saved_model_name:
+            return True
+    return False
 
 def load_model(model, saved_model_name, checkpoint=-1):
     if not os.path.exists(__model_path__):
@@ -73,9 +83,9 @@ def load_model(model, saved_model_name, checkpoint=-1):
                 checkpoint = ckpt
     path = "{}/{}@{}.ckpt".format(__model_path__, saved_model_name, checkpoint)
     if not os.path.exists(path):
-        log("Checkpoint not found.")
+        log("Checkpoint {} not found.".format(path))
     else:
-        log("Checkpoint found, restoring from {}".format(checkpoint))
+        log("Restore model from checkpoint {}.".format(path))
         if not torch.cuda.is_available():
             model.load_state_dict(torch.load(path, map_location=lambda storage, loc: storage))
         else:
@@ -83,13 +93,14 @@ def load_model(model, saved_model_name, checkpoint=-1):
     return checkpoint
 
 
-def save_model(model, saved_model_name, checkpoint):
+def save_model(model, saved_model_name, checkpoint=-1):
     if not os.path.exists(__model_path__):
         os.makedirs(__model_path__, exist_ok=True)
     if checkpoint == -1:
         checkpoint = 0
-    torch.save(model.state_dict(), "{}/{}@{}.ckpt".format(
-        __model_path__, saved_model_name, checkpoint))
+    path = "{}/{}@{}.ckpt".format(__model_path__, saved_model_name, checkpoint)
+    torch.save(model.state_dict(), path)
+    log("Model saved to {}.".format(path))
     return checkpoint + 1
 
 

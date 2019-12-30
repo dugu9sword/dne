@@ -9,7 +9,7 @@ import re
 import pickle
 import random
 import argparse
-from typing import List, Dict, NamedTuple, Union
+from typing import List, Dict, NamedTuple, Union, Iterable
 from colorama import Fore, Back
 import psutil
 from tabulate import tabulate
@@ -295,6 +295,12 @@ def locate_chunk(num_total,  num_chunk, chunk_id):
     if chunk_id == num_chunk - 1:
         end = num_total
     return start, end
+
+
+def chunks(lst, chunk_size):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), chunk_size):
+        yield lst[i:i + chunk_size]
 
 
 class CherryPicker:
