@@ -87,8 +87,9 @@ class LstmClassifier(Model):
             token_embedder = Embedding(num_embeddings=vocab.get_vocab_size('tokens'),
                                        embedding_dim=EMBED_DIM[pretrain],
                                        weight=weight,
+                                    #    scale_grad_by_freq=True,
                                        sparse=True,
-                                       trainable=False)
+                                       trainable=True)
         elif pretrain == 'elmo':
             token_embedder = ElmoTokenEmbedder(ELMO_OPTION, ELMO_WEIGHT)
         else:

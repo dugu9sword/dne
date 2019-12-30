@@ -50,7 +50,7 @@ log_config("log", "cf")
 FORMAT = '%(asctime)-15s %(message)s'
 # logging.basicConfig(format=FORMAT, level=logging.INFO)
 
-pretrain = "fasttext"
+pretrain = "fasttext_ol"
 cache_prefix = "sst_elmo" if pretrain == "elmo" else "sst"
 
 if pretrain == 'elmo':
@@ -98,13 +98,21 @@ log(model)
 
 model_path = f'{cache_prefix}_model'
 
-if exist_model(model_path):
+if False and exist_model(model_path):
     load_model(model, model_path)
 else:
     iterator = BucketIterator(batch_size=32, sorting_keys=[("tokens", "num_tokens")])
     # iterator = BasicIterator(batch_size=32)
     iterator.index_with(vocab)
-    optimizer = DenseSparseAdam(model.parameters())
+    # optimizer = DenseSparseAdam(model.parameters())
+    optimizer = DenseSparseAdam([{
+        'params': model.word_embedders.parameters(),
+        'lr': 1e-4
+    }, {
+        'params': list(model.parameters())[1:],
+        'lr': 1e-3
+    }])
+    # optimizer = torch.optim.Adagrad(model.parameters())
     # optimizer = torch.optim.SGD(model.parameters(), lr=0.1, weight_decay=1e-5)
 
     trainer = CallbackTrainer(model=model,
@@ -117,7 +125,10 @@ else:
                               patience=None,
                               cuda_device=0,
                               callbacks=[EvaluateCallback(test_data)])
+    # trainer.train()
+    # model.word_embedders.token_embedder_tokens.weight.requires_grad=True
     trainer.train()
+    exit()
     save_model(model, model_path)
 
 for module in model.modules():
