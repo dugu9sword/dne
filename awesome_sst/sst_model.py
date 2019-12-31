@@ -40,10 +40,12 @@ from allennlpx.predictors.text_classifier import TextClassifierPredictor
 # from allennlp.training.trainer import Trainer
 from allennlpx.training.callback_trainer import CallbackTrainer
 from allennlpx.training.callbacks.evaluate_callback import EvaluateCallback
-from freq_util import analyze_frequency, frequency_analysis
 from luna import (auto_create, flt2str, log, log_config, ram_read, ram_reset, ram_write)
 from allennlp.modules.token_embedders.elmo_token_embedder import ElmoTokenEmbedder
 from collections import defaultdict
+
+from awesome_sst.freq_util import analyze_frequency, frequency_analysis
+
 # from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
 # from luna import load_word2vec
 # emb_searcher = EmbeddingSearcher(token_embedding.weight,
@@ -75,21 +77,25 @@ EMBED_DIM = defaultdict(lambda: 300, {"elmo": 256})
 
 
 class LstmClassifier(Model):
-    def __init__(self, vocab, pretrain="fasttext_ol"):
+    def __init__(self, vocab, pretrain="fasttext_ol", fix_embed=False):
         super().__init__(vocab)
 
         if pretrain in WORD2VECS:
             embedding_path = WORD2VECS[pretrain]
             cache_embed_path = hashlib.md5(embedding_path.encode()).hexdigest()
             weight = auto_create(
-                cache_embed_path, lambda: _read_pretrained_embeddings_file(
-                    embedding_path, embedding_dim=EMBED_DIM[pretrain], vocab=vocab, namespace="tokens"), True)
-            token_embedder = Embedding(num_embeddings=vocab.get_vocab_size('tokens'),
-                                       embedding_dim=EMBED_DIM[pretrain],
-                                       weight=weight,
-                                    #    scale_grad_by_freq=True,
-                                       sparse=True,
-                                       trainable=True)
+                cache_embed_path,
+                lambda: _read_pretrained_embeddings_file(embedding_path,
+                                                         embedding_dim=EMBED_DIM[pretrain],
+                                                         vocab=vocab,
+                                                         namespace="tokens"), True)
+            token_embedder = Embedding(
+                num_embeddings=vocab.get_vocab_size('tokens'),
+                embedding_dim=EMBED_DIM[pretrain],
+                weight=weight,
+                #    scale_grad_by_freq=True,
+                sparse=True,
+                trainable=fix_embed)
         elif pretrain == 'elmo':
             token_embedder = ElmoTokenEmbedder(ELMO_OPTION, ELMO_WEIGHT)
         else:
@@ -110,7 +116,11 @@ class LstmClassifier(Model):
     def forward(self, tokens, label=None):
         mask = get_text_field_mask(tokens)
         embeddings = self.word_embedders(tokens)
+        if self.training:
+            embeddings = noise(embeddings, ram_read("config").embed_noise)
         encoder_out = self.encoder(embeddings, mask)
+        if self.training:
+            encoder_out = noise(encoder_out, ram_read("config").lstm_noise)
         logits = self.linear(encoder_out)
         #         print(encoder_out.size(), logits.size())
         output = {"logits": logits, "probs": F.softmax(logits, dim=1)}
@@ -122,3 +132,7 @@ class LstmClassifier(Model):
 
     def get_metrics(self, reset=False):
         return {'accuracy': self.accuracy.get_metric(reset)}
+
+
+def noise(tsr: torch.Tensor, scale=1.0):
+    return tsr + torch.normal(0., tsr.std().item() * scale, tsr.size()).to(tsr.device)

@@ -19,8 +19,7 @@ from allennlp.models import Model
 from allennlp.modules.seq2vec_encoders import (PytorchSeq2VecWrapper, Seq2VecEncoder)
 from allennlp.modules.text_field_embedders import (BasicTextFieldEmbedder, TextFieldEmbedder)
 from allennlp.modules.token_embedders import Embedding, TokenEmbedder
-from allennlp.modules.token_embedders.embedding import \
-    _read_pretrained_embeddings_file
+from allennlp.modules.token_embedders.embedding import _read_pretrained_embeddings_file
 from allennlp.nn.util import get_text_field_mask
 from allennlp.training.metrics import CategoricalAccuracy
 from allennlp.training.optimizers import DenseSparseAdam
@@ -37,19 +36,38 @@ from allennlpx.predictors.text_classifier import TextClassifierPredictor
 # from allennlp.training.trainer import Trainer
 from allennlpx.training.callback_trainer import CallbackTrainer
 from allennlpx.training.callbacks.evaluate_callback import EvaluateCallback
-from freq_util import analyze_frequency, frequency_analysis
+from awesome_sst.freq_util import analyze_frequency, frequency_analysis
 from luna import (auto_create, flt2str, log, log_config, ram_read, ram_reset, ram_write)
-from sst_model import LstmClassifier, WORD2VECS
 from allennlp.data.token_indexers.elmo_indexer import ELMoTokenCharactersIndexer
 from luna.pytorch import load_model, save_model, exist_model
+from awesome_sst.sst_model import LstmClassifier, WORD2VECS
+from luna.program_args import ProgramArgs
+from allennlpx.training.util import evaluate
 
-log_config("log", "cf")
+
+class Config(ProgramArgs):
+    def __init__(self):
+        super().__init__()
+        self.pretrain = "fasttext_ol"
+        self.fix_embed = True
+        self.mode = 'train'
+
+        self.embed_noise = 0.1
+        self.lstm_noise = 0.1
+
+
+config = Config()._parse_args()
+
+ram_write("config", config)
+
+log_config("log", "c")
+log(config)
+
 # logging.basicConfig(level=logging.INFO)
 
-pretrain = "fasttext_ol"
-cache_prefix = "sst_elmo" if pretrain == "elmo" else "sst"
+cache_prefix = "sst_elmo" if config.pretrain == "elmo" else "sst"
 
-if pretrain == 'elmo':
+if config.pretrain == 'elmo':
     token_indexer = ELMoTokenCharactersIndexer()
 else:
     token_indexer = SingleIdTokenIndexer(lowercase_tokens=True)
@@ -89,27 +107,21 @@ vocab = auto_create(f"{cache_prefix}_vocab",
 # analyze_frequency(vocab)
 # exit()
 
-model = LstmClassifier(vocab, pretrain).cuda()
+model = LstmClassifier(vocab, pretrain=config.pretrain, fix_embed=config.fix_embed).cuda()
 log(model)
 
 model_path = f'{cache_prefix}_model'
 
-if exist_model(model_path):
-    load_model(model, model_path)
-else:
-    iterator = BucketIterator(batch_size=32, sorting_keys=[("tokens", "num_tokens")])
-    # iterator = BasicIterator(batch_size=32)
-    iterator.index_with(vocab)
-    # optimizer = DenseSparseAdam(model.parameters())
-    optimizer = DenseSparseAdam([{
-        'params': model.word_embedders.parameters(),
-        'lr': 1e-4
-    }, {
-        'params': list(model.parameters())[1:],
-        'lr': 1e-3
+iterator = BucketIterator(batch_size=32, sorting_keys=[("tokens", "num_tokens")])
+iterator.index_with(vocab)
+
+if config.mode == 'train':
+    # yapf: disable
+    optimizer = DenseSparseAdam([
+        {'params': model.word_embedders.parameters(), 'lr': 1e-4},
+        {'params': list(model.parameters())[1:], 'lr': 1e-3
     }])
-    # optimizer = torch.optim.Adagrad(model.parameters())
-    # optimizer = torch.optim.SGD(model.parameters(), lr=0.1, weight_decay=1e-5)
+    # yapf: enable
 
     trainer = CallbackTrainer(model=model,
                               optimizer=optimizer,
@@ -124,8 +136,11 @@ else:
     # trainer.train()
     # model.word_embedders.token_embedder_tokens.weight.requires_grad=True
     trainer.train()
+    log(evaluate(model, test_data, iterator, 0, None))
     exit()
     save_model(model, model_path)
+elif config.mode == 'eval':
+    load_model(model, model_path)
 
 for module in model.modules():
     if isinstance(module, TextFieldEmbedder):

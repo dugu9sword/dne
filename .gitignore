@@ -2,6 +2,7 @@
 nogit/*
 .idea/
 *.json
+*.hjson
 .vscode/*
 **/__pycache__/*
 *.logs/*
