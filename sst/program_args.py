@@ -22,7 +22,7 @@ class ProgramArgs(argparse.Namespace):
         self.min_count = 0
         self.num_layers = 2
         
-        self.embedding_trainable = 'True'
+        self.embedding_trainable = 'False'
         self.sparse_optimizer = 'True'
         self.pretrain = 'fasttext'
         
