@@ -65,8 +65,6 @@ log(config)
 
 # logging.basicConfig(level=logging.INFO)
 
-cache_prefix = "sst_elmo" if config.pretrain == "elmo" else "sst"
-
 if config.pretrain == 'elmo':
     token_indexer = ELMoTokenCharactersIndexer()
 else:
@@ -88,10 +86,10 @@ def load_data():
     return sub_train_data, train_data, dev_data, test_data
 
 
-sub_train_data, train_data, dev_data, test_data = auto_create(f"{cache_prefix}_data", load_data,
+sub_train_data, train_data, dev_data, test_data = auto_create(f"{config.pretrain}_data", load_data,
                                                               True)
 
-vocab = auto_create(f"{cache_prefix}_vocab",
+vocab = auto_create(f"{config.pretrain}_vocab",
                     lambda: Vocabulary.from_instances(sub_train_data + dev_data + test_data))
 
 # counter = Counter(dict(vocab._retained_counter['tokens']))
@@ -110,7 +108,7 @@ vocab = auto_create(f"{cache_prefix}_vocab",
 model = LstmClassifier(vocab, pretrain=config.pretrain, fix_embed=config.fix_embed).cuda()
 log(model)
 
-model_path = f'{cache_prefix}_model'
+model_path = f'{config.pretrain}_model'
 
 iterator = BucketIterator(batch_size=32, sorting_keys=[("tokens", "num_tokens")])
 iterator.index_with(vocab)
