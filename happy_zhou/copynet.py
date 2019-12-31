@@ -40,7 +40,7 @@ log_config("copy", "cf")
 #                               target_tokenizer=WordTokenizer(),
 #                               source_token_indexers={'tokens': SingleIdTokenIndexer()},
 #                               target_token_indexers={'tokens': SingleIdTokenIndexer()})
-reader = CopyNetDatasetReader(target_namespace="target_tokens",
+reader = CopyNetDatasetReader(target_namespace="tgt",
                               source_tokenizer=WordTokenizer(),
                               target_tokenizer=WordTokenizer(),
                               source_token_indexers={'tokens': SingleIdTokenIndexer()})
@@ -51,18 +51,17 @@ validation_data = data[3:]
 
 vocab = Vocabulary.from_instances(train_data)
 
-token_embedder = Embedding(num_embeddings=vocab.get_vocab_size('tokens'), embedding_dim=300)
-
 model = CopyNetSeq2Seq(
     vocab,
-    source_embedder=BasicTextFieldEmbedder({"tokens": token_embedder}),
+    source_embedder=BasicTextFieldEmbedder(
+        {"tokens": Embedding(num_embeddings=vocab.get_vocab_size('tokens'), embedding_dim=300)}),
     encoder=PytorchSeq2SeqWrapper(torch.nn.LSTM(300, 300, batch_first=True)),
     attention=DotProductAttention(),
     beam_size=3,
     max_decoding_steps=20,
     target_embedding_dim=300,
-    source_namespace="source_tokens",
-    target_namespace="target_tokens",
+    source_namespace="tokens",
+    target_namespace="tgt",
 )
 
 # model = ComposedSeq2Seq(
@@ -87,14 +86,15 @@ optimizer = optim.Adam(model.parameters())
 iterator = BasicIterator(batch_size=1)
 
 iterator.index_with(vocab)
-trainer = Trainer(model=model,
-                  optimizer=optimizer,
-                  iterator=iterator,
-                  train_dataset=train_data,
-                  validation_dataset=validation_data,
-                  num_epochs=10,
-                #   cuda_device=0
-                  )
+trainer = Trainer(
+    model=model,
+    optimizer=optimizer,
+    iterator=iterator,
+    train_dataset=train_data,
+    validation_dataset=validation_data,
+    num_epochs=10,
+    #   cuda_device=0
+)
 
 trainer.train()
 

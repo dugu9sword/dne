@@ -1,6 +1,3 @@
-# To add a new cell, type ''
-# To add a new markdown cell, type ' [markdown]'
-
 import hashlib
 import logging
 import pathlib
@@ -47,8 +44,7 @@ from allennlp.data.token_indexers.elmo_indexer import ELMoTokenCharactersIndexer
 from luna.pytorch import load_model, save_model, exist_model
 
 log_config("log", "cf")
-FORMAT = '%(asctime)-15s %(message)s'
-# logging.basicConfig(format=FORMAT, level=logging.INFO)
+# logging.basicConfig(level=logging.INFO)
 
 pretrain = "fasttext_ol"
 cache_prefix = "sst_elmo" if pretrain == "elmo" else "sst"
@@ -98,7 +94,7 @@ log(model)
 
 model_path = f'{cache_prefix}_model'
 
-if False and exist_model(model_path):
+if exist_model(model_path):
     load_model(model, model_path)
 else:
     iterator = BucketIterator(batch_size=32, sorting_keys=[("tokens", "num_tokens")])

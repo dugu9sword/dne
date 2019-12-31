@@ -30,13 +30,22 @@ from allennlp.modules.seq2seq_decoders import AutoRegressiveSeqDecoder, LstmCell
 from allennlp.modules.seq2seq_encoders import StackedBidirectionalLstm
 from allennlp.models import ComposedSeq2Seq
 # from allennlpx.training.callback_trainer import CallbackTrainer
+from allennlpx.models.encoder_decoders.copynet_seq2seq import CopyNetSeq2Seq
+from allennlp.data.iterators.basic_iterator import BasicIterator
+from allennlp.data.dataset_readers.copynet_seq2seq import CopyNetDatasetReader
+from luna.pytorch import load_model
 
 log_config("translate", "cf")
 
-reader = Seq2SeqDatasetReader(source_tokenizer=WordTokenizer(),
+# reader = Seq2SeqDatasetReader(source_tokenizer=WordTokenizer(),
+#                               target_tokenizer=WordTokenizer(),
+#                               source_token_indexers={'tokens': SingleIdTokenIndexer()},
+#                               target_token_indexers={'tokens': SingleIdTokenIndexer()})
+reader = CopyNetDatasetReader(target_namespace="tgt",
+                              source_tokenizer=WordTokenizer(),
                               target_tokenizer=WordTokenizer(),
-                              source_token_indexers={'tokens': SingleIdTokenIndexer()},
-                              target_token_indexers={'tokens': SingleIdTokenIndexer()})
+                              source_token_indexers={'tokens': SingleIdTokenIndexer()})
+
 train_data = reader.read('nogit/raw_att.train.tsv')
 # validation_dataset = reader.read('tatoeba/en_zh.dev.tsv')
 
@@ -47,7 +56,7 @@ sst_test_data = sst_reader.read('https://s3-us-west-2.amazonaws.com/allennlp/dat
 vocab = Vocabulary.from_instances(train_data + sst_test_data)
 
 sst_clf = LstmClassifier(vocab=load_var("sst_vocab"))
-sst_clf.load_state_dict(torch.load('sst_model.pt'))
+load_model(sst_clf, 'sst_model')
 sst_predictor = TextClassifierPredictor(sst_clf, sst_reader)
 sst_clf.eval()
 
@@ -74,19 +83,33 @@ if embedding_path:
 else:
     token_embedder = Embedding(num_embeddings=vocab.get_vocab_size('tokens'), embedding_dim=300)
 
-model = ComposedSeq2Seq(vocab,
-                        source_text_embedder=BasicTextFieldEmbedder({"tokens": token_embedder}),
-                        encoder=PytorchSeq2SeqWrapper(torch.nn.LSTM(300, 300, batch_first=True)),
-                        decoder=AutoRegressiveSeqDecoder(vocab,
-                                                         decoder_net=LstmCellDecoderNet(
-                                                             decoding_dim=300,
-                                                             target_embedding_dim=300,
-                                                            #  attention=DotProductAttention(),
-                                                             bidirectional_input=False),
-                                                         max_decoding_steps=50,
-                                                         beam_size=1,
-                                                         target_embedder=token_embedder,
-                                                         tie_output_embedding=True))
+
+model = CopyNetSeq2Seq(
+    vocab,
+    source_embedder=BasicTextFieldEmbedder(
+        {"tokens": Embedding(num_embeddings=vocab.get_vocab_size('tokens'), embedding_dim=300)}),
+    encoder=PytorchSeq2SeqWrapper(torch.nn.LSTM(300, 300, batch_first=True)),
+    attention=DotProductAttention(),
+    beam_size=3,
+    max_decoding_steps=50,
+    target_embedding_dim=300,
+    source_namespace="tokens",
+    target_namespace="tgt",
+)
+
+# model = ComposedSeq2Seq(vocab,
+#                         source_text_embedder=BasicTextFieldEmbedder({"tokens": token_embedder}),
+#                         encoder=PytorchSeq2SeqWrapper(torch.nn.LSTM(300, 300, batch_first=True)),
+#                         decoder=AutoRegressiveSeqDecoder(vocab,
+#                                                          decoder_net=LstmCellDecoderNet(
+#                                                              decoding_dim=300,
+#                                                              target_embedding_dim=300,
+#                                                             #  attention=DotProductAttention(),
+#                                                              bidirectional_input=False),
+#                                                          max_decoding_steps=50,
+#                                                          beam_size=1,
+#                                                          target_embedder=token_embedder,
+#                                                          tie_output_embedding=True))
 model.cuda()
 
 optimizer = optim.Adam(model.parameters())
@@ -106,24 +129,24 @@ for i in range(50):
     model.train()
     trainer.train()
 
-    if i > 30:
+    if i >= 0:
         predictor = Seq2SeqPredictor(model, reader)
 
-        total_num = 300
+        total_num = 100
         succ_num = 0
 
         model.eval()
         for instance in itertools.islice(sst_test_data, total_num):
             src_words = allenutil.as_sentence(instance.fields['tokens'])
             src_probs = sst_predictor.predict(src_words)['probs']
-            log('SOURCE:', src_words)
-            log('Prediction:', src_probs)
+            log('SOURCE:', src_words, target='f')
+            log('Prediction:', src_probs, target='f')
 
-            pred_words = allenutil.as_sentence(predictor.predict(src_words)['predicted_tokens'])
+            pred_words = allenutil.as_sentence(predictor.predict(src_words)['predicted_tokens'][0])
             pred_probs = sst_predictor.predict(pred_words)['probs']
-            log("PRED", pred_words)
-            log('Prediction:', pred_probs)
-            log()
+            log("PRED", pred_words, target='f')
+            log('Prediction:', pred_probs, target='f')
+            log(target='f')
             if (src_probs[0] - src_probs[1]) * (pred_probs[0] - pred_probs[1]) < 0:
                 succ_num += 1
         log('FLIP RATE {:.2f}'.format(succ_num / total_num * 100))
