@@ -95,7 +95,7 @@ class LstmClassifier(Model):
                 weight=weight,
                 #    scale_grad_by_freq=True,
                 sparse=True,
-                trainable=fix_embed)
+                trainable=not fix_embed)
         elif pretrain == 'elmo':
             token_embedder = ElmoTokenEmbedder(ELMO_OPTION, ELMO_WEIGHT)
         else:
