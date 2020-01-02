@@ -4,6 +4,7 @@
 import hashlib
 
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from allennlp.models import Model
 from allennlp.modules.seq2vec_encoders import PytorchSeq2VecWrapper
@@ -13,12 +14,13 @@ from allennlp.modules.token_embedders.embedding import  _read_pretrained_embeddi
 from allennlp.nn.util import get_text_field_mask
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.training.metrics import CategoricalAccuracy
+from allennlp.nn.regularizers.regularizer_applicator import RegularizerApplicator
 
 from luna import auto_create
 from allennlp.modules.token_embedders.elmo_token_embedder import ElmoTokenEmbedder
 from collections import defaultdict
 
-from sst.program_args import ProgramArgs
+from sst.args import ProgramArgs
 
 # from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
 # from luna import load_word2vec
@@ -48,11 +50,28 @@ ELMO_WEIGHT = 'https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x1024_12
 
 EMBED_DIM = defaultdict(lambda: 300, {"elmo": 256})
 
+class EmbeddingDropout(nn.Module):
+    def __init__(self, p=0.5):
+        super(EmbeddingDropout, self).__init__()
+
+        self.p = p
+
+    def extra_repr(self):
+        return f"p={self.p}"
+
+    def forward(self, x, eps=1e-12):
+        if self.training:
+            x_mask = torch.bernoulli(x.new_full(x.shape[:2], 1 - self.p))
+            x *= x_mask.unsqueeze(dim=-1)
+        return x
+
 
 class LstmClassifier(Model):
-    def __init__(self, vocab: Vocabulary, config: ProgramArgs):
-        super().__init__(vocab)
+    def __init__(self, vocab: Vocabulary, config: ProgramArgs, regularizer: RegularizerApplicator = None):
+        super().__init__(vocab, regularizer)
 
+        self.config = config
+        
         if config.pretrain in WORD2VECS:
             embedding_path = WORD2VECS[config.pretrain]
             cache_embed_path = hashlib.md5(embedding_path.encode()).hexdigest()
@@ -62,7 +81,7 @@ class LstmClassifier(Model):
             token_embedder = Embedding(num_embeddings=vocab.get_vocab_size('tokens'),
                                        embedding_dim=EMBED_DIM[config.pretrain],
                                        weight=weight,
-                                       sparse=config.is_sparse_optimizer,
+                                       sparse=True,
                                        trainable=config.is_embedding_trainable)
         elif config.pretrain == 'elmo':
             token_embedder = ElmoTokenEmbedder(ELMO_OPTION, ELMO_WEIGHT)
@@ -80,11 +99,18 @@ class LstmClassifier(Model):
                             out_features=vocab.get_vocab_size('label')))
         self.accuracy = CategoricalAccuracy()
         self.loss_function = torch.nn.CrossEntropyLoss()
+        
+        self.word_dropout = EmbeddingDropout(config.dropout_rate)
 
     def forward(self, tokens, label=None):
         mask = get_text_field_mask(tokens)
         embeddings = self.word_embedders(tokens)
+        if self.training:
+            embeddings = self.noise(embeddings, self.config.embed_noise)
+        embeddings = self.word_dropout(embeddings)
         encoder_out = self.encoder(embeddings, mask)
+        if self.training:
+            encoder_out = self.noise(encoder_out, self.config.lstm_noise)
         logits = self.linear(encoder_out)
         #         print(encoder_out.size(), logits.size())
         output = {"logits": logits, "probs": F.softmax(logits, dim=1)}
@@ -96,3 +122,6 @@ class LstmClassifier(Model):
 
     def get_metrics(self, reset=False):
         return {'accuracy': self.accuracy.get_metric(reset)}
+    
+    def noise(self, tsr: torch.Tensor, scale=1.0):
+        return tsr + torch.normal(0., tsr.std().item() * scale, tsr.size()).to(tsr.device)

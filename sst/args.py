@@ -10,6 +10,8 @@ class ProgramArgs(argparse.Namespace):
         super(ProgramArgs, self).__init__()
         self.cuda_device = "3"
         
+        self.mode = 'train'   # 'evaluate' 'attack' 'augmentation'
+        
         self.workspace = '/disks/sdb/zjiehang/frequency'
         self.data = 'SST'
         self.train_data_file = "https://s3-us-west-2.amazonaws.com/allennlp/datasets/sst/train.txt"
@@ -21,10 +23,17 @@ class ProgramArgs(argparse.Namespace):
         self.learning_rate = 1e-3
         self.min_count = 0
         self.num_layers = 2
+        self.optimizer = 'sparse' # 'sparse' 'sgd' 'adam' 
         
-        self.embedding_trainable = 'False'
-        self.sparse_optimizer = 'True'
+        self.embedding_trainable = 'True'
         self.pretrain = 'fasttext'
+        
+        self.dropout_rate = 0.0
+        self.weight_decay = 0.0
+        
+        # for noise
+        self.embed_noise = 1.0
+        self.lstm_noise = 0.0# when noise is 0.0, meaning not add noise
         
     @property
     def cache_path(self):
@@ -41,10 +50,6 @@ class ProgramArgs(argparse.Namespace):
     @property
     def is_embedding_trainable(self):
         return string_to_bool(self.embedding_trainable)
-    
-    @property    
-    def is_sparse_optimizer(self):
-        return string_to_bool(self.sparse_optimizer)
 
     @staticmethod
     def parse(verbose=False) -> "ProgramArgs":

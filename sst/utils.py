@@ -36,8 +36,8 @@ def get_iterator(batch_size: int, type='bucket'):
     else:
         return BasicIterator(batch_size=batch_size)
 
-def get_optimizer(sparse: bool, learning_rate: float, model: Model):
-    if sparse:
+def get_optimizer(model: Model, type: str = 'sparse', learning_rate: float = 1e-3, weight_decay: float = 0.0):
+    if type == 'sparse':
         return DenseSparseAdam([{
             'params': model.word_embedders.parameters(),
             'lr': learning_rate * 0.1
@@ -45,8 +45,17 @@ def get_optimizer(sparse: bool, learning_rate: float, model: Model):
             'params': list(model.parameters())[1:],
             'lr': learning_rate
         }])
-    else:
+    elif type == 'adam':
         return torch.optim.Adam(model.parameters(),lr=learning_rate)
+    elif type == 'sgd':
+        return torch.optim.SGD([{
+                'params': model.word_embedders.parameters(),
+                'lr': learning_rate * 0.1
+            }, {
+                'params': list(model.parameters())[1:],
+                'lr': learning_rate
+        }], weight_decay=weight_decay)
+        
     
 def get_best_checkpoint(path: str):
     # The author is lazy ,so it is the most easy way in allennlp to find the best
