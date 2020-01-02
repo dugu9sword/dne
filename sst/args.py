@@ -45,7 +45,11 @@ class ProgramArgs(argparse.Namespace):
     
     @property
     def saved_path(self):
-        return '{}/saved_models/{}/{}_{}{}'.format(self.workspace, self.data, self.pretrain, 'train' if self.is_embedding_trainable else 'not_train','_sparse' if self.is_sparse_optimizer else '')
+        return '{}/saved_models/{}/{}_{}{}'.format(self.workspace, 
+                                                   self.data, 
+                                                   self.pretrain, 
+                                                   'train' if self.is_embedding_trainable else 'not_train',
+                                                   self.optimizer)
     
     @property
     def is_embedding_trainable(self):
