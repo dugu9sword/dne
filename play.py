@@ -146,7 +146,7 @@ if config.mode == 'train':
     # trainer.train()
     # model.word_embedders.token_embedder_tokens.weight.requires_grad=True
     trainer.train()
-    log(evaluate(model, test_data, iterator, 0, None))
+    # log(evaluate(model, test_data, iterator, 0, None))
     # exit()
     save_model(model, model_path)
     exit()
