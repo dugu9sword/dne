@@ -55,7 +55,7 @@ class Config(ProgramArgs):
         self.fix_embed = False
         self.mode = 'train'
 
-        self.bert_noise = 0
+        self.bert_noise = 0.0
         self.embed_noise = 0.1
         self.lstm_noise = 0.1
 
