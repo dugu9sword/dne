@@ -392,8 +392,9 @@ class BertLayer(nn.Module):
     def forward(self, hidden_states, attention_mask):
         attention_output = self.attention(hidden_states, attention_mask)
         intermediate_output = self.intermediate(attention_output)
+        if ram_read('config').bert_noise != 0:
+            intermediate_output = ram_read('noise')(intermediate_output, ram_read('config').bert_noise)
         layer_output = self.output(intermediate_output, attention_output)
-        layer_output = ram_read('noise_fn')(layer_output, ram_read('config').bert_noise)
         return layer_output
 
 

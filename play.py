@@ -55,7 +55,7 @@ class Config(ProgramArgs):
         self.fix_embed = False
         self.mode = 'train'
 
-        self.bert_noise = 0.1
+        self.bert_noise = 0
         self.embed_noise = 0.1
         self.lstm_noise = 0.1
 
@@ -138,7 +138,7 @@ if config.mode == 'train':
                               iterator=iterator,
                               train_dataset=sub_train_data,
                               validation_dataset=dev_data,
-                              num_epochs=8,
+                              num_epochs=4 if config.pretrain == 'bert' else 8,
                               shuffle=True,
                               patience=None,
                               cuda_device=0,

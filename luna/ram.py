@@ -40,6 +40,23 @@ def ram_has(k):
     return k in __global_ram
 
 
+def ram_globalize(name=None):
+    if name is None:
+        def wrapper(fun):
+            if fun.__name__ in __global_ram:
+                raise Exception("{} already in ram.".format(fun.__name__))
+            __global_ram[fun.__name__] = fun
+            return fun
+    else:
+        def wrapper(fun):
+            if name in __global_ram:
+                raise Exception("{} already in ram.".format(name))
+            __global_ram[name] = fun
+            return fun
+    return wrapper
+
+
+
 # def ram_linear_analyze(k):
     # y = __global_ram[k]
     # x = list(range(len(y)))

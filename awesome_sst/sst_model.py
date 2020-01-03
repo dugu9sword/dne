@@ -40,7 +40,8 @@ from allennlpx.predictors.text_classifier import TextClassifierPredictor
 # from allennlp.training.trainer import Trainer
 from allennlpx.training.callback_trainer import CallbackTrainer
 from allennlpx.training.callbacks.evaluate_callback import EvaluateCallback
-from luna import (auto_create, flt2str, log, log_config, ram_read, ram_reset, ram_write)
+from luna import (auto_create, flt2str, log, log_config, ram_read, ram_reset, ram_write,
+                  ram_globalize)
 from allennlp.modules.token_embedders.elmo_token_embedder import ElmoTokenEmbedder
 from collections import defaultdict
 from allennlpx.modules.token_embedders.bert_token_embedder import PretrainedBertEmbedder
@@ -90,12 +91,11 @@ class LstmClassifier(Model):
                                                          embedding_dim=EMBED_DIM[pretrain],
                                                          vocab=vocab,
                                                          namespace="tokens"), True)
-            token_embedder = Embedding(
-                num_embeddings=vocab.get_vocab_size('tokens'),
-                embedding_dim=EMBED_DIM[pretrain],
-                weight=weight,
-                sparse=True,
-                trainable=not fix_embed)
+            token_embedder = Embedding(num_embeddings=vocab.get_vocab_size('tokens'),
+                                       embedding_dim=EMBED_DIM[pretrain],
+                                       weight=weight,
+                                       sparse=True,
+                                       trainable=not fix_embed)
         elif pretrain == 'elmo':
             token_embedder = ElmoTokenEmbedder(ELMO_OPTION,
                                                ELMO_WEIGHT,
@@ -148,7 +148,9 @@ class LstmClassifier(Model):
         return {'accuracy': self.accuracy.get_metric(reset)}
 
 
+@ram_globalize()
 def noise(tsr: torch.Tensor, scale=1.0):
-    return tsr + torch.normal(0., tsr.std().item() * scale, tsr.size()).to(tsr.device)
+    return tsr + torch.normal(0., tsr.std().item() * scale, tsr.size(), device=tsr.device)
 
-ram_write("noise_fn", noise)
+
+# ram_write("noise_fn", noise)
