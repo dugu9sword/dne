@@ -60,7 +60,7 @@ class Task(object):
                         
     def train(self, config: ProgramArgs):
         # get optimizer
-        optimizer = get_optimizer(self.model, config.optimizer, config.learning_rate, config.weight_decay)
+        optimizer = get_optimizer(self.model, config.optimizer, config.learning_rate)
         # training 
         trainer = CallbackTrainer(model=self.model,
                                   optimizer=optimizer,
@@ -68,7 +68,9 @@ class Task(object):
                                   train_dataset=self.sub_train_data,
                                   validation_dataset=self.dev_data,
                                   validation_metric='+accuracy',
-                                  num_epochs=8,
+                                  serialization_dir=config.saved_path,
+                                  num_serialized_models_to_keep=10,
+                                  num_epochs=config.epoch,
                                   shuffle=True,
                                   patience=None,
                                   cuda_device=0,

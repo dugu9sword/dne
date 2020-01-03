@@ -36,7 +36,7 @@ def get_iterator(batch_size: int, type='bucket'):
     else:
         return BasicIterator(batch_size=batch_size)
 
-def get_optimizer(model: Model, type: str = 'sparse', learning_rate: float = 1e-3, weight_decay: float = 0.0):
+def get_optimizer(model: Model, type: str = 'sparse', learning_rate: float = 1e-3):
     if type == 'sparse':
         return DenseSparseAdam([{
             'params': model.word_embedders.parameters(),
@@ -54,7 +54,7 @@ def get_optimizer(model: Model, type: str = 'sparse', learning_rate: float = 1e-
             }, {
                 'params': list(model.parameters())[1:],
                 'lr': learning_rate
-        }], weight_decay=weight_decay)
+        }])
         
     
 def get_best_checkpoint(path: str):

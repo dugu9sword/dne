@@ -8,9 +8,9 @@ def string_to_bool(string_val):
 class ProgramArgs(argparse.Namespace):
     def __init__(self):
         super(ProgramArgs, self).__init__()
-        self.cuda_device = "3"
+        self.cuda_device = "2"
         
-        self.mode = 'train'   # 'evaluate' 'attack' 'augmentation'
+        self.mode = 'attack'   # 'evaluate' 'attack' 'augmentation'
         
         self.workspace = '/disks/sdb/zjiehang/frequency'
         self.data = 'SST'
@@ -18,12 +18,13 @@ class ProgramArgs(argparse.Namespace):
         self.dev_data_file = "https://s3-us-west-2.amazonaws.com/allennlp/datasets/sst/dev.txt"
         self.test_data_file = "https://s3-us-west-2.amazonaws.com/allennlp/datasets/sst/test.txt"
 
+        self.epoch = 128
         self.hidden_dim = 256
         self.batch_size = 32
-        self.learning_rate = 1e-3
+        self.learning_rate = 1e-1
         self.min_count = 0
         self.num_layers = 2
-        self.optimizer = 'sparse' # 'sparse' 'sgd' 'adam' 
+        self.optimizer = 'sgd'  # 'sparse' 'sgd' 'adam' 
         
         self.embedding_trainable = 'True'
         self.pretrain = 'fasttext'
@@ -32,7 +33,7 @@ class ProgramArgs(argparse.Namespace):
         self.weight_decay = 0.0
         
         # for noise
-        self.embed_noise = 1.0
+        self.embed_noise = 0.0
         self.lstm_noise = 0.0# when noise is 0.0, meaning not add noise
         
     @property
@@ -45,11 +46,12 @@ class ProgramArgs(argparse.Namespace):
     
     @property
     def saved_path(self):
-        return '{}/saved_models/{}/{}_{}{}'.format(self.workspace, 
-                                                   self.data, 
-                                                   self.pretrain, 
-                                                   'train' if self.is_embedding_trainable else 'not_train',
-                                                   self.optimizer)
+        return '{}/saved_models/{}/{}_{}_{}_{}noise'.format(self.workspace,
+                                                            self.data, 
+                                                            self.pretrain, 
+                                                            'train' if self.is_embedding_trainable else 'not_train',
+                                                            self.optimizer,
+                                                            self.embed_noise)
     
     @property
     def is_embedding_trainable(self):
