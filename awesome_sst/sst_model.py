@@ -43,6 +43,7 @@ from allennlpx.training.callbacks.evaluate_callback import EvaluateCallback
 from luna import (auto_create, flt2str, log, log_config, ram_read, ram_reset, ram_write)
 from allennlp.modules.token_embedders.elmo_token_embedder import ElmoTokenEmbedder
 from collections import defaultdict
+from allennlpx.modules.token_embedders.bert_token_embedder import PretrainedBertEmbedder
 
 from awesome_sst.freq_util import analyze_frequency, frequency_analysis
 
@@ -93,29 +94,42 @@ class LstmClassifier(Model):
                 num_embeddings=vocab.get_vocab_size('tokens'),
                 embedding_dim=EMBED_DIM[pretrain],
                 weight=weight,
-                #    scale_grad_by_freq=True,
                 sparse=True,
                 trainable=not fix_embed)
         elif pretrain == 'elmo':
-            token_embedder = ElmoTokenEmbedder(ELMO_OPTION, ELMO_WEIGHT)
+            token_embedder = ElmoTokenEmbedder(ELMO_OPTION,
+                                               ELMO_WEIGHT,
+                                               requires_grad=not fix_embed)
+        elif pretrain == 'bert':
+            token_embedder = PretrainedBertEmbedder('bert-base-uncased',
+                                                    requires_grad=not fix_embed,
+                                                    top_layer_only=True)
         else:
             token_embedder = Embedding(num_embeddings=vocab.get_vocab_size('tokens'),
-                                       embedding_dim=EMBED_DIM[pretrain])
+                                       embedding_dim=EMBED_DIM[pretrain],
+                                       sparse=True,
+                                       trainable=not fix_embed)
 
-        self.word_embedders = BasicTextFieldEmbedder({"tokens": token_embedder})
+        self.word_embedders = BasicTextFieldEmbedder({"tokens": token_embedder},
+                                                     allow_unmatched_keys=True)
 
-        self.encoder = PytorchSeq2VecWrapper(
-            torch.nn.LSTM(EMBED_DIM[pretrain], hidden_size=512, num_layers=2, batch_first=True))
+        if pretrain != 'bert':
+            self.encoder = PytorchSeq2VecWrapper(
+                torch.nn.LSTM(EMBED_DIM[pretrain], hidden_size=512, num_layers=2, batch_first=True))
+            self.linear = torch.nn.Linear(in_features=self.encoder.get_output_dim(),
+                                          out_features=vocab.get_vocab_size('label'))
+        else:
+            self.encoder = lambda x, _: x[:, 0]
+            self.linear = torch.nn.Linear(in_features=768,
+                                          out_features=vocab.get_vocab_size('label'))
 
-        self.linear = torch.nn.Sequential(
-            torch.nn.Linear(in_features=self.encoder.get_output_dim(),
-                            out_features=vocab.get_vocab_size('label')))
         self.accuracy = CategoricalAccuracy()
         self.loss_function = torch.nn.CrossEntropyLoss()
 
     def forward(self, tokens, label=None):
         mask = get_text_field_mask(tokens)
         embeddings = self.word_embedders(tokens)
+
         if self.training:
             embeddings = noise(embeddings, ram_read("config").embed_noise)
         encoder_out = self.encoder(embeddings, mask)
@@ -136,3 +150,5 @@ class LstmClassifier(Model):
 
 def noise(tsr: torch.Tensor, scale=1.0):
     return tsr + torch.normal(0., tsr.std().item() * scale, tsr.size()).to(tsr.device)
+
+ram_write("noise_fn", noise)

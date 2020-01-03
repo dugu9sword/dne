@@ -43,15 +43,19 @@ from luna.pytorch import load_model, save_model, exist_model
 from awesome_sst.sst_model import LstmClassifier, WORD2VECS
 from luna.program_args import ProgramArgs
 from allennlpx.training.util import evaluate
+from allennlp.data.token_indexers.wordpiece_indexer import PretrainedBertIndexer
+from torch.optim.adam import Adam
+from torch.optim.sgd import SGD
 
 
 class Config(ProgramArgs):
     def __init__(self):
         super().__init__()
-        self.pretrain = "fasttext_ol"
-        self.fix_embed = True
+        self.pretrain = "bert"
+        self.fix_embed = False
         self.mode = 'train'
 
+        self.bert_noise = 0.1
         self.embed_noise = 0.1
         self.lstm_noise = 0.1
 
@@ -67,6 +71,8 @@ log(config)
 
 if config.pretrain == 'elmo':
     token_indexer = ELMoTokenCharactersIndexer()
+elif config.pretrain == 'bert':
+    token_indexer = PretrainedBertIndexer(pretrained_model='bert-base-uncased', do_lowercase=True)
 else:
     token_indexer = SingleIdTokenIndexer(lowercase_tokens=True)
 
@@ -115,10 +121,16 @@ iterator.index_with(vocab)
 
 if config.mode == 'train':
     # yapf: disable
-    optimizer = DenseSparseAdam([
-        {'params': model.word_embedders.parameters(), 'lr': 1e-4},
-        {'params': list(model.parameters())[1:], 'lr': 1e-3
-    }])
+    if config.pretrain == 'bert':
+        optimizer = Adam(model.parameters(), lr=3e-5)
+    elif config.pretrain == 'elmo':
+        # Garbage elmo, slow & poor
+        optimizer = Adam(model.parameters(), lr=1e-4)
+    else:
+        optimizer = DenseSparseAdam([
+            {'params': model.word_embedders.parameters(), 'lr': 1e-4},
+            {'params': list(model.parameters())[1:], 'lr': 1e-3
+        }])
     # yapf: enable
 
     trainer = CallbackTrainer(model=model,
