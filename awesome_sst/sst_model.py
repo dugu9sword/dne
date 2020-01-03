@@ -130,11 +130,11 @@ class LstmClassifier(Model):
         mask = get_text_field_mask(tokens)
         embeddings = self.word_embedders(tokens)
 
-        if self.training:
+        if self.training \
+            and ram_read("config").pretrain!='bert' \
+            and ram_read("config").embed_noise != 0:
             embeddings = noise(embeddings, ram_read("config").embed_noise)
         encoder_out = self.encoder(embeddings, mask)
-        if self.training:
-            encoder_out = noise(encoder_out, ram_read("config").lstm_noise)
         logits = self.linear(encoder_out)
         #         print(encoder_out.size(), logits.size())
         output = {"logits": logits, "probs": F.softmax(logits, dim=1)}

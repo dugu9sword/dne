@@ -56,8 +56,8 @@ class Config(ProgramArgs):
         self.mode = 'train'
 
         self.bert_noise = 0.0
-        self.embed_noise = 0.1
-        self.lstm_noise = 0.1
+        self.embed_noise = 0.5
+        self.lstm_noise = 0.0
 
 
 config = Config()._parse_args()
@@ -114,7 +114,15 @@ vocab = auto_create(f"{config.pretrain}_vocab",
 model = LstmClassifier(vocab, pretrain=config.pretrain, fix_embed=config.fix_embed).cuda()
 log(model)
 
+# predictor = TextClassifierPredictor(model.cpu(), reader)
+
+# with predictor.capture_named_internals(['encoder', 'word_embedders']) as internals:
+#     predictor.predict('11 11')
+#     print(internals)
+
 model_path = f'{config.pretrain}_model'
+if config.fix_embed:
+    model_path += '_feat'  # this means feature-based (v.s. finetune-based)
 
 iterator = BucketIterator(batch_size=32, sorting_keys=[("tokens", "num_tokens")])
 iterator.index_with(vocab)
@@ -147,11 +155,12 @@ if config.mode == 'train':
     # model.word_embedders.token_embedder_tokens.weight.requires_grad=True
     trainer.train()
     # log(evaluate(model, test_data, iterator, 0, None))
-    # exit()
+    exit()
     save_model(model, model_path)
     exit()
 elif config.mode == 'eval':
     load_model(model, model_path)
+    # exit()
 
 for module in model.modules():
     if isinstance(module, TextFieldEmbedder):
@@ -164,6 +173,7 @@ not_words = [line.rstrip('\n') for line in open("sentiment-words/negation-words.
 forbidden_words = pos_words + neg_words + not_words + DEFAULT_IGNORE_TOKENS
 
 predictor = TextClassifierPredictor(model.cpu(), reader)
+
 # attacker = HotFlip(predictor)
 attacker = BruteForce(predictor)
 attacker.initialize()

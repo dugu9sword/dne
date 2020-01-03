@@ -1,4 +1,4 @@
-from typing import List, Iterator, Dict, Tuple, Any
+from typing import List, Iterator, Dict, Tuple, Any, Union
 import json
 from contextlib import contextmanager
 import numpy
@@ -124,30 +124,32 @@ class Predictor(Predictor_):
         return backward_hooks
 
     @contextmanager
-    def capture_model_internals(self) -> Iterator[dict]:
+    def capture_named_internals(self, names: Union[str, List[str]]) -> Iterator[dict]:
         """
         Context manager that captures the internal-module outputs of
         this predictor's model. The idea is that you could use it as follows:
 
         .. code-block:: python
 
-            with predictor.capture_model_internals() as internals:
+            with predictor.capture_named_internals([""]) as internals:
                 outputs = predictor.predict_json(inputs)
 
-            return {**outputs, "model_internals": internals}
         """
+        if isinstance(names, str):
+            names = [names]
+            
         results = {}
         hooks = []
 
         # First we'll register hooks to add the outputs of each module to the results dict.
-        def add_output(idx: int):
+        def add_output(name):
             def _add_output(mod, _, outputs):
-                results[idx] = {"name": str(mod), "output": outputs}
+                results[name] = outputs
             return _add_output
 
-        for idx, module in enumerate(self._model.modules()):
-            if module != self._model:
-                hook = module.register_forward_hook(add_output(idx))
+        for idx, (m_name, module) in enumerate(self._model.named_modules()):
+            if m_name in names:
+                hook = module.register_forward_hook(add_output(m_name))
                 hooks.append(hook)
 
         # If you capture the return value of the context manager, you get the results dict.

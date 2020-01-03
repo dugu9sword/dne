@@ -267,6 +267,8 @@ class BertEmbeddings(nn.Module):
             token_type_ids = torch.zeros_like(input_ids)
 
         words_embeddings = self.word_embeddings(input_ids)
+        if self.training and ram_read("config").embed_noise != 0:
+            words_embeddings = ram_read("noise")(words_embeddings, ram_read("config").embed_noise)
         position_embeddings = self.position_embeddings(position_ids)
         token_type_embeddings = self.token_type_embeddings(token_type_ids)
 
