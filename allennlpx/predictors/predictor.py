@@ -15,6 +15,8 @@ from allennlp.modules.text_field_embedders import TextFieldEmbedder
 from allennlp.data.dataset import Batch
 
 from allennlp.predictors.predictor import Predictor as Predictor_
+import re
+
 
 class Predictor(Predictor_):
     # """
@@ -58,8 +60,7 @@ class Predictor(Predictor_):
     #     new_instances = self.predictions_to_labeled_instances(instance, outputs)
     #     return new_instances
 
-    def get_gradients(self,
-                      instances: List[Instance]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    def get_gradients(self, instances: List[Instance]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """
         Gets the gradients of the loss with respect to the model inputs.
 
@@ -113,7 +114,7 @@ class Predictor(Predictor_):
         will be called multiple times. We append all the embeddings gradients
         to a list.
         """
-        def hook_layers(module, grad_in, grad_out): # pylint: disable=unused-argument
+        def hook_layers(module, grad_in, grad_out):  # pylint: disable=unused-argument
             embedding_gradients.append(grad_out[0])
 
         backward_hooks = []
@@ -124,20 +125,17 @@ class Predictor(Predictor_):
         return backward_hooks
 
     @contextmanager
-    def capture_named_internals(self, names: Union[str, List[str]]) -> Iterator[dict]:
+    def capture_named_internals(self,
+                                names: Union[str, List[str]],
+                                match_type='full') -> Iterator[dict]:
         """
-        Context manager that captures the internal-module outputs of
-        this predictor's model. The idea is that you could use it as follows:
-
-        .. code-block:: python
-
             with predictor.capture_named_internals([""]) as internals:
                 outputs = predictor.predict_json(inputs)
-
         """
+        assert match_type in ['full', 'partial', 're']
         if isinstance(names, str):
             names = [names]
-            
+
         results = {}
         hooks = []
 
@@ -145,12 +143,24 @@ class Predictor(Predictor_):
         def add_output(name):
             def _add_output(mod, _, outputs):
                 results[name] = outputs
+
             return _add_output
 
-        for idx, (m_name, module) in enumerate(self._model.named_modules()):
-            if m_name in names:
-                hook = module.register_forward_hook(add_output(m_name))
-                hooks.append(hook)
+        for idx, (mod_name, module) in enumerate(self._model.named_modules()):
+            if match_type == 'full':
+                if mod_name in names:
+                    hook = module.register_forward_hook(add_output(mod_name))
+                    hooks.append(hook)
+            elif match_type == 'partial':
+                for name in names:
+                    if name in mod_name:
+                        hook = module.register_forward_hook(add_output(mod_name))
+                        hooks.append(hook)
+            elif match_type == 're':
+                for name in names:
+                    if re.match(name, mod_name):
+                        hook = module.register_forward_hook(add_output(mod_name))
+                        hooks.append(hook)
 
         # If you capture the return value of the context manager, you get the results dict.
         yield results
