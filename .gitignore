@@ -14,5 +14,6 @@ nogit/*
 *.txt
 saved/*
 universal-triggers-master/
-.ipynb_checkpoints 
+.ipynb_checkpoints
+glue_data/* 
 
