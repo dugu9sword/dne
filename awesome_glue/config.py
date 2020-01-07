@@ -12,6 +12,7 @@ class Config(ProgramArgs):
         self.embed_noise = 0.3
 
         self.alchemist = False
+        self.seed = 0
 
 
     def _check_args(self):

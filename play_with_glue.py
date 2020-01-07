@@ -3,8 +3,14 @@ from awesome_glue.task import Task
 from allennlp.common.tqdm import Tqdm
 from luna.ram import ram_write
 from luna.logging import log, log_config
+import numpy as np
+
+import torch
 
 config = Config()._parse_args()
+
+torch.manual_seed(config.seed)
+np.random.seed(config.seed)
 
 if config.alchemist:
     Tqdm.set_slower_interval(True)
