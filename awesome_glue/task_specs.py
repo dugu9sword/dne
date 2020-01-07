@@ -1,6 +1,6 @@
 DEFAULT_TASK_PATH = 'glue_data'
 
-#yapf:disable
+# yapf:disable
 TASK_SPECS = {
     "SST": {
         "path": f"{DEFAULT_TASK_PATH}/SST-2/",
@@ -22,6 +22,13 @@ TASK_SPECS = {
         "sent2_col": None,
         "label_col": "label",
         "skip_label_indexing": True,
+    },
+    "QNLI": {
+        "path": f"{DEFAULT_TASK_PATH}/QNLI",
+        "sent1_col": "question",
+        "sent2_col": "sentence",
+        "label_col": "label",
+        "skip_label_indexing": False,
     }
 }
-#yapf:enable
+# yapf:enable

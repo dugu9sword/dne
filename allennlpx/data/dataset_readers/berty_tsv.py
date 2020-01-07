@@ -7,7 +7,7 @@ from allennlp.data.dataset_readers.dataset_reader import DatasetReader
 from allennlp.data.fields import LabelField, TextField, Field, ListField
 from allennlp.data.instance import Instance
 from allennlp.data.token_indexers import TokenIndexer, SingleIdTokenIndexer
-from allennlp.data.tokenizers import Tokenizer, WordTokenizer
+from allennlp.data.tokenizers import Tokenizer
 from allennlp.data.tokenizers.sentence_splitter import SpacySentenceSplitter
 import pandas
 import csv
@@ -37,7 +37,7 @@ class BertyTSVReader(DatasetReader):
         self._max_sequence_length = max_sequence_length
         self._skip_label_indexing = skip_label_indexing
         self._token_indexers = {
-            "tokens": PretrainedBertIndexer(pretrained_model=bert_model, do_lowercase=True)
+            "berty_tokens": PretrainedBertIndexer(pretrained_model=bert_model, do_lowercase=True)
         }
 
     @overrides
@@ -72,13 +72,14 @@ class BertyTSVReader(DatasetReader):
                          label: Optional[str] = None) -> Instance:  # type: ignore
         fields: Dict[str, Field] = {}
 
-        sent1_tokens = ['[CLS]'] + self._tokenizer.tokenize(sent1) + ['[SEP]']
-        sent2_tokens = self._tokenizer.tokenize(sent2) + ['[SEP]'] if sent2 else []
-        tokens = sent1_tokens + sent2_tokens
-        tokens = tokens[:self._max_sequence_length]
+        tokens = self._tokenizer.tokenize(sent1)
+        if sent2:
+            tokens +=  ['[SEP]'] + self._tokenizer.tokenize(sent2) 
+        # tokens = tokens[:self._max_sequence_length]
         tokens = [Token(x) for x in tokens]
+        # tokens = tokens[:512]
 
-        fields['tokens'] = TextField(tokens, self._token_indexers)
+        fields['berty_tokens'] = TextField(tokens, self._token_indexers)
         
         if label is not None:
             fields['label'] = LabelField(label, skip_indexing=self._skip_label_indexing)

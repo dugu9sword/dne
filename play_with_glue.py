@@ -11,7 +11,7 @@ if config.alchemist:
 
 ram_write("config", config)
 
-log_config("log", "cf")
+log_config("log", "c")
 log(config)
 
 task = Task(config)

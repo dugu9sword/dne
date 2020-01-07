@@ -12,6 +12,9 @@ from allennlp.data.iterators.basic_iterator import BasicIterator
 import torch
 from luna.public import auto_create
 from awesome_glue.bert_classification import BertClassifier
+from allennlp.training.learning_rate_schedulers.slanted_triangular import SlantedTriangular
+from pytorch_pretrained_bert.optimization import BertAdam
+from luna.logging import log
 
 
 class Task:
@@ -40,36 +43,36 @@ class Task:
         self.model = BertClassifier(self.vocab, config.finetunable).cuda()
 
     def train(self):
-        # yapf: disable
-        if self.config.pretrain == 'bert':
-            optimizer = Adam(self.model.parameters(), lr=3e-5)
-        else:
-            optimizer = DenseSparseAdam([
-                {'params': self.model.word_embedders.parameters(), 'lr': 1e-4},
-                {'params': list(self.model.parameters())[1:], 'lr': 1e-3
-            }])
-        # yapf: enable
+        num_epochs = 3
+        pseudo_batch_size = 24
+        accumulate_num = 2
+        batch_size = pseudo_batch_size * accumulate_num
+        optimizer = BertAdam(self.model.parameters(),
+                             lr=3e-5,
+                             warmup=0.1,
+                             t_total=(len(self.train_data) // batch_size + 1) * num_epochs,
+                             weight_decay=0.01)
 
-        iterator = BucketIterator(batch_size=16, sorting_keys=[("tokens", "num_tokens")])
+        iterator = BucketIterator(batch_size=pseudo_batch_size,
+                                  sorting_keys=[("berty_tokens", "num_tokens")])
         iterator.index_with(self.vocab)
 
-        # results for test set is not available
-        dev_size = len(self.dev_data)
-        tmp_valid_data = self.dev_data[:dev_size // 2]
-        tmp_test_data = self.dev_data[dev_size // 2:]
-
-        trainer = CallbackTrainer(model=self.model,
-                                  optimizer=optimizer,
-                                  iterator=iterator,
-                                  train_dataset=self.train_data,
-                                  validation_dataset=tmp_valid_data,
-                                  num_epochs=4 if self.config.pretrain == 'bert' else 8,
-                                  shuffle=True,
-                                  patience=None,
-                                  cuda_device=0,
-                                  callbacks=[EvaluateCallback(tmp_test_data)])
+        trainer = CallbackTrainer(
+            model=self.model,
+            optimizer=optimizer,
+            iterator=iterator,
+            should_log_learning_rate=True,
+            train_dataset=self.train_data,
+            validation_dataset=self.dev_data,
+            num_epochs=num_epochs,
+            shuffle=True,
+            patience=None,
+            cuda_device=0,
+            num_gradient_accumulation_steps=accumulate_num,
+            #   callbacks=[EvaluateCallback(self.dev_data)],
+        )
         trainer.train()
-        # log(evaluate(model, test_data, iterator, 0, None))
+        log(evaluate(self.model, self.dev_data, iterator, 0, None))
         # exit()
         # save_model(self.model, self.model_path)
 
