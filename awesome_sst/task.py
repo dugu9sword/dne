@@ -47,6 +47,7 @@ from allennlp.data.token_indexers.wordpiece_indexer import PretrainedBertIndexer
 from torch.optim.adam import Adam
 from torch.optim.sgd import SGD
 from awesome_sst.config import Config
+from pytorch_pretrained_bert.optimization import BertAdam
 
 
 class Task:
@@ -64,9 +65,12 @@ class Task:
             token_indexer = SingleIdTokenIndexer(lowercase_tokens=True)
 
         self.sub_reader = StanfordSentimentTreeBankDatasetReader(
-            token_indexers={"tokens": token_indexer}, granularity='2-class', use_subtrees=True)
+            token_indexers={"tokens": token_indexer},
+            granularity='2-class',
+            use_subtrees=True,
+            add_cls=True)
         self.reader = StanfordSentimentTreeBankDatasetReader(
-            token_indexers={"tokens": token_indexer}, granularity='2-class')
+            token_indexers={"tokens": token_indexer}, granularity='2-class', add_cls=True)
 
         def __load_data():
             sub_train_data = self.sub_reader.read(
@@ -99,7 +103,8 @@ class Task:
         # analyze_frequency(vocab)
         # exit()
 
-        self.model = LstmClassifier(self.vocab, pretrain=config.pretrain,
+        self.model = LstmClassifier(self.vocab,
+                                    pretrain=config.pretrain,
                                     fix_embed=config.fix_embed).cuda()
         log(self.model)
 
@@ -119,6 +124,8 @@ class Task:
         load_model(self.model, self.model_path)
 
     def train(self):
+        num_epochs = 5
+        batch_size = 32
         # yapf: disable
         if self.config.pretrain == 'bert':
             optimizer = Adam(self.model.parameters(), lr=3e-5)
@@ -127,9 +134,15 @@ class Task:
             optimizer = Adam(self.model.parameters(), lr=1e-4)
         else:
             optimizer = DenseSparseAdam([
-                {'params': self.model.word_embedders.parameters(), 'lr': 1e-4},
-                {'params': list(self.model.parameters())[1:], 'lr': 1e-3
+                {'params': self.model.word_embedders.parameters(), 'lr': 5e-5},
+                {'params': list(self.model.parameters())[1:], 'lr': 5e-4
             }])
+            # optimizer = Adam(self.model.parameters(), lr=5e-4)
+            # optimizer = BertAdam(self.model.parameters(),
+            #                  lr=5e-4,
+            #                  warmup=0.2,
+            #                  t_total=(len(self.sub_train_data) // batch_size + 1) * num_epochs,
+            #                  weight_decay=0.01)
         # yapf: enable
 
         iterator = BucketIterator(batch_size=32, sorting_keys=[("tokens", "num_tokens")])
@@ -140,7 +153,7 @@ class Task:
                                   iterator=iterator,
                                   train_dataset=self.sub_train_data,
                                   validation_dataset=self.dev_data,
-                                  num_epochs=4 if self.config.pretrain == 'bert' else 8,
+                                  num_epochs=num_epochs,
                                   shuffle=True,
                                   patience=None,
                                   cuda_device=0,

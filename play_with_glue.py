@@ -22,12 +22,9 @@ log(config)
 
 task = Task(config)
 
-#
-if config.mode == 'train':
-    task.train()
-elif config.mode == 'eval':
-    task.from_trained()
-    task.evaluate()
-elif config.mode == 'attack':
-    task.from_trained()
-    task.attack()
+{
+    'train': task.train,
+    'eval': task.evaluate,
+    'attack': task.attack,
+    'transfer': task.transfer_attack
+}[config.mode]()

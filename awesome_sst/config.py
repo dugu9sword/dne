@@ -4,9 +4,10 @@ from luna.program_args import ProgramArgs
 class Config(ProgramArgs):
     def __init__(self):
         super().__init__()
-        self.pretrain = "bert"
+        self.arch = 'fakebert'
+        self.pretrain = "fasttext_ol"
         self.fix_embed = False
-        self.mode = 'attack'
+        self.mode = 'train'
 
         self.bert_noise = 0.0
         self.embed_noise = 0.0

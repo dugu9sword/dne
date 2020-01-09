@@ -2,9 +2,9 @@ from allennlp.data.instance import Instance
 from allennlp.data.fields import TextField
 from allennlp.data.tokenizers import Token
 
-def as_sentence(something):
+def as_sentence(something, field='tokens'):
     if isinstance(something, Instance):
-        tokens = something.fields['tokens'].tokens
+        tokens = something.fields[field].tokens
         tkstrs = list(map(str, tokens))
     elif isinstance(something, TextField):
         tokens = something.tokens

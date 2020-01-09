@@ -81,6 +81,13 @@ class BertClassifier(Model):
     def get_metrics(self, reset=False):
         return {'accuracy': self.accuracy.get_metric(reset)}
 
+    def get_optimizer(self, total_steps):
+        return BertAdam(self.parameters(),
+                        lr=3e-5,
+                        warmup=0.1,
+                        t_total=total_steps,
+                        weight_decay=0.01)
+
 
 from luna import ram_globalize
 

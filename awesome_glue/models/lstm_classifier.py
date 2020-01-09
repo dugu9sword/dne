@@ -45,23 +45,7 @@ from allennlpx.modules.token_embedders.bert_token_embedder import PretrainedBert
 from awesome_sst.freq_util import analyze_frequency, frequency_analysis
 from allennlpx.modules.seq2seq_encoders.stacked_self_attention import StackedSelfAttentionEncoder
 from allennlp.modules.seq2seq_encoders.pytorch_seq2seq_wrapper import PytorchSeq2SeqWrapper
-
-
-# from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
-# from luna import load_word2vec
-# emb_searcher = EmbeddingSearcher(token_embedding.weight,
-#                                  word2idx=vocab.get_token_index,
-#                                  idx2word=vocab.get_token_from_index)
-
-# cf_embedding = torch.nn.Embedding(num_embeddings=vocab.get_vocab_size('tokens'),
-#                                   embedding_dim=300)
-# load_word2vec(cf_embedding, vocab._token_to_index["tokens"],
-#               "../counter-fitting/results/counter_fitted_vectors.txt")
-# cf_searcher = EmbeddingSearcher(cf_embedding.weight,
-#                                 word2idx=vocab.get_token_index,
-#                                 idx2word=vocab.get_token_from_index)
-
-# emb_searcher.find_neighbours("happy", "euc", topk=20, verbose=True)
+from allennlp.modules.seq2vec_encoders.pytorch_seq2vec_wrapper import PytorchSeq2VecWrapper
 
 WORD2VECS = {
     "fasttext": "/disks/sdb/zjiehang/embeddings/fasttext/crawl-300d-2M.vec",
@@ -78,7 +62,7 @@ EMBED_DIM = defaultdict(lambda: 300, {"elmo": 256})
 
 
 class LstmClassifier(Model):
-    def __init__(self, vocab, pretrain="fasttext_ol", fix_embed=False):
+    def __init__(self, vocab, pretrain, finetunable=False):
         super().__init__(vocab)
 
         if pretrain in WORD2VECS:
@@ -94,59 +78,38 @@ class LstmClassifier(Model):
                                        embedding_dim=EMBED_DIM[pretrain],
                                        weight=weight,
                                        sparse=True,
-                                       trainable=not fix_embed)
+                                       trainable=finetunable)
         elif pretrain == 'elmo':
-            token_embedder = ElmoTokenEmbedder(ELMO_OPTION,
-                                               ELMO_WEIGHT,
-                                               requires_grad=not fix_embed)
-        elif pretrain == 'bert':
-            token_embedder = PretrainedBertEmbedder('bert-base-uncased',
-                                                    requires_grad=not fix_embed,
-                                                    top_layer_only=True)
-        else:
-            token_embedder = Embedding(num_embeddings=vocab.get_vocab_size('tokens'),
-                                       embedding_dim=EMBED_DIM[pretrain],
-                                    #    sparse=True,
-                                       trainable=not fix_embed)
+            token_embedder = ElmoTokenEmbedder(ELMO_OPTION, ELMO_WEIGHT, requires_grad=finetunable)
+        elif pretrain == 'random':
+            token_embedder = Embedding(
+                num_embeddings=vocab.get_vocab_size('tokens'),
+                embedding_dim=EMBED_DIM[pretrain],
+                #    sparse=True,
+                trainable=finetunable)
 
         self.word_embedders = BasicTextFieldEmbedder({"tokens": token_embedder},
                                                      allow_unmatched_keys=True)
 
-        if pretrain != 'bert':
-            
-            # self.encoder = PytorchSeq2SeqWrapper(
-            #     torch.nn.LSTM(EMBED_DIM[pretrain], hidden_size=512, num_layers=2, batch_first=True))
-            self.encoder = StackedSelfAttentionEncoder(input_dim=EMBED_DIM[pretrain],
-                                                       hidden_dim=300,
-                                                       projection_dim=300,
-                                                       feedforward_hidden_dim=300,
-                                                       num_attention_heads=6,
-                                                       num_layers=3)
-
-            print("ENCODER SIZE: ", sum(p.numel() for p in self.encoder.parameters()))
-            self.linear = torch.nn.Linear(in_features=self.encoder.get_output_dim(),
-                                          out_features=vocab.get_vocab_size('label'))
-            print("LINEAR SIZE: ", sum(p.numel() for p in self.linear.parameters()))
-
-        else:
-            self.encoder = lambda x, _: x[:, 0]
-            self.linear = torch.nn.Linear(in_features=768,
-                                          out_features=vocab.get_vocab_size('label'))
+        self.encoder = PytorchSeq2VecWrapper(
+            torch.nn.LSTM(EMBED_DIM[pretrain], hidden_size=512, num_layers=2, batch_first=True))
+        self.linear = torch.nn.Linear(in_features=self.encoder.get_output_dim(),
+                                      out_features=vocab.get_vocab_size('label'))
 
         self.accuracy = CategoricalAccuracy()
         self.loss_function = torch.nn.CrossEntropyLoss()
 
-    def forward(self, tokens, label=None):
-        mask = get_text_field_mask(tokens)
-        embeddings = self.word_embedders(tokens)
-        if self.training \
-            and ram_read("config").pretrain!='bert':
-            embeddings = noise(embeddings, ram_read("config").embed_noise)
+    def get_optimizer(self):
+        return DenseSparseAdam(self.parameters(), lr=1e-3)
+
+    def forward(self, sent, label=None):
+        mask = get_text_field_mask(sent)
+        embeddings = self.word_embedders(sent)
+        # if self.training \
+        #     and ram_read("config").pretrain!='bert':
+        #     embeddings = noise(embeddings, ram_read("config").embed_noise)
 
         encoder_out = self.encoder(embeddings, mask)
-        # encoder_out, _ = encoder_out.max(dim=1)
-        # encoder_out = encoder_out.mean(dim=1)
-        encoder_out = encoder_out[:, 0]
 
         logits = self.linear(encoder_out)
         output = {"logits": logits, "probs": F.softmax(logits, dim=1)}
@@ -157,11 +120,3 @@ class LstmClassifier(Model):
 
     def get_metrics(self, reset=False):
         return {'accuracy': self.accuracy.get_metric(reset)}
-
-
-@ram_globalize()
-def noise(tsr: torch.Tensor, scale=1.0):
-    if scale == 0:
-        return tsr
-    else:
-        return tsr + torch.normal(0., tsr.std().item() * scale, tsr.size(), device=tsr.device)

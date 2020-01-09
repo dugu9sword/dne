@@ -267,8 +267,8 @@ class BertEmbeddings(nn.Module):
             token_type_ids = torch.zeros_like(input_ids)
 
         words_embeddings = self.word_embeddings(input_ids)
-        if self.training:
-            words_embeddings = ram_read("noise")(words_embeddings, ram_read("config").embed_noise)
+        # if self.training:
+        #     words_embeddings = ram_read("noise")(words_embeddings, ram_read("config").embed_noise)
         position_embeddings = self.position_embeddings(position_ids)
         token_type_embeddings = self.token_type_embeddings(token_type_ids)
 
@@ -394,8 +394,8 @@ class BertLayer(nn.Module):
     def forward(self, hidden_states, attention_mask):
         attention_output = self.attention(hidden_states, attention_mask)
         intermediate_output = self.intermediate(attention_output)
-        if self.training:
-            intermediate_output = ram_read('noise')(intermediate_output, ram_read('config').layer_noise)
+        # if self.training:
+        #     intermediate_output = ram_read('noise')(intermediate_output, ram_read('config').layer_noise)
         layer_output = self.output(intermediate_output, attention_output)
         
         return layer_output

@@ -7,7 +7,7 @@ import numpy
 from allennlp.common.util import JsonDict
 from allennlp.data import Instance
 from allennlp.data.fields import LabelField
-from allennlp.data.tokenizers.word_tokenizer import WordTokenizer
+from allennlp.data.tokenizers import SpacyTokenizer
 from allennlpx.predictors.predictor import Predictor
 
 class TextClassifierPredictor(Predictor):
@@ -27,7 +27,7 @@ class TextClassifierPredictor(Predictor):
         """
         sentence = json_dict["sentence"]
         if not hasattr(self._dataset_reader, 'tokenizer') and not hasattr(self._dataset_reader, '_tokenizer'):
-            tokenizer = WordTokenizer()
+            tokenizer = SpacyTokenizer()
             sentence = [str(t) for t in tokenizer.tokenize(sentence)]
         return self._dataset_reader.text_to_instance(sentence)
 
