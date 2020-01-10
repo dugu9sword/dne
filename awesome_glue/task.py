@@ -29,6 +29,7 @@ from allennlpx.predictors.text_classifier import TextClassifierPredictor
 from tqdm import tqdm
 import pandas
 import csv
+from torch.optim import AdamW
 
 
 class Task:
@@ -71,14 +72,14 @@ class Task:
         self.predictor = TextClassifierPredictor(self.model, self.reader)
 
     def train(self):
-        num_epochs = 5
-        pseudo_batch_size = 32
-        accumulate_num = 1
+        num_epochs = 4
+        pseudo_batch_size = 16
+        accumulate_num = 2
         batch_size = pseudo_batch_size * accumulate_num
 
         if isinstance(self.model, BertClassifier):
-            total_steps = (len(self.train_data) // batch_size + 1) * num_epochs
-            optimizer = self.model.get_optimizer(total_steps=num_epochs)
+            optimizer = self.model.get_optimizer(
+                    total_steps = (len(self.train_data) // batch_size + 1) * num_epochs)
         elif isinstance(self.model, LstmClassifier):
             optimizer = self.model.get_optimizer()
 
@@ -94,22 +95,28 @@ class Task:
             model=self.model,
             optimizer=optimizer,
             iterator=iterator,
-            should_log_learning_rate=True,
             train_dataset=self.train_data,
             validation_dataset=self.dev_data,
             num_epochs=num_epochs,
             shuffle=True,
             patience=None,
+            grad_clipping=1.,
             cuda_device=0,
             num_gradient_accumulation_steps=accumulate_num,
+            # serialization_dir='saved/allenmodels',
+            # num_serialized_models_to_keep=1
             #   callbacks=[EvaluateCallback(self.dev_data)],
         )
         trainer.train()
         log(evaluate(self.model, self.dev_data, iterator, 0, None))
         save_model(self.model, self.config.model_name)
 
+    def from_pretrained(self):
+        load_model(self.model, self.config.model_name)
+
     @torch.no_grad()
     def evaluate(self):
+        self.from_pretrained()
         self.model.eval()
         iterator = BasicIterator(batch_size=32)
         iterator.index_with(self.vocab)
@@ -117,7 +124,7 @@ class Task:
 
     @torch.no_grad()
     def transfer_attack(self):
-        load_model(self.model, self.config.model_name)
+        self.from_pretrained()
         self.model.eval()
         df = pandas.read_csv(self.config.attack_tsv, sep='\t', quoting=csv.QUOTE_NONE)
         flip_num = 0
@@ -133,7 +140,7 @@ class Task:
         print(f'flipped {flip_num/df.shape[0]}')
 
     def attack(self):
-        load_model(self.model, self.config.model_name)
+        self.from_pretrained()
         self.model.eval()
         f_tsv = open(f"nogit/{self.config.model_name}.attack.tsv", 'w')
         f_tsv.write("raw\tatt\n")
@@ -182,7 +189,7 @@ class Task:
                 log("[att]", att_text)
                 log('\t', flt2str(predictor.predict(att_text)['probs']))
                 log()
-            
+
             f_tsv.write(f"{raw_text}\t{att_text}\n")
         f_tsv.close()
         print(f'Succ rate {succ_num/total_num*100}')

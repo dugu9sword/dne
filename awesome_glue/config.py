@@ -4,14 +4,14 @@ from luna.program_args import ProgramArgs
 class Config(ProgramArgs):
     def __init__(self):
         super().__init__()
-        self.task_id = "SST"
+        self.task_id = "RTE"
         self.finetunable = True
 
-        self.tokenizer = 'spacy'
-        self.arch = 'lstm'
+        self.tokenizer = 'bert'
+        self.arch = 'bert'
 
         self.pretrain = 'fasttext_ol'
-        self.mode = 'transfer'
+        self.mode = 'train'
 
         self.attack_tsv = 'nogit/SST-lstm-random.attack.tsv'
 
@@ -19,7 +19,7 @@ class Config(ProgramArgs):
         # self.embed_noise = 0.0
 
         self.alchemist = False
-        self.seed = 0
+        self.seed = 2
 
     @property
     def model_name(self):

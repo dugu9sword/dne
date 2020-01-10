@@ -49,8 +49,6 @@ from allennlp.modules.seq2vec_encoders.pytorch_seq2vec_wrapper import PytorchSeq
 
 WORD2VECS = {
     "fasttext": "/disks/sdb/zjiehang/embeddings/fasttext/crawl-300d-2M.vec",
-    "sgns":
-    "/disks/sdb/zjiehang/frequency/pretrained_embedding/word2vec/GoogleNews-vectors-negative300.txt",
     "glove": "/disks/sdb/zjiehang/embeddings/glove/glove.42B.300d.txt",
     "fasttext_ol": "https://dl.fbaipublicfiles.com/fasttext/vectors-english/crawl-300d-2M.vec.zip"
 }
