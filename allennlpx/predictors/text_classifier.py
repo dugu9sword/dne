@@ -11,21 +11,16 @@ from allennlp.data.tokenizers import SpacyTokenizer
 from allennlpx.predictors.predictor import Predictor
 
 class TextClassifierPredictor(Predictor):
-    """
-    Predictor for any model that takes in a sentence and returns
-    a single class for it.  In particular, it can be used with
-    the :class:`~allennlp.models.basic_classifier.BasicClassifier` model
-    """
+    def __init__(self, model, dataset_reader, key='sent'):
+        super().__init__(model, dataset_reader)
+        self.key=key
+
     def predict(self, sentence: str) -> JsonDict:
-        return self.predict_json({"sentence": sentence})
+        return self.predict_json({self.key: sentence})
 
     @overrides
     def _json_to_instance(self, json_dict: JsonDict) -> Instance:
-        """
-        Expects JSON that looks like ``{"sentence": "..."}``.
-        Runs the underlying model, and adds the ``"label"`` to the output.
-        """
-        sentence = json_dict["sentence"]
+        sentence = json_dict[self.key]
         if not hasattr(self._dataset_reader, 'tokenizer') and not hasattr(self._dataset_reader, '_tokenizer'):
             tokenizer = SpacyTokenizer()
             sentence = [str(t) for t in tokenizer.tokenize(sentence)]

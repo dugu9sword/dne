@@ -2,8 +2,10 @@ from allennlp.data.instance import Instance
 from allennlp.data.fields import TextField
 from allennlp.data.tokenizers import Token
 
-def as_sentence(something, field='tokens'):
+def as_sentence(something, field=None):
     if isinstance(something, Instance):
+        if field is None:
+            field = next(iter(something.fields))
         tokens = something.fields[field].tokens
         tkstrs = list(map(str, tokens))
     elif isinstance(something, TextField):
@@ -18,6 +20,8 @@ def as_sentence(something, field='tokens'):
             raise Exception(f'the arg you passes is {type(something[0])}')
     else:
         raise Exception(f'the arg you passes is {type(something)}')
-    return " ".join(tkstrs)
+    sent = " ".join(tkstrs)
+    sent = sent.replace(" ##" , "", -1)  # replace word piece
+    return sent
 
     

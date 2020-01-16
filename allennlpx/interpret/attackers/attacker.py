@@ -66,13 +66,17 @@ class EmbedAttacker(Attacker):
         super().__init__(predictor)
         self.vocab = self.predictor._model.vocab
         self.token_embedding: Embedding = None
+        
+    @property
+    def model_device(self):
+        return next(self.predictor._model.parameters()).device
 
-    def initialize(self):
-        """
-        Initializes any components of the Attacker that are expensive to compute, so that they are
-        not created on __init__().  Default implementation is ``pass``.
-        """
-        self.token_embedding = self._construct_embedding_matrix()
+    def initialize(self, vocab=None, token_embedding=None):
+        if vocab is None:
+            self.token_embedding = self._construct_embedding_matrix()
+        else:
+            self.vocab = vocab
+            self.token_embedding = token_embedding.to(self.model_device)
 
     def _construct_embedding_matrix(self):
         """
@@ -87,7 +91,7 @@ class EmbedAttacker(Attacker):
         # Gets all tokens in the vocab and their corresponding IDs
         all_tokens = self.vocab._token_to_index["tokens"]
         all_indices = list(self.vocab._index_to_token["tokens"].keys())
-        all_inputs = {"tokens": torch.LongTensor(all_indices).unsqueeze(0)}
+        all_inputs = {"tokens": torch.LongTensor(all_indices).to(self.model_device).unsqueeze(0)}
         for token_indexer in self.predictor._dataset_reader._token_indexers.values():
             # handle when a model uses character-level inputs, e.g., a CharCNN
             if isinstance(token_indexer, TokenCharactersIndexer):
@@ -99,7 +103,7 @@ class EmbedAttacker(Attacker):
                     indexed_tokens, {"token_characters": len(tokens)},
                     {"num_token_characters": max_token_length})
                 all_inputs['token_characters'] = torch.LongTensor(
-                    padded_tokens['token_characters']).unsqueeze(0)
+                    padded_tokens['token_characters']).to(self.model_device).unsqueeze(0)
             # for ELMo models
             if isinstance(token_indexer, ELMoTokenCharactersIndexer):
                 elmo_tokens = []
@@ -108,7 +112,7 @@ class EmbedAttacker(Attacker):
                                                                          self.vocab,
                                                                          "sentence")["sentence"]
                     elmo_tokens.append(elmo_indexed_token[0])
-                all_inputs["elmo"] = torch.LongTensor(elmo_tokens).unsqueeze(0)
+                all_inputs["elmo"] = torch.LongTensor(elmo_tokens).to(self.model_device).unsqueeze(0)
 
         # find the TextFieldEmbedder
         for module in self.predictor._model.modules():
@@ -116,7 +120,8 @@ class EmbedAttacker(Attacker):
                 embedder = module
         # pass all tokens through the fake matrix and create an embedding out of it.
         embedding_matrix = embedder(all_inputs).squeeze()
-        return Embedding(num_embeddings=self.vocab.get_vocab_size('tokens'),
-                         embedding_dim=embedding_matrix.shape[1],
-                         weight=embedding_matrix,
-                         trainable=False)
+        return embedding_matrix
+        # return Embedding(num_embeddings=self.vocab.get_vocab_size('tokens'),
+        #                  embedding_dim=embedding_matrix.shape[1],
+        #                  weight=embedding_matrix,
+        #                  trainable=False)

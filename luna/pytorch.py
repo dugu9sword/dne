@@ -7,6 +7,10 @@ from .logging import log
 __model_path__ = "saved/models"
 
 
+def get_device(model):
+    return next(model.parameters()).device
+    
+
 def cast_list(array, squeeze=True):
     if isinstance(array, torch.Tensor):
         return cast_list(array.detach().cpu().numpy(),squeeze)

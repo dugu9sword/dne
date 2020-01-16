@@ -7,7 +7,7 @@ class Config(ProgramArgs):
         self.arch = 'fakebert'
         self.pretrain = "fasttext_ol"
         self.fix_embed = False
-        self.mode = 'train'
+        self.mode = 'attack'
 
         self.bert_noise = 0.0
         self.embed_noise = 0.0

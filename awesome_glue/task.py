@@ -23,13 +23,50 @@ from luna import flt2str
 from allennlpx import allenutil
 from allennlpx.interpret.attackers.attacker import DEFAULT_IGNORE_TOKENS
 from allennlpx.interpret.attackers.bruteforce import BruteForce
+from allennlpx.interpret.attackers.bert_bruteforce import BertBruteForce
 from allennlpx.interpret.attackers.hotflip import HotFlip
 from allennlpx.interpret.attackers.pgd import PGD
+from allennlpx.predictors.predictor import Predictor
 from allennlpx.predictors.text_classifier import TextClassifierPredictor
 from tqdm import tqdm
 import pandas
 import csv
 from torch.optim import AdamW
+import numpy as np
+from awesome_glue.utils import AttackMetric, WORD2VECS
+from typing import List
+from allennlp.data import Instance
+from allennlp.modules.token_embedders.embedding import _read_pretrained_embeddings_file
+from awesome_glue.utils import EMBED_DIM, WORD2VECS
+
+
+def load_data(task_id: str, tokenizer: str):
+    spec = TASK_SPECS[task_id]
+
+    if tokenizer in ['spacy', 'xspacy']:
+        reader = SpacyTSVReader(sent1_col=spec['sent1_col'],
+                                sent2_col=spec['sent2_col'],
+                                label_col=spec['label_col'],
+                                skip_label_indexing=spec['skip_label_indexing'],
+                                add_cls=tokenizer == 'xspacy')
+    else:
+        reader = BertyTSVReader(sent1_col=spec['sent1_col'],
+                                sent2_col=spec['sent2_col'],
+                                label_col=spec['label_col'],
+                                skip_label_indexing=spec['skip_label_indexing'])
+
+    def __load_data():
+        train_data = reader.read(f'{spec["path"]}/train.tsv')
+        dev_data = reader.read(f'{spec["path"]}/dev.tsv')
+        test_data = reader.read(f'{spec["path"]}/test.tsv')
+        vocab = Vocabulary.from_instances(train_data + dev_data + test_data)
+        return train_data, dev_data, test_data, vocab
+
+    # The cache name is {task}-{tokenizer}
+    train_data, dev_data, test_data, vocab = auto_create(f"{task_id}-{tokenizer}", __load_data,
+                                                         True)
+
+    return {"reader": reader, "data": (train_data, dev_data, test_data), "vocab": vocab}
 
 
 class Task:
@@ -37,30 +74,10 @@ class Task:
         super().__init__()
         self.config = config
 
-        spec = TASK_SPECS[config.task_id]
-
-        if config.tokenizer in ['spacy', 'xspacy']:
-            self.reader = SpacyTSVReader(sent1_col=spec['sent1_col'],
-                                         sent2_col=spec['sent2_col'],
-                                         label_col=spec['label_col'],
-                                         skip_label_indexing=spec['skip_label_indexing'],
-                                         add_cls=config.tokenizer == 'xspacy')
-        else:
-            self.reader = BertyTSVReader(sent1_col=spec['sent1_col'],
-                                         sent2_col=spec['sent2_col'],
-                                         label_col=spec['label_col'],
-                                         skip_label_indexing=spec['skip_label_indexing'])
-
-        def __load_data():
-            train_data = self.reader.read(f'{spec["path"]}/train.tsv')
-            dev_data = self.reader.read(f'{spec["path"]}/dev.tsv')
-            test_data = self.reader.read(f'{spec["path"]}/test.tsv')
-            vocab = Vocabulary.from_instances(train_data + dev_data + test_data)
-            return train_data, dev_data, test_data, vocab
-
-        # The cache name is {task}-{tokenizer}
-        self.train_data, self.dev_data, self.test_data, self.vocab = auto_create(
-            f"{config.task_id}-{config.tokenizer}", __load_data, True)
+        loaded_data = load_data(config.task_id, config.tokenizer)
+        self.reader = loaded_data['reader']
+        self.train_data, self.dev_data, self.test_data = loaded_data['data']
+        self.vocab: Vocabulary = loaded_data['vocab']
 
         if config.arch == 'bert':
             self.model = BertClassifier(self.vocab, config.finetunable).cuda()
@@ -69,17 +86,18 @@ class Task:
         else:
             raise Exception
 
-        self.predictor = TextClassifierPredictor(self.model, self.reader)
+        self.predictor = TextClassifierPredictor(
+            self.model, self.reader, key='sent' if self.config.arch != 'bert' else 'berty_tokens')
 
     def train(self):
-        num_epochs = 4
-        pseudo_batch_size = 16
-        accumulate_num = 2
+        num_epochs = 2
+        pseudo_batch_size = 32
+        accumulate_num = 1
         batch_size = pseudo_batch_size * accumulate_num
 
         if isinstance(self.model, BertClassifier):
             optimizer = self.model.get_optimizer(
-                    total_steps = (len(self.train_data) // batch_size + 1) * num_epochs)
+                total_steps=(len(self.train_data) // batch_size + 1) * num_epochs)
         elif isinstance(self.model, LstmClassifier):
             optimizer = self.model.get_optimizer()
 
@@ -127,23 +145,43 @@ class Task:
         self.from_pretrained()
         self.model.eval()
         df = pandas.read_csv(self.config.attack_tsv, sep='\t', quoting=csv.QUOTE_NONE)
-        flip_num = 0
-        for rid in range(1, df.shape[0]):
+        attack_metric = AttackMetric()
+        for rid in range(df.shape[0]):
             raw = df.iloc[rid]['raw']
             att = df.iloc[rid]['att']
             raw_instance = self.reader.text_to_instance(raw)
             att_instance = self.reader.text_to_instance(att)
             results = self.model.forward_on_instances([raw_instance, att_instance])
-            if (results[0]['probs'][0] - results[0]['probs'][1]) \
-                * (results[1]['probs'][0] - results[1]['probs'][1]) < 0:
-                flip_num += 1
-        print(f'flipped {flip_num/df.shape[0]}')
+            raw_pred = np.argmax(results[0]['probs'])
+            att_pred = np.argmax(results[1]['probs'])
+            label = df.iloc[rid]['label']
+            if raw_pred == label:
+                if att_pred != raw_pred:
+                    attack_metric.succeed()
+                else:
+                    attack_metric.fail()
+            else:
+                attack_metric.escape()
+        print(attack_metric)
 
     def attack(self):
         self.from_pretrained()
         self.model.eval()
+
+        if self.config.arch == 'bert':
+            spacy_data = load_data(self.config.task_id, "spacy")
+            spacy_vocab: Vocabulary = spacy_data['vocab']
+            spacy_weight = auto_create(
+                f"{self.config.task_id}-{self.config.tokenizer}-{self.config.attack_pretrain}",
+                lambda: _read_pretrained_embeddings_file(WORD2VECS[self.config.attack_pretrain],
+                                                         embedding_dim=EMBED_DIM[self.config.
+                                                                                 attack_pretrain],
+                                                         vocab=spacy_vocab,
+                                                         namespace="tokens"), True)
+
         f_tsv = open(f"nogit/{self.config.model_name}.attack.tsv", 'w')
-        f_tsv.write("raw\tatt\n")
+        f_tsv.write("raw\tatt\tlabel\n")
+
         for module in self.model.modules():
             if isinstance(module, TextFieldEmbedder):
                 for embed in module._token_embedders.keys():
@@ -154,42 +192,59 @@ class Task:
         not_words = [line.rstrip('\n') for line in open("sentiment-words/negation-words.txt")]
         forbidden_words = pos_words + neg_words + not_words + DEFAULT_IGNORE_TOKENS
 
-        predictor = TextClassifierPredictor(self.model.cpu(), self.reader)
+        # self.predictor._model.cpu()
+        if self.config.arch == 'bert':
+            attacker = BertBruteForce(self.predictor)
+            attacker.initialize(vocab=spacy_vocab, token_embedding=spacy_weight)
+        else:
+            # attacker = HotFlip(predictor)
+            attacker = BruteForce(self.predictor)
+            attacker.initialize()
 
-        # attacker = HotFlip(predictor)
-        attacker = BruteForce(predictor)
-        attacker.initialize()
-
-        data_to_attack = self.test_data[:200]
+        data_to_attack = self.dev_data[:100]
         total_num = len(data_to_attack)
-        succ_num = 0
+        attack_metric = AttackMetric()
         for i in tqdm(range(total_num)):
-            raw_text = allenutil.as_sentence(data_to_attack[i], 'sent')
+            raw_text = allenutil.as_sentence(data_to_attack[i])
+            raw_pred = np.argmax(self.predictor.predict(raw_text)['probs'])
+            raw_label = data_to_attack[i]['label'].label
+            # Only attack correct instance
+            if raw_pred == raw_label:
+                # result = attacker.attack_from_json({"sentence": raw_text},
+                #                                    ignore_tokens=forbidden_words,
+                #                                    forbidden_tokens=forbidden_words,
+                #                                    step_size=100,
+                #                                    max_change_num=3,
+                #                                    iter_change_num=2)
+                if self.config.arch == 'bert':
+                    field_to_change = 'berty_tokens'
+                elif self.config.arch == 'lstm':
+                    field_to_change = 'sent'
 
-            # result = attacker.attack_from_json({"sentence": raw_text},
-            #                                    ignore_tokens=forbidden_words,
-            #                                    forbidden_tokens=forbidden_words,
-            #                                    step_size=100,
-            #                                    max_change_num=3,
-            #                                    iter_change_num=2)
+                result = attacker.attack_from_json({field_to_change: raw_text},
+                                                   field_to_change=field_to_change,
+                                                   ignore_tokens=forbidden_words,
+                                                   forbidden_tokens=forbidden_words,
+                                                   max_change_num=3,
+                                                   search_num=128)
 
-            result = attacker.attack_from_json({"sentence": raw_text},
-                                               field_to_change="sent",
-                                               ignore_tokens=forbidden_words,
-                                               forbidden_tokens=forbidden_words,
-                                               max_change_num=5,
-                                               search_num=256)
+                att_text = allenutil.as_sentence(result['att'])
 
-            att_text = allenutil.as_sentence(result['att'], 'sent')
+                if result["success"] == 1:
+                    attack_metric.succeed()
+                    log("[raw]", raw_text)
+                    log("\t", flt2str(self.predictor.predict(raw_text)['probs']))
+                    log("[att]", att_text)
+                    log('\t', flt2str(self.predictor.predict(att_text)['probs']))
+                    log()
+                else:
+                    attack_metric.fail()
+            else:
+                attack_metric.escape()
+                att_text = raw_text
 
-            if result["success"] == 1:
-                succ_num += 1
-                log("[raw]", raw_text)
-                log("\t", flt2str(predictor.predict(raw_text)['probs']))
-                log("[att]", att_text)
-                log('\t', flt2str(predictor.predict(att_text)['probs']))
-                log()
+            f_tsv.write(f"{raw_text}\t{att_text}\t{raw_label}\n")
 
-            f_tsv.write(f"{raw_text}\t{att_text}\n")
         f_tsv.close()
-        print(f'Succ rate {succ_num/total_num*100}')
+
+        print(attack_metric)
