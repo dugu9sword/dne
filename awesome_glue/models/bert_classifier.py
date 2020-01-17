@@ -51,8 +51,21 @@ class BertClassifier(Model):
         # self.pooler = BertPooler()
 
         self.bert_model = PretrainedBertModel.load('bert-base-uncased')
-        for param in self.bert_model.parameters():
-            param.requires_grad = finetunable
+
+        if finetunable:
+            for name, param in self.bert_model.named_parameters():
+                param.requires_grad = True
+            else:
+                param.requires_grad = False
+        else:
+            found_unfrozen_layer = False
+            for name, param in self.bert_model.named_parameters():
+                if "layer.10" in name:
+                    found_unfrozen_layer = True
+                if found_unfrozen_layer:
+                    param.requires_grad = True
+                else:
+                    param.requires_grad = False
 
         self.linear = torch.nn.Sequential(
             torch.nn.Dropout(0.1),

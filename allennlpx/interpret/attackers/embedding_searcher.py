@@ -117,7 +117,6 @@ class EmbeddingSearcher:
                         rho=None,
                         verbose=False):
         # checking args
-        assert (topk is None) ^ (rho is None), "You must set one of topk/rho to be None"
         assert measure in ['euc', 'cos']
         if rho is not None:
             assert (measure == 'euc' and rho > 0) or (

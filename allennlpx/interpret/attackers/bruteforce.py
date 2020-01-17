@@ -43,22 +43,17 @@ class BruteForce(EmbedAttacker):
 
         raw_output = self.predictor.predict_instance(raw_instance)
 
-        with time_record("gen neighbours"):
-            sids_to_change = []
-            nbr_dct = defaultdict(lambda: [])
-            with time_record("wtf"):
-                for i in range(len(raw_tokens)):
-                    with time_record(f"{raw_tokens[i]}"):
-                        if raw_tokens[i].text not in ignore_tokens:
-                            word = raw_tokens[i].text
-                            with time_record(f'find {word}'):
-                                nbrs = self.neariest_neighbours(word)
-                            print(nbrs)
-                            nbrs = [nbr for nbr in nbrs if nbr not in forbidden_tokens]
-                            if len(nbrs) > 0:
-                                sids_to_change.append(i)
-                                nbr_dct[i] = nbrs
-            max_change_num = min(max_change_num, len(sids_to_change))
+        sids_to_change = []
+        nbr_dct = defaultdict(lambda: [])
+        for i in range(len(raw_tokens)):
+            if raw_tokens[i].text not in ignore_tokens:
+                word = raw_tokens[i].text
+                nbrs = self.neariest_neighbours(word)
+                nbrs = [nbr for nbr in nbrs if nbr not in forbidden_tokens]
+                if len(nbrs) > 0:
+                    sids_to_change.append(i)
+                    nbr_dct[i] = nbrs
+        max_change_num = min(max_change_num, len(sids_to_change))
 
         instances = []
         for i in range(search_num):

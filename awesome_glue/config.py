@@ -5,15 +5,17 @@ class Config(ProgramArgs):
     def __init__(self):
         super().__init__()
         self.task_id = "SST"
-        self.finetunable = True
+        self.finetunable = False
 
         self.arch = 'bert'
 
         self.pretrain = 'fasttext'
         self.mode = 'attack'
 
-        self.attack_pretrain = 'glove'
-        self.attack_tsv = 'nogit/SST-lstm-fasttext.attack.tsv'
+        self.attack_vectors = 'glove'
+        self.attack_tsv = 'nogit/SST-bert-fix.attack.tsv'
+        # self.attack_tsv = 'nogit/SST-bert.attack.tsv'
+        # self.attack_tsv = 'nogit/SST-lstm-fasttext.attack.tsv'
 
         # self.layer_noise = 0.0
         # self.embed_noise = 0.0
@@ -31,9 +33,12 @@ class Config(ProgramArgs):
     @property
     def model_name(self):
         if self.arch in ['bert', 'elmo']:
-            return f"{self.task_id}-{self.arch}"
+            model_name = f"{self.task_id}-{self.arch}"
         else:
-            return f"{self.task_id}-{self.arch}-{self.pretrain}"
+            model_name =  f"{self.task_id}-{self.arch}-{self.pretrain}"
+        if not self.finetunable:
+            model_name += '-fix'
+        return model_name
 
     # @property
     # def vocab_name(self):

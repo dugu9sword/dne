@@ -172,10 +172,10 @@ class Task:
             spacy_data = load_data(self.config.task_id, "spacy")
             spacy_vocab: Vocabulary = spacy_data['vocab']
             spacy_weight = auto_create(
-                f"{self.config.task_id}-{self.config.tokenizer}-{self.config.attack_pretrain}",
-                lambda: _read_pretrained_embeddings_file(WORD2VECS[self.config.attack_pretrain],
+                f"{self.config.task_id}-{self.config.tokenizer}-{self.config.attack_vectors}",
+                lambda: _read_pretrained_embeddings_file(WORD2VECS[self.config.attack_vectors],
                                                          embedding_dim=EMBED_DIM[self.config.
-                                                                                 attack_pretrain],
+                                                                                 attack_vectors],
                                                          vocab=spacy_vocab,
                                                          namespace="tokens"), True)
 

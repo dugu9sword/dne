@@ -67,9 +67,12 @@ def ram_globalize(name=None):
 
 def ram_reset(prefix=None):
     if prefix is not None:
+        to_reset = []
         for key in __global_ram:
             if key.startswith(prefix):
-                __global_ram.pop(prefix)
+                to_reset.append(key)
+        for key in to_reset:
+            __global_ram.pop(key)
     else:
         __global_ram.clear()
         

@@ -20,27 +20,10 @@ from luna import (auto_create, flt2str, log, log_config, ram_read, ram_reset, ra
 from allennlp.modules.token_embedders.elmo_token_embedder import ElmoTokenEmbedder
 from collections import defaultdict
 
-
-def maybe_path(*args):
-    for arg in args:
-        if pathlib.Path(arg).exists():
-            break
-    return arg
-
-
-WORD2VECS = {
-    "fasttext":
-    maybe_path("/disks/sdb/zjiehang/embeddings/fasttext/crawl-300d-2M.vec",
-               "https://dl.fbaipublicfiles.com/fasttext/vectors-english/crawl-300d-2M.vec.zip"),
-    "glove":
-    maybe_path("/disks/sdb/zjiehang/embeddings/glove/glove.42B.300d.txt",
-               "/root/glove/glove.42B.300d.txt", "http://nlp.stanford.edu/data/glove.42B.300d.zip"),
-}
+from awesome_glue.utils import WORD2VECS, EMBED_DIM
 
 ELMO_OPTION = 'https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x1024_128_2048cnn_1xhighway/elmo_2x1024_128_2048cnn_1xhighway_options.json'
 ELMO_WEIGHT = 'https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x1024_128_2048cnn_1xhighway/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5'
-
-EMBED_DIM = defaultdict(lambda: 300, {"elmo": 256})
 
 
 class LstmClassifier(Model):

@@ -2,6 +2,7 @@ import torch
 
 from allennlp.common.checks import ConfigurationError
 from allennlp.modules.seq2vec_encoders.seq2vec_encoder import Seq2VecEncoder
+from luna import ram_write
 
 class PytorchSeq2VecWrapper(Seq2VecEncoder):
     """
@@ -106,8 +107,7 @@ class PytorchSeq2VecWrapper(Seq2VecEncoder):
         except AttributeError:
             last_state_index = 1
         
-        from luna import ram_write
-        ram_write("state", unsorted_state)
+        ram_write("lstm_states", unsorted_state)
         last_layer_state = unsorted_state[:, -last_state_index:, :]
         last_layer_state = last_layer_state.contiguous().view([-1, self.get_output_dim()])
         
