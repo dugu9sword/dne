@@ -38,6 +38,9 @@ from typing import List
 from allennlp.data import Instance
 from allennlp.modules.token_embedders.embedding import _read_pretrained_embeddings_file
 from awesome_glue.utils import EMBED_DIM, WORD2VECS
+from luna import ram_read, ram_write, ram_append, ram_reset, ram_has
+from allennlpx.modules.knn_utils import build_faiss_index
+import faiss
 
 
 def load_data(task_id: str, tokenizer: str):
@@ -95,16 +98,12 @@ class Task:
         accumulate_num = 1
         batch_size = pseudo_batch_size * accumulate_num
 
-        if isinstance(self.model, BertClassifier):
-            optimizer = self.model.get_optimizer(
-                total_steps=(len(self.train_data) // batch_size + 1) * num_epochs)
-        elif isinstance(self.model, LstmClassifier):
-            optimizer = self.model.get_optimizer()
+        optimizer = self.model.get_optimizer()
 
         if self.config.tokenizer in ['spacy', 'spacyx']:
             sorting_keys = [("sent", "num_tokens")]
         else:
-            sorting_keys = [("berty_tokens", "num_tokens")]
+            sorting_keys = [("berty_tokens", "berty_tokens___input_ids")]
 
         iterator = BucketIterator(batch_size=pseudo_batch_size, sorting_keys=sorting_keys)
         iterator.index_with(self.vocab)
@@ -123,7 +122,7 @@ class Task:
             num_gradient_accumulation_steps=accumulate_num,
             # serialization_dir='saved/allenmodels',
             # num_serialized_models_to_keep=1
-            #   callbacks=[EvaluateCallback(self.dev_data)],
+            # callbacks=[EvaluateCallback(self.dev_data)],
         )
         trainer.train()
         log(evaluate(self.model, self.dev_data, iterator, 0, None))
@@ -132,13 +131,31 @@ class Task:
     def from_pretrained(self):
         load_model(self.model, self.config.model_name)
 
+    def knn_build_index(self):
+        self.from_pretrained()
+        self.model.eval()
+        iterator = BasicIterator(batch_size=32)
+        iterator.index_with(self.vocab)
+
+        ram_write("knn_flag", "collect")
+        filtered = list(filter(lambda x: len(x.fields['berty_tokens'].tokens) > 10, self.train_data))
+        evaluate(self.model, filtered, iterator, 0, None)
+
+    def knn_evaluate(self):
+        ram_write("knn_flag", "infer")
+        self.evaluate()
+
+    def knn_attack(self):
+        ram_write("knn_flag", "infer")
+        self.attack()
+
     @torch.no_grad()
     def evaluate(self):
         self.from_pretrained()
         self.model.eval()
         iterator = BasicIterator(batch_size=32)
         iterator.index_with(self.vocab)
-        evaluate(self.model, self.test_data, iterator, 0, None)
+        evaluate(self.model, self.dev_data, iterator, 0, None)
 
     @torch.no_grad()
     def transfer_attack(self):
@@ -201,7 +218,7 @@ class Task:
             attacker = BruteForce(self.predictor)
             attacker.initialize()
 
-        data_to_attack = self.dev_data[:100]
+        data_to_attack = self.dev_data[:200]
         total_num = len(data_to_attack)
         attack_metric = AttackMetric()
         for i in tqdm(range(total_num)):

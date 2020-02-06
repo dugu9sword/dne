@@ -26,5 +26,8 @@ task = Task(config)
     'train': task.train,
     'eval': task.evaluate,
     'attack': task.attack,
+    'knn_build': task.knn_build_index,
+    'knn_eval': task.knn_evaluate,
+    'knn_attack': task.knn_attack,
     'transfer': task.transfer_attack
 }[config.mode]()

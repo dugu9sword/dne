@@ -34,21 +34,28 @@ from torch.nn import CrossEntropyLoss
 
 from pytorch_pretrained_bert.file_utils import cached_path, WEIGHTS_NAME, CONFIG_NAME
 
-from luna import ram_read, ram_write, ram_append, ram_reset
+from luna import ram_read, ram_write, ram_append, ram_reset, ram_has
 
 logger = logging.getLogger(__name__)
 
 PRETRAINED_MODEL_ARCHIVE_MAP = {
-    'bert-base-uncased': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-uncased.tar.gz",
-    'bert-large-uncased': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-uncased.tar.gz",
+    'bert-base-uncased':
+    "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-uncased.tar.gz",
+    'bert-large-uncased':
+    "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-uncased.tar.gz",
     'bert-base-cased': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-cased.tar.gz",
-    'bert-large-cased': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-cased.tar.gz",
-    'bert-base-multilingual-uncased': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-multilingual-uncased.tar.gz",
-    'bert-base-multilingual-cased': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-multilingual-cased.tar.gz",
-    'bert-base-chinese': "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-chinese.tar.gz",
+    'bert-large-cased':
+    "https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-cased.tar.gz",
+    'bert-base-multilingual-uncased':
+    "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-multilingual-uncased.tar.gz",
+    'bert-base-multilingual-cased':
+    "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-multilingual-cased.tar.gz",
+    'bert-base-chinese':
+    "https://s3.amazonaws.com/models.huggingface.co/bert/bert-base-chinese.tar.gz",
 }
 BERT_CONFIG_NAME = 'bert_config.json'
 TF_WEIGHTS_NAME = 'model.ckpt'
+
 
 def load_tf_weights_in_bert(model, tf_checkpoint_path):
     """ Load tf checkpoints in a pytorch model
@@ -58,7 +65,8 @@ def load_tf_weights_in_bert(model, tf_checkpoint_path):
         import numpy as np
         import tensorflow as tf
     except ImportError:
-        print("Loading a TensorFlow models in PyTorch, requires TensorFlow to be installed. Please see "
+        print(
+            "Loading a TensorFlow models in PyTorch, requires TensorFlow to be installed. Please see "
             "https://www.tensorflow.org/install/ for installation instructions.")
         raise
     tf_path = os.path.abspath(tf_checkpoint_path)
@@ -172,8 +180,9 @@ class BertConfig(object):
             initializer_range: The sttdev of the truncated_normal_initializer for
                 initializing all weight matrices.
         """
-        if isinstance(vocab_size_or_config_json_file, str) or (sys.version_info[0] == 2
-                        and isinstance(vocab_size_or_config_json_file, unicode)):
+        if isinstance(vocab_size_or_config_json_file,
+                      str) or (sys.version_info[0] == 2
+                               and isinstance(vocab_size_or_config_json_file, unicode)):
             with open(vocab_size_or_config_json_file, "r", encoding='utf-8') as reader:
                 json_config = json.loads(reader.read())
             for key, value in json_config.items():
@@ -226,10 +235,14 @@ class BertConfig(object):
         with open(json_file_path, "w", encoding='utf-8') as writer:
             writer.write(self.to_json_string())
 
+
 try:
     from apex.normalization.fused_layer_norm import FusedLayerNorm as BertLayerNorm
 except ImportError:
-    logger.info("Better speed can be achieved with apex installed from https://www.github.com/nvidia/apex .")
+    logger.info(
+        "Better speed can be achieved with apex installed from https://www.github.com/nvidia/apex ."
+    )
+
     class BertLayerNorm(nn.Module):
         def __init__(self, hidden_size, eps=1e-12):
             """Construct a layernorm module in the TF style (epsilon inside the square root).
@@ -244,6 +257,7 @@ except ImportError:
             s = (x - u).pow(2).mean(-1, keepdim=True)
             x = (x - u) / torch.sqrt(s + self.variance_epsilon)
             return self.weight * x + self.bias
+
 
 class BertEmbeddings(nn.Module):
     """Construct the embeddings from word, position and token_type embeddings.
@@ -282,9 +296,8 @@ class BertSelfAttention(nn.Module):
     def __init__(self, config):
         super(BertSelfAttention, self).__init__()
         if config.hidden_size % config.num_attention_heads != 0:
-            raise ValueError(
-                "The hidden size (%d) is not a multiple of the number of attention "
-                "heads (%d)" % (config.hidden_size, config.num_attention_heads))
+            raise ValueError("The hidden size (%d) is not a multiple of the number of attention "
+                             "heads (%d)" % (config.hidden_size, config.num_attention_heads))
         self.num_attention_heads = config.num_attention_heads
         self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.attention_head_size
@@ -324,7 +337,7 @@ class BertSelfAttention(nn.Module):
 
         context_layer = torch.matmul(attention_probs, value_layer)
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
-        new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
+        new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size, )
         context_layer = context_layer.view(*new_context_layer_shape)
         return context_layer
 
@@ -359,7 +372,8 @@ class BertIntermediate(nn.Module):
     def __init__(self, config):
         super(BertIntermediate, self).__init__()
         self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
-        if isinstance(config.hidden_act, str) or (sys.version_info[0] == 2 and isinstance(config.hidden_act, unicode)):
+        if isinstance(config.hidden_act, str) or (sys.version_info[0] == 2
+                                                  and isinstance(config.hidden_act, unicode)):
             self.intermediate_act_fn = ACT2FN[config.hidden_act]
         else:
             self.intermediate_act_fn = config.hidden_act
@@ -397,7 +411,7 @@ class BertLayer(nn.Module):
         # if self.training:
         #     intermediate_output = ram_read('noise')(intermediate_output, ram_read('config').layer_noise)
         layer_output = self.output(intermediate_output, attention_output)
-        
+
         return layer_output
 
 
@@ -410,8 +424,40 @@ class BertEncoder(nn.Module):
     def forward(self, hidden_states, attention_mask, output_all_encoded_layers=True):
         all_encoder_layers = []
         ram_reset("bert_layers")
-        for layer_module in self.layer:
-            hidden_states = layer_module(hidden_states, attention_mask)
+        for layer_id, layer_module in enumerate(self.layer):
+
+            if ram_has("knn_flag") and layer_id in [6, 9]:
+                if ram_read("knn_flag") == 'collect':
+                    if not ram_has(f"knn_collector_{layer_id}"):
+                        from allennlpx.modules.knn_utils import H5pyCollector
+                        collector = H5pyCollector(f'bert_knn_{layer_id}.h5', 768)
+                        ram_write(f"knn_collector_{layer_id}", collector)
+                    else:
+                        collector = ram_read(f"knn_collector_{layer_id}")
+                    hidden_states = layer_module(hidden_states, attention_mask)
+                    mask = (attention_mask > -10).squeeze(1).squeeze(1)
+                    collector.collect(hidden_states[mask].cpu().numpy())
+                elif ram_read("knn_flag") == 'infer':
+                    if not ram_has(f"bert_faiss_index_{layer_id}"):
+                        from allennlpx.modules.knn_utils import build_faiss_index
+                        import h5py
+                        data = h5py.File(f"bert_knn_{layer_id}.h5", "r")['data'][:]
+                        index = build_faiss_index(data, ann=True, ann_nprobe=1)
+                        ram_write(f"bert_knn_data_{layer_id}", data)
+                        ram_write(f"bert_faiss_index_{layer_id}", index)
+                    else:
+                        data = ram_read(f"bert_knn_data_{layer_id}")
+                        index = ram_read(f"bert_faiss_index_{layer_id}")
+                    viewed = hidden_states.view(-1, hidden_states.size(-1))
+                    D, I = index.search(viewed.cpu().numpy(), k=1)
+                    hidden_states = torch.from_numpy(data[I[:, 0]]).to(hidden_states.device).reshape(hidden_states.size())
+
+                    # proxy = ram_read('bert')
+                else:
+                    raise Exception
+            else:
+                hidden_states = layer_module(hidden_states, attention_mask)
+
             if output_all_encoded_layers:
                 all_encoder_layers.append(hidden_states)
             ram_append("bert_layers", hidden_states)
@@ -439,7 +485,8 @@ class BertPredictionHeadTransform(nn.Module):
     def __init__(self, config):
         super(BertPredictionHeadTransform, self).__init__()
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
-        if isinstance(config.hidden_act, str) or (sys.version_info[0] == 2 and isinstance(config.hidden_act, unicode)):
+        if isinstance(config.hidden_act, str) or (sys.version_info[0] == 2
+                                                  and isinstance(config.hidden_act, unicode)):
             self.transform_act_fn = ACT2FN[config.hidden_act]
         else:
             self.transform_act_fn = config.hidden_act
@@ -514,8 +561,7 @@ class BertPreTrainedModel(nn.Module):
                 "Parameter config in `{}(config)` should be an instance of class `BertConfig`. "
                 "To create a model from a Google pretrained model use "
                 "`model = {}.from_pretrained(PRETRAINED_MODEL_NAME)`".format(
-                    self.__class__.__name__, self.__class__.__name__
-                ))
+                    self.__class__.__name__, self.__class__.__name__))
         self.config = config
 
     def init_bert_weights(self, module):
@@ -574,13 +620,11 @@ class BertPreTrainedModel(nn.Module):
         try:
             resolved_archive_file = cached_path(archive_file, cache_dir=cache_dir)
         except EnvironmentError:
-            logger.error(
-                "Model name '{}' was not found in model name list ({}). "
-                "We assumed '{}' was a path or url but couldn't find any file "
-                "associated to this path or url.".format(
-                    pretrained_model_name_or_path,
-                    ', '.join(PRETRAINED_MODEL_ARCHIVE_MAP.keys()),
-                    archive_file))
+            logger.error("Model name '{}' was not found in model name list ({}). "
+                         "We assumed '{}' was a path or url but couldn't find any file "
+                         "associated to this path or url.".format(
+                             pretrained_model_name_or_path,
+                             ', '.join(PRETRAINED_MODEL_ARCHIVE_MAP.keys()), archive_file))
             return None
         if resolved_archive_file == archive_file:
             logger.info("loading archive file {}".format(archive_file))
@@ -643,11 +687,12 @@ class BertPreTrainedModel(nn.Module):
 
         def load(module, prefix=''):
             local_metadata = {} if metadata is None else metadata.get(prefix[:-1], {})
-            module._load_from_state_dict(
-                state_dict, prefix, local_metadata, True, missing_keys, unexpected_keys, error_msgs)
+            module._load_from_state_dict(state_dict, prefix, local_metadata, True, missing_keys,
+                                         unexpected_keys, error_msgs)
             for name, child in module._modules.items():
                 if child is not None:
                     load(child, prefix + name + '.')
+
         start_prefix = ''
         if not hasattr(model, 'bert') and any(s.startswith('bert.') for s in state_dict.keys()):
             start_prefix = 'bert.'
@@ -660,7 +705,7 @@ class BertPreTrainedModel(nn.Module):
                 model.__class__.__name__, unexpected_keys))
         if len(error_msgs) > 0:
             raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
-                               model.__class__.__name__, "\n\t".join(error_msgs)))
+                model.__class__.__name__, "\n\t".join(error_msgs)))
         return model
 
 
@@ -715,7 +760,11 @@ class BertModel(BertPreTrainedModel):
         self.pooler = BertPooler(config)
         self.apply(self.init_bert_weights)
 
-    def forward(self, input_ids, token_type_ids=None, attention_mask=None, output_all_encoded_layers=True):
+    def forward(self,
+                input_ids,
+                token_type_ids=None,
+                attention_mask=None,
+                output_all_encoded_layers=True):
         if attention_mask is None:
             attention_mask = torch.ones_like(input_ids)
         if token_type_ids is None:
@@ -733,7 +782,8 @@ class BertModel(BertPreTrainedModel):
         # positions we want to attend and -10000.0 for masked positions.
         # Since we are adding it to the raw scores before the softmax, this is
         # effectively the same as removing these entirely.
-        extended_attention_mask = extended_attention_mask.to(dtype=next(self.parameters()).dtype) # fp16 compatibility
+        extended_attention_mask = extended_attention_mask.to(dtype=next(
+            self.parameters()).dtype)  # fp16 compatibility
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
 
         embedding_output = self.embeddings(input_ids, token_type_ids)
@@ -803,15 +853,24 @@ class BertForPreTraining(BertPreTrainedModel):
         self.cls = BertPreTrainingHeads(config, self.bert.embeddings.word_embeddings.weight)
         self.apply(self.init_bert_weights)
 
-    def forward(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, next_sentence_label=None):
-        sequence_output, pooled_output = self.bert(input_ids, token_type_ids, attention_mask,
+    def forward(self,
+                input_ids,
+                token_type_ids=None,
+                attention_mask=None,
+                masked_lm_labels=None,
+                next_sentence_label=None):
+        sequence_output, pooled_output = self.bert(input_ids,
+                                                   token_type_ids,
+                                                   attention_mask,
                                                    output_all_encoded_layers=False)
         prediction_scores, seq_relationship_score = self.cls(sequence_output, pooled_output)
 
         if masked_lm_labels is not None and next_sentence_label is not None:
             loss_fct = CrossEntropyLoss(ignore_index=-1)
-            masked_lm_loss = loss_fct(prediction_scores.view(-1, self.config.vocab_size), masked_lm_labels.view(-1))
-            next_sentence_loss = loss_fct(seq_relationship_score.view(-1, 2), next_sentence_label.view(-1))
+            masked_lm_loss = loss_fct(prediction_scores.view(-1, self.config.vocab_size),
+                                      masked_lm_labels.view(-1))
+            next_sentence_loss = loss_fct(seq_relationship_score.view(-1, 2),
+                                          next_sentence_label.view(-1))
             total_loss = masked_lm_loss + next_sentence_loss
             return total_loss
         else:
@@ -867,13 +926,16 @@ class BertForMaskedLM(BertPreTrainedModel):
         self.apply(self.init_bert_weights)
 
     def forward(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None):
-        sequence_output, _ = self.bert(input_ids, token_type_ids, attention_mask,
+        sequence_output, _ = self.bert(input_ids,
+                                       token_type_ids,
+                                       attention_mask,
                                        output_all_encoded_layers=False)
         prediction_scores = self.cls(sequence_output)
 
         if masked_lm_labels is not None:
             loss_fct = CrossEntropyLoss(ignore_index=-1)
-            masked_lm_loss = loss_fct(prediction_scores.view(-1, self.config.vocab_size), masked_lm_labels.view(-1))
+            masked_lm_loss = loss_fct(prediction_scores.view(-1, self.config.vocab_size),
+                                      masked_lm_labels.view(-1))
             return masked_lm_loss
         else:
             return prediction_scores
@@ -928,14 +990,21 @@ class BertForNextSentencePrediction(BertPreTrainedModel):
         self.cls = BertOnlyNSPHead(config)
         self.apply(self.init_bert_weights)
 
-    def forward(self, input_ids, token_type_ids=None, attention_mask=None, next_sentence_label=None):
-        _, pooled_output = self.bert(input_ids, token_type_ids, attention_mask,
+    def forward(self,
+                input_ids,
+                token_type_ids=None,
+                attention_mask=None,
+                next_sentence_label=None):
+        _, pooled_output = self.bert(input_ids,
+                                     token_type_ids,
+                                     attention_mask,
                                      output_all_encoded_layers=False)
-        seq_relationship_score = self.cls( pooled_output)
+        seq_relationship_score = self.cls(pooled_output)
 
         if next_sentence_label is not None:
             loss_fct = CrossEntropyLoss(ignore_index=-1)
-            next_sentence_loss = loss_fct(seq_relationship_score.view(-1, 2), next_sentence_label.view(-1))
+            next_sentence_loss = loss_fct(seq_relationship_score.view(-1, 2),
+                                          next_sentence_label.view(-1))
             return next_sentence_loss
         else:
             return seq_relationship_score
@@ -995,7 +1064,10 @@ class BertForSequenceClassification(BertPreTrainedModel):
         self.apply(self.init_bert_weights)
 
     def forward(self, input_ids, token_type_ids=None, attention_mask=None, labels=None):
-        _, pooled_output = self.bert(input_ids, token_type_ids, attention_mask, output_all_encoded_layers=False)
+        _, pooled_output = self.bert(input_ids,
+                                     token_type_ids,
+                                     attention_mask,
+                                     output_all_encoded_layers=False)
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
 
@@ -1061,9 +1133,14 @@ class BertForMultipleChoice(BertPreTrainedModel):
 
     def forward(self, input_ids, token_type_ids=None, attention_mask=None, labels=None):
         flat_input_ids = input_ids.view(-1, input_ids.size(-1))
-        flat_token_type_ids = token_type_ids.view(-1, token_type_ids.size(-1)) if token_type_ids is not None else None
-        flat_attention_mask = attention_mask.view(-1, attention_mask.size(-1)) if attention_mask is not None else None
-        _, pooled_output = self.bert(flat_input_ids, flat_token_type_ids, flat_attention_mask, output_all_encoded_layers=False)
+        flat_token_type_ids = token_type_ids.view(
+            -1, token_type_ids.size(-1)) if token_type_ids is not None else None
+        flat_attention_mask = attention_mask.view(
+            -1, attention_mask.size(-1)) if attention_mask is not None else None
+        _, pooled_output = self.bert(flat_input_ids,
+                                     flat_token_type_ids,
+                                     flat_attention_mask,
+                                     output_all_encoded_layers=False)
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
         reshaped_logits = logits.view(-1, self.num_choices)
@@ -1130,7 +1207,10 @@ class BertForTokenClassification(BertPreTrainedModel):
         self.apply(self.init_bert_weights)
 
     def forward(self, input_ids, token_type_ids=None, attention_mask=None, labels=None):
-        sequence_output, _ = self.bert(input_ids, token_type_ids, attention_mask, output_all_encoded_layers=False)
+        sequence_output, _ = self.bert(input_ids,
+                                       token_type_ids,
+                                       attention_mask,
+                                       output_all_encoded_layers=False)
         sequence_output = self.dropout(sequence_output)
         logits = self.classifier(sequence_output)
 
@@ -1204,8 +1284,16 @@ class BertForQuestionAnswering(BertPreTrainedModel):
         self.qa_outputs = nn.Linear(config.hidden_size, 2)
         self.apply(self.init_bert_weights)
 
-    def forward(self, input_ids, token_type_ids=None, attention_mask=None, start_positions=None, end_positions=None):
-        sequence_output, _ = self.bert(input_ids, token_type_ids, attention_mask, output_all_encoded_layers=False)
+    def forward(self,
+                input_ids,
+                token_type_ids=None,
+                attention_mask=None,
+                start_positions=None,
+                end_positions=None):
+        sequence_output, _ = self.bert(input_ids,
+                                       token_type_ids,
+                                       attention_mask,
+                                       output_all_encoded_layers=False)
         logits = self.qa_outputs(sequence_output)
         start_logits, end_logits = logits.split(1, dim=-1)
         start_logits = start_logits.squeeze(-1)

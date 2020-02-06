@@ -6,8 +6,9 @@ from allennlp.training.metrics import CategoricalAccuracy
 from allennlpx.modules.token_embedders.bert_token_embedder import PretrainedBertEmbedder, PretrainedBertModel
 from allennlp.modules.text_field_embedders.basic_text_field_embedder import BasicTextFieldEmbedder
 
-from allennlp.training.optimizers import BertAdam
-from torch.optim import AdamW
+# from allennlp.training.optimizers import BertAdam
+# from torch.optim import AdamW
+from transformers import AdamW
 
 class BertPooler(torch.nn.Module):
     def forward(self, bert_outputs):
@@ -79,8 +80,8 @@ class BertClassifier(Model):
         # embeddings = self.word_embedders(berty_tokens)
         # encoder_out = self.pooler(embeddings)
 
-        input_ids = berty_tokens['berty_tokens']
-        token_type_ids = berty_tokens['berty_tokens-type-ids']
+        input_ids = berty_tokens['berty_tokens']['input_ids']
+        token_type_ids = berty_tokens['berty_tokens']['token_type_ids']
         _, encoder_out = self.bert_model(input_ids=input_ids,
                                          token_type_ids=token_type_ids,
                                          attention_mask=(input_ids != 0).long(),
@@ -96,13 +97,8 @@ class BertClassifier(Model):
     def get_metrics(self, reset=False):
         return {'accuracy': self.accuracy.get_metric(reset)}
 
-    def get_optimizer(self, total_steps):
-        return BertAdam(self.parameters(),
-                        lr=3e-5,
-                        warmup=0.1,
-                        t_total=total_steps,
-                        weight_decay=0.01)
-        # return AdamW(self.parameters(), lr=2e-5, weight_decay=0.01)
+    def get_optimizer(self):
+        return AdamW(self.parameters(), lr=2e-5, weight_decay=0.01)
 
 
 from luna import ram_globalize

@@ -5,12 +5,12 @@ class Config(ProgramArgs):
     def __init__(self):
         super().__init__()
         self.task_id = "SST"
-        self.finetunable = False
+        self.finetunable = True
 
         self.arch = 'bert'
 
         self.pretrain = 'fasttext'
-        self.mode = 'attack'
+        self.mode = 'knn_attack'
 
         self.attack_vectors = 'glove'
         self.attack_tsv = 'nogit/SST-bert-fix.attack.tsv'
