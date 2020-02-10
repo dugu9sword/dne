@@ -41,6 +41,8 @@ from awesome_glue.utils import EMBED_DIM, WORD2VECS
 from luna import ram_read, ram_write, ram_append, ram_reset, ram_has
 from allennlpx.modules.knn_utils import build_faiss_index
 import faiss
+from collections import Counter
+from luna.pytorch import set_seed
 
 
 def load_data(task_id: str, tokenizer: str):
@@ -133,12 +135,12 @@ class Task:
 
     def knn_build_index(self):
         self.from_pretrained()
-        self.model.eval()
         iterator = BasicIterator(batch_size=32)
         iterator.index_with(self.vocab)
 
         ram_write("knn_flag", "collect")
-        filtered = list(filter(lambda x: len(x.fields['berty_tokens'].tokens) > 10, self.train_data))
+        filtered = list(filter(lambda x: len(x.fields['berty_tokens'].tokens) > 10,
+                               self.train_data))
         evaluate(self.model, filtered, iterator, 0, None)
 
     def knn_evaluate(self):
@@ -152,7 +154,6 @@ class Task:
     @torch.no_grad()
     def evaluate(self):
         self.from_pretrained()
-        self.model.eval()
         iterator = BasicIterator(batch_size=32)
         iterator.index_with(self.vocab)
         evaluate(self.model, self.dev_data, iterator, 0, None)
@@ -160,12 +161,23 @@ class Task:
     @torch.no_grad()
     def transfer_attack(self):
         self.from_pretrained()
-        self.model.eval()
+        # self.model.eval()
+        set_seed(111)
         df = pandas.read_csv(self.config.attack_tsv, sep='\t', quoting=csv.QUOTE_NONE)
         attack_metric = AttackMetric()
         for rid in range(df.shape[0]):
             raw = df.iloc[rid]['raw']
             att = df.iloc[rid]['att']
+
+            new_att = [wa for wr, wa in zip(raw.split(" "), att.split(" ")) if wr == wa]
+            att = " ".join(new_att)
+
+            # x = att.split(" ")
+            # import random
+            # for i in range(min(7, len(x) - 1)):
+            #     x.pop(random.randrange(len(x)))
+            # att = " ".join(x)
+
             raw_instance = self.reader.text_to_instance(raw)
             att_instance = self.reader.text_to_instance(att)
             results = self.model.forward_on_instances([raw_instance, att_instance])
@@ -179,6 +191,7 @@ class Task:
                     attack_metric.fail()
             else:
                 attack_metric.escape()
+        print(Counter(df["label"].tolist()))
         print(attack_metric)
 
     def attack(self):

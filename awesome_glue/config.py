@@ -10,11 +10,11 @@ class Config(ProgramArgs):
         self.arch = 'bert'
 
         self.pretrain = 'fasttext'
-        self.mode = 'knn_attack'
+        self.mode = 'transfer'
 
         self.attack_vectors = 'glove'
-        self.attack_tsv = 'nogit/SST-bert-fix.attack.tsv'
-        # self.attack_tsv = 'nogit/SST-bert.attack.tsv'
+        # self.attack_tsv = 'nogit/SST-bert-fix.attack.tsv'
+        self.attack_tsv = 'nogit/SST-bert.attack.tsv'
         # self.attack_tsv = 'nogit/SST-lstm-fasttext.attack.tsv'
 
         # self.layer_noise = 0.0

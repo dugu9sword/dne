@@ -1,5 +1,7 @@
 from .public import *
 import torch
+import random
+import numpy as np
 from torch.nn.utils.rnn import PackedSequence
 import torch.nn.functional as F
 from .logging import log
@@ -219,6 +221,13 @@ def msk_to_idx(msk):
     assert msk.sum() == msk.size(0), \
         "only one element is allowed to be 1 in each row"
     return msk.nonzero()[:, 1].flatten()
+
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 
 # def flip_by_length(inputs, lengths):
