@@ -16,7 +16,7 @@ from allennlp.training.metrics import CategoricalAccuracy
 from allennlp.training.optimizers import DenseSparseAdam
 
 from luna import (auto_create, flt2str, log, log_config, ram_read, ram_reset, ram_write,
-                  ram_globalize)
+                  ram_globalize, LabelSmoothingLoss)
 from allennlp.modules.token_embedders.elmo_token_embedder import ElmoTokenEmbedder
 from collections import defaultdict
 
@@ -62,7 +62,8 @@ class LstmClassifier(Model):
                                       out_features=vocab.get_vocab_size('label'))
 
         self.accuracy = CategoricalAccuracy()
-        self.loss_function = torch.nn.CrossEntropyLoss()
+#         self.loss_function = torch.nn.CrossEntropyLoss()
+        self.loss_function = LabelSmoothingLoss(0.1)
 
     def get_optimizer(self):
         return DenseSparseAdam(self.parameters(), lr=1e-3)

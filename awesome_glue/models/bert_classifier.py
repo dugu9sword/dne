@@ -6,6 +6,8 @@ from allennlp.training.metrics import CategoricalAccuracy
 from allennlpx.modules.token_embedders.bert_token_embedder import PretrainedBertEmbedder, PretrainedBertModel
 from allennlp.modules.text_field_embedders.basic_text_field_embedder import BasicTextFieldEmbedder
 
+from luna import LabelSmoothingLoss
+
 # from allennlp.training.optimizers import BertAdam
 # from torch.optim import AdamW
 from transformers import AdamW
@@ -74,17 +76,16 @@ class BertClassifier(Model):
         )
 
         self.accuracy = CategoricalAccuracy()
-        self.loss_function = torch.nn.CrossEntropyLoss()
-
+#         self.loss_function = torch.nn.CrossEntropyLoss()
+        self.loss_function = LabelSmoothingLoss(0.05)
+    
     def forward(self, berty_tokens, label=None):
         # embeddings = self.word_embedders(berty_tokens)
         # encoder_out = self.pooler(embeddings)
 
-        input_ids = berty_tokens['berty_tokens']['input_ids']
-        token_type_ids = berty_tokens['berty_tokens']['token_type_ids']
-        _, encoder_out = self.bert_model(input_ids=input_ids,
-                                         token_type_ids=token_type_ids,
-                                         attention_mask=(input_ids != 0).long(),
+        _, encoder_out = self.bert_model(input_ids=berty_tokens['berty_tokens'],
+                                         token_type_ids=berty_tokens['berty_tokens-type-ids'],
+                                         attention_mask=(berty_tokens['berty_tokens'] != 0).long(),
                                          output_all_encoded_layers=False)
 
         logits = self.linear(encoder_out)

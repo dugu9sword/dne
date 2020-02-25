@@ -34,6 +34,9 @@ class BruteForce(EmbedAttacker):
                          ignore_tokens: List[str] = DEFAULT_IGNORE_TOKENS,
                          forbidden_tokens: List[str] = DEFAULT_IGNORE_TOKENS,
                          max_change_num: int = 5,
+                         measure = 'euc',
+                         topk = 20,
+                         rho = None,
                          search_num: int = 512) -> JsonDict:
         if self.token_embedding is None:
             self.initialize()
@@ -48,7 +51,7 @@ class BruteForce(EmbedAttacker):
         for i in range(len(raw_tokens)):
             if raw_tokens[i].text not in ignore_tokens:
                 word = raw_tokens[i].text
-                nbrs = self.neariest_neighbours(word)
+                nbrs = self.neariest_neighbours(word, measure, topk, rho)
                 nbrs = [nbr for nbr in nbrs if nbr not in forbidden_tokens]
                 if len(nbrs) > 0:
                     sids_to_change.append(i)
@@ -91,8 +94,7 @@ class BruteForce(EmbedAttacker):
                                  word2idx=lambda x: self.vocab.get_token_index(x))
 
     @lru_cache(maxsize=None)
-    def neariest_neighbours(self, word):
+    def neariest_neighbours(self, word, measure, topk, rho):
         # May be accelerated by caching a the distance
-        vals, idxs = self.embed_searcher.find_neighbours(word, measure='cos', rho=0.6)
+        vals, idxs = self.embed_searcher.find_neighbours(word, measure=measure, topk=topk, rho=rho)
         return [self.vocab.get_token_from_index(idx) for idx in cast_list(idxs)]
-        # return random.choices(list(self.vocab._token_to_index['tokens'].keys()), k=10)

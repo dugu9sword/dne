@@ -105,10 +105,15 @@ class Task:
         if self.config.tokenizer in ['spacy', 'spacyx']:
             sorting_keys = [("sent", "num_tokens")]
         else:
-            sorting_keys = [("berty_tokens", "berty_tokens___input_ids")]
+            sorting_keys = [("berty_tokens", "num_tokens")]
 
         iterator = BucketIterator(batch_size=pseudo_batch_size, sorting_keys=sorting_keys)
         iterator.index_with(self.vocab)
+
+        if self.config.augment_data != '':
+            log(f'Augment data from {self.config.augment_data}')
+            augment_data = self.reader.read(self.config.augment_data)
+            self.train_data.extend(augment_data)
 
         trainer = CallbackTrainer(
             model=self.model,
@@ -209,8 +214,12 @@ class Task:
                                                          vocab=spacy_vocab,
                                                          namespace="tokens"), True)
 
-        f_tsv = open(f"nogit/{self.config.model_name}.attack.tsv", 'w')
-        f_tsv.write("raw\tatt\tlabel\n")
+        if self.config.mode == 'attackx':
+            f_tsv = open(f"nogit/{self.config.model_name}.attack.tsv", 'w')
+            f_tsv.write("raw\tatt\tlabel\n")
+
+            f_aug = open(f"nogit/{self.config.model_name}.advaug.tsv", 'w')
+            f_aug.write("sentence\tlabel\n")
 
         for module in self.model.modules():
             if isinstance(module, TextFieldEmbedder):
@@ -231,10 +240,25 @@ class Task:
             attacker = BruteForce(self.predictor)
             attacker.initialize()
 
-        data_to_attack = self.dev_data[:200]
-        total_num = len(data_to_attack)
+        if self.config.attack_data_split == 'train':
+            data_to_attack = self.train_data
+            if self.config.task_id == 'SST':
+                if self.config.arch == 'bert':
+                    field_name = 'berty_tokens'
+                else:
+                    field_name = 'sent'
+                data_to_attack = list(
+                    filter(lambda x: len(x[field_name].tokens) > 20, data_to_attack))
+        elif self.config.attack_data_split == 'dev':
+            data_to_attack = self.dev_data
+        if self.config.attack_size == -1:
+            adv_number = len(data_to_attack)
+        else:
+            adv_number = self.config.attack_size
+        data_to_attack = data_to_attack[:adv_number]
+
         attack_metric = AttackMetric()
-        for i in tqdm(range(total_num)):
+        for i in tqdm(range(adv_number)):
             raw_text = allenutil.as_sentence(data_to_attack[i])
             raw_pred = np.argmax(self.predictor.predict(raw_text)['probs'])
             raw_label = data_to_attack[i]['label'].label
@@ -256,7 +280,9 @@ class Task:
                                                    ignore_tokens=forbidden_words,
                                                    forbidden_tokens=forbidden_words,
                                                    max_change_num=3,
-                                                   search_num=128)
+                                                   measure='euc',
+                                                   topk=30,
+                                                   search_num=256)
 
                 att_text = allenutil.as_sentence(result['att'])
 
@@ -267,14 +293,19 @@ class Task:
                     log("[att]", att_text)
                     log('\t', flt2str(self.predictor.predict(att_text)['probs']))
                     log()
+                    log("Aggregated metric:", attack_metric)
                 else:
                     attack_metric.fail()
             else:
                 attack_metric.escape()
                 att_text = raw_text
 
-            f_tsv.write(f"{raw_text}\t{att_text}\t{raw_label}\n")
+            if self.config.mode == 'attackx':
+                f_tsv.write(f"{raw_text}\t{att_text}\t{raw_label}\n")
+                f_aug.write(f"{att_text}\t{raw_label}\n")
 
-        f_tsv.close()
+        if self.config.mode == 'attackx':
+            f_tsv.close()
+            f_aug.close()
 
         print(attack_metric)

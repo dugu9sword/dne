@@ -2,7 +2,7 @@ import torch
 from tabulate import tabulate
 import numpy as np
 from typing import Union
-
+from luna import show_mean_std, cast_list
 
 class EmbeddingSearcher:
     def __init__(
@@ -54,7 +54,7 @@ class EmbeddingSearcher:
             index = faiss.index_cpu_to_gpu(res, 0, index)
         self.faiss_index = index
 
-    def show_embedding_info(self):
+    def show_embedding_info(self, measure='euc'):
         print('*** Statistics of parameters and 2-norm ***')
         show_mean_std(self.embed, 'Param')
         show_mean_std(torch.norm(self.embed, p=2, dim=1), 'Norm')
@@ -65,7 +65,7 @@ class EmbeddingSearcher:
         for ele in cast_list(torch.randint(self.embed.size(0), (50, ))):
             if self.embed[ele].sum() == 0.:
                 continue
-            idxs, vals = self.find_neighbours(ele, -1, 'euc', False)
+            vals, idxs = self.find_neighbours(ele, measure,  None)
             for nbr in nbr_num:
                 dists[nbr].append(vals[1:nbr + 1])
         table = []
@@ -86,9 +86,9 @@ class EmbeddingSearcher:
                 continue
             vect = torch.rand_like(self.embed[ele])
             vect = vect / torch.norm(vect)
-            ridxs, rvals = self.find_neighbours(self.embed[ele], -1, 'euc', False)
+            rvals, ridxs = self.find_neighbours(self.embed[ele], measure, None)
             for mve in mve_nom:
-                idxs, vals = self.find_neighbours(self.embed[ele] + vect * mve, 500, 'euc', False)
+                vals, idxs = self.find_neighbours(self.embed[ele] + vect * mve, measure, 500)
                 for nbr in nbr_num:
                     dists[mve][nbr].append(vals[1:nbr + 1])
                     cover[mve][nbr].append(compare_idxes(idxs[1:nbr + 1], ridxs[1:nbr + 1]))
