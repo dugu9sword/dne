@@ -43,8 +43,11 @@ from allennlpx.modules.knn_utils import build_faiss_index
 import faiss
 from collections import Counter
 from luna.pytorch import set_seed
+import random
+from statistics import mode
+import nlpaug.augmenter.word as naw
 
-
+    
 def load_data(task_id: str, tokenizer: str):
     spec = TASK_SPECS[task_id]
 
@@ -110,10 +113,9 @@ class Task:
         iterator = BucketIterator(batch_size=pseudo_batch_size, sorting_keys=sorting_keys)
         iterator.index_with(self.vocab)
 
-        if self.config.augment_data != '':
-            log(f'Augment data from {self.config.augment_data}')
-            augment_data = self.reader.read(self.config.augment_data)
-            self.train_data.extend(augment_data)
+        if self.config.aug_data != '':
+            log(f'Augment data from {self.config.aug_data}')
+            self.train_data.extend(self.reader.read(aug_data))
 
         trainer = CallbackTrainer(
             model=self.model,
@@ -167,28 +169,67 @@ class Task:
     def transfer_attack(self):
         self.from_pretrained()
         # self.model.eval()
-        set_seed(111)
-        df = pandas.read_csv(self.config.attack_tsv, sep='\t', quoting=csv.QUOTE_NONE)
+        set_seed(11221)
+        df = pandas.read_csv(self.config.adv_data, sep='\t', quoting=csv.QUOTE_NONE)
         attack_metric = AttackMetric()
-        for rid in range(df.shape[0]):
+        
+        def rand_drop(x):
+            x_split = x.split(" ")
+            for i in range(min(3, len(x_split) - 1)):
+                x_split.pop(random.randrange(len(x_split)))
+            return " ".join(x_split)
+        
+        def rand_stop(x):
+            x_split = x.split(" ")
+            idxs = random.choices(range(len(x_split)), k=5)
+            for i in idxs:
+                x_split[i] = 'the'
+            return " ".join(x_split)
+        
+        def bert_aug(x):
+            if ram_has("bert_aug"):
+                aug = ram_read("bert_aug")
+            else:
+                aug = naw.ContextualWordEmbsAug(
+                    model_path='bert-base-uncased', 
+                    top_k = 30,
+                    aug_min = 15,
+                    aug_max = 15,
+                    stopwords = ['a', 'the'],
+                #     stopwords_regex = ['un', 'less'],
+                    action="substitute")
+                ram_write("bert_aug", aug)
+            if len(x.split(' ')) < 15:
+                aug.aug_min = 3
+            ret = aug.augment(x)
+            aug.aug_min = 15
+            return ret
+                
+        transform = bert_aug
+        ensemble_num = 19
+            
+        for rid in tqdm(range(df.shape[0])):
             raw = df.iloc[rid]['raw']
             att = df.iloc[rid]['att']
-
-            new_att = [wa for wr, wa in zip(raw.split(" "), att.split(" ")) if wr == wa]
-            att = " ".join(new_att)
-
-            # x = att.split(" ")
-            # import random
-            # for i in range(min(7, len(x) - 1)):
-            #     x.pop(random.randrange(len(x)))
-            # att = " ".join(x)
-
-            raw_instance = self.reader.text_to_instance(raw)
-            att_instance = self.reader.text_to_instance(att)
-            results = self.model.forward_on_instances([raw_instance, att_instance])
-            raw_pred = np.argmax(results[0]['probs'])
-            att_pred = np.argmax(results[1]['probs'])
+            
+            raw_instances, att_instances = [], []
+            for i in range(ensemble_num):
+                raw_instances.append(self.reader.text_to_instance(transform(raw)))
+                att_instances.append(self.reader.text_to_instance(transform(att)))
+            results = self.model.forward_on_instances(raw_instances + att_instances)
+            
+            raw_preds, att_preds = [], []
+            for i in range(ensemble_num):
+                raw_preds.append(np.argmax(results[i]['probs']))
+                att_preds.append(np.argmax(results[i + ensemble_num]['probs']))
+            raw_pred = mode(raw_preds)
+            att_pred = mode(att_preds)
+            
+#             new_att = [wa for wr, wa in zip(raw.split(" "), att.split(" ")) if wr == wa]
+#             att = " ".join(new_att)
+            
             label = df.iloc[rid]['label']
+            
             if raw_pred == label:
                 if att_pred != raw_pred:
                     attack_metric.succeed()
@@ -196,6 +237,7 @@ class Task:
                     attack_metric.fail()
             else:
                 attack_metric.escape()
+            print('Agg metric', attack_metric)
         print(Counter(df["label"].tolist()))
         print(attack_metric)
 
@@ -214,11 +256,12 @@ class Task:
                                                          vocab=spacy_vocab,
                                                          namespace="tokens"), True)
 
-        if self.config.mode == 'attackx':
-            f_tsv = open(f"nogit/{self.config.model_name}.attack.tsv", 'w')
-            f_tsv.write("raw\tatt\tlabel\n")
+        if self.config.attack_gen_adv:
+            f_adv = open(f"nogit/{self.config.model_name}.adv.tsv", 'w')
+            f_adv.write("raw\tatt\tlabel\n")
 
-            f_aug = open(f"nogit/{self.config.model_name}.advaug.tsv", 'w')
+        if self.config.attack_gen_aug:
+            f_aug = open(f"nogit/{self.config.model_name}.aug.tsv", 'w')
             f_aug.write("sentence\tlabel\n")
 
         for module in self.model.modules():
@@ -300,12 +343,14 @@ class Task:
                 attack_metric.escape()
                 att_text = raw_text
 
-            if self.config.mode == 'attackx':
-                f_tsv.write(f"{raw_text}\t{att_text}\t{raw_label}\n")
+            if self.config.attack_gen_adv:
+                f_adv.write(f"{raw_text}\t{att_text}\t{raw_label}\n")
+            if self.config.attack_gen_aug:
                 f_aug.write(f"{att_text}\t{raw_label}\n")
 
-        if self.config.mode == 'attackx':
-            f_tsv.close()
+        if self.config.attack_gen_adv: 
+            f_adv.close()
+        if self.config.attack_gen_aug:
             f_aug.close()
 
         print(attack_metric)

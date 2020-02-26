@@ -4,33 +4,31 @@ from luna.program_args import ProgramArgs
 class Config(ProgramArgs):
     def __init__(self):
         super().__init__()
+        
+        # basic settings
         self.task_id = "SST"
         self.finetunable = True
-
         self.arch = 'lstm'
+        self.pretrain = 'glove'      
+        self._model_name = "SST-lstm-glove"
+#         self._model_name = ""
+        self.mode = 'transfer'
+        
+        # transfer settings
+        self.adv_data = 'nogit/SST-lstm-glove.adv.tsv' 
+        
+        # training settings
+#         self.aug_data = 'nogit/SST-lstm-glove.advaug.tsv'
+        self.aug_data = ''
 
-        self.pretrain = 'glove'
-        self.mode = 'attack'
-
-#         self.augment_data = 'nogit/SST-bert.advaug.tsv'
-#         self.given_model_name = 'SST-bert-adv'
-
-#         self.augment_data = 'nogit/SST-lstm-glove.advaug.tsv'
-        self.augment_data = ''
-        self.given_model_name = "SST-lstm-glove-ls1"
-#         self.given_model_name = 'SST-bert-adv-ls05'
-
-
+        # attack settings
         self.attack_vectors = 'glove'
-        # self.attack_tsv = 'nogit/SST-bert-fix.attack.tsv'
         self.attack_data_split = 'dev'
-        self.attack_size = 400
-        self.attack_tsv = 'nogit/SST-bert.attack.tsv'
-        # self.attack_tsv = 'nogit/SST-lstm-fasttext.attack.tsv'
-
-        # self.layer_noise = 0.0
-        # self.embed_noise = 0.0
-
+        self.attack_size = 400        
+        self.attack_gen_aug = False
+        self.attack_gen_adv = True
+        
+        # other settings
         self.alchemist = False
         self.seed = 2
 
@@ -43,7 +41,7 @@ class Config(ProgramArgs):
 
     @property
     def model_name(self):
-        if not self.given_model_name:
+        if not self._model_name:
             if self.arch in ['bert', 'elmo']:
                 model_name = f"{self.task_id}-{self.arch}"
             else:
@@ -52,7 +50,7 @@ class Config(ProgramArgs):
                 model_name += '-fix'
             return model_name
         else:
-            return self.given_model_name
+            return self._model_name
 
     def _check_args(self):
         assert self.arch in ['lstm', 'bert', 'transformer']
