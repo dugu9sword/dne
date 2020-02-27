@@ -42,7 +42,7 @@ class AttackMetric:
 
     @property
     def flip_ratio(self):
-        return self._succ_num / (self._succ_num + self._fail_num) * 100
+        return self._succ_num / (self._succ_num + self._fail_num + 1e-40) * 100
 
     def __repr__(self):
         return "Accu before: {:.2f}%, after: {:.2f}%, Flip ratio {:.2f}%".format(

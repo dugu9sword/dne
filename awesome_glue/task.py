@@ -173,6 +173,9 @@ class Task:
         df = pandas.read_csv(self.config.adv_data, sep='\t', quoting=csv.QUOTE_NONE)
         attack_metric = AttackMetric()
         
+        def identity(x):
+            return x
+        
         def rand_drop(x):
             x_split = x.split(" ")
             for i in range(min(3, len(x_split) - 1)):
@@ -186,32 +189,89 @@ class Task:
                 x_split[i] = 'the'
             return " ".join(x_split)
         
+        def embed_aug(x):
+            aug_num = 5
+            if ram_has("emb_aug"):
+                aug = ram_read("emb_aug")
+            else:
+                aug = naw.WordEmbsAug(  
+                    model_type = 'glove',
+                    top_k=30,
+                    model_path = '/home/zhouyi/counter-fitting/word_vectors/counter-fitted-vectors.txt',
+#                     model_path = '/home/zhouyi/counter-fitting/word_vectors/glove.txt',
+                    aug_min = aug_num,
+                    aug_max = aug_num,
+                    stopwords = ['a', 'the'],
+                    stopwords_regex = '@',
+                )
+                ram_write("emb_aug", aug)
+            if len(x.split(' ')) < aug_num:
+                aug.aug_min = 1
+            ret = aug.substitute(x)
+            aug.aug_min = aug_num
+            return ret
+        
+        def syn_aug(x):
+            aug_num = 5
+            if ram_has("syn_aug"):
+                aug = ram_read("syn_aug")
+            else:
+                while True:
+                    try:
+                        aug = naw.SynonymAug(
+                            aug_min = aug_num,
+                            aug_max = aug_num,
+                            stopwords = ['a', 'the'],
+                            stopwords_regex = '@',
+                        )
+                        break
+                    except:
+                        import nltk
+                        nltk.download('wordnet')
+                        nltk.download('averaged_perceptron_tagger')
+                ram_write("syn_aug", aug)
+            if len(x.split(' ')) < aug_num:
+                aug.aug_min = 1
+            ret = aug.substitute(x)
+            aug.aug_min = aug_num
+            return ret
+            
         def bert_aug(x):
+            aug_num = 5
             if ram_has("bert_aug"):
                 aug = ram_read("bert_aug")
             else:
                 aug = naw.ContextualWordEmbsAug(
                     model_path='bert-base-uncased', 
                     top_k = 30,
-                    aug_min = 15,
-                    aug_max = 15,
+                    aug_min = aug_num,
+                    aug_max = aug_num,
                     stopwords = ['a', 'the'],
-                #     stopwords_regex = ['un', 'less'],
+                    stopwords_regex = '@',
                     action="substitute")
                 ram_write("bert_aug", aug)
-            if len(x.split(' ')) < 15:
-                aug.aug_min = 3
+            if len(x.split(' ')) < aug_num:
+                aug.aug_min = 1
             ret = aug.augment(x)
-            aug.aug_min = 15
-            return ret
+            aug.aug_min = aug_num
+            return ret    
                 
         transform = bert_aug
-        ensemble_num = 19
+        ensemble_num = 9
             
         for rid in tqdm(range(df.shape[0])):
             raw = df.iloc[rid]['raw']
             att = df.iloc[rid]['att']
             
+#             new_att = []
+#             for wr, wa in zip(raw.split(" "), att.split(" ")):
+#                 if wr == wa:
+#                     new_att.append(wa)
+#                 else:
+#                     pass
+# #                     new_att.append()
+#             att = " ".join(new_att)
+
             raw_instances, att_instances = [], []
             for i in range(ensemble_num):
                 raw_instances.append(self.reader.text_to_instance(transform(raw)))
@@ -224,9 +284,6 @@ class Task:
                 att_preds.append(np.argmax(results[i + ensemble_num]['probs']))
             raw_pred = mode(raw_preds)
             att_pred = mode(att_preds)
-            
-#             new_att = [wa for wr, wa in zip(raw.split(" "), att.split(" ")) if wr == wa]
-#             att = " ".join(new_att)
             
             label = df.iloc[rid]['label']
             

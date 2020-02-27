@@ -8,14 +8,14 @@ class Config(ProgramArgs):
         # basic settings
         self.task_id = "SST"
         self.finetunable = True
-        self.arch = 'lstm'
+        self.arch = 'bert'
         self.pretrain = 'glove'      
-        self._model_name = "SST-lstm-glove"
+        self._model_name = "SST-bert"
 #         self._model_name = ""
         self.mode = 'transfer'
         
         # transfer settings
-        self.adv_data = 'nogit/SST-lstm-glove.adv.tsv' 
+        self.adv_data = 'nogit/SST-bert.adv.tsv' 
         
         # training settings
 #         self.aug_data = 'nogit/SST-lstm-glove.advaug.tsv'
