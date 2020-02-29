@@ -13,7 +13,7 @@ from allennlp.modules.text_field_embedders.text_field_embedder import TextFieldE
 from allennlp.modules.token_embedders import Embedding
 from luna import cast_list, lazy_property
 
-from allennlpx.interpret.attackers.attacker import EmbedAttacker, DEFAULT_IGNORE_TOKENS
+from allennlpx.interpret.attackers.attacker import Attacker, DEFAULT_IGNORE_TOKENS
 from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
 from allennlpx import allenutil
 from itertools import product
@@ -25,7 +25,7 @@ from allennlp.data.tokenizers import SpacyTokenizer
 from luna import time_record
 
 
-class BertBruteForce(EmbedAttacker):
+class BertBruteForce(Attacker):
     def __init__(self, predictor):
         super().__init__(predictor)
         self.spacy = SpacyTokenizer()

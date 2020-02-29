@@ -13,11 +13,11 @@ from allennlp.modules.text_field_embedders.text_field_embedder import TextFieldE
 from allennlp.modules.token_embedders import Embedding
 from luna import cast_list
 
-from allennlpx.interpret.attackers.attacker import EmbedAttacker, DEFAULT_IGNORE_TOKENS
+from allennlpx.interpret.attackers.attacker import Attacker, DEFAULT_IGNORE_TOKENS
 
 
 
-class HotFlip(EmbedAttacker):
+class HotFlip(Attacker):
     """
     Runs the HotFlip style attack at the word-level https://arxiv.org/abs/1712.06751.  We use the
     first-order taylor approximation described in https://arxiv.org/abs/1903.06620, in the function

@@ -6,6 +6,7 @@ import torch
 from allennlp.modules.token_embedders import Embedding
 from allennlp.data.token_indexers.token_characters_indexer import TokenCharactersIndexer
 from allennlp.data.tokenizers.token import Token
+from allennlp.data.vocabulary import Vocabulary, DEFAULT_OOV_TOKEN
 from allennlp.data.token_indexers.elmo_indexer import ELMoTokenCharactersIndexer
 from allennlp.modules.text_field_embedders.text_field_embedder import TextFieldEmbedder
 from allennlpx.predictors.predictor import Predictor
@@ -16,19 +17,19 @@ DEFAULT_IGNORE_TOKENS = [
 
 
 class Attacker(Registrable):
-    """
-    An ``Attacker`` will modify an input (e.g., add or delete tokens) to try to change an AllenNLP
-    Predictor's output in a desired manner (e.g., make it incorrect).
-    """
     def __init__(self, predictor: Predictor) -> None:
         self.predictor = predictor
+        
+        self.vocab : Vocabulary = None
+        self.token_embedding: Embedding = None
 
-    def initialize(self):
-        """
-        Initializes any components of the Attacker that are expensive to compute, so that they are
-        not created on __init__().  Default implementation is ``pass``.
-        """
-        pass
+    def initialize(self, vocab=None, token_embedding=None):
+        if vocab is None:
+            self.vocab = self.predictor._model.vocab
+            self.token_embedding = self._construct_embedding_matrix()
+        else:
+            self.vocab = vocab
+            self.token_embedding = token_embedding.to(self.model_device)
 
     def attack_from_json(self,
                          inputs: JsonDict,
@@ -60,24 +61,10 @@ class Attacker(Registrable):
         """
         raise NotImplementedError()
 
-
-class EmbedAttacker(Attacker):
-    def __init__(self, predictor: Predictor):
-        super().__init__(predictor)
-        self.vocab = self.predictor._model.vocab
-        self.token_embedding: Embedding = None
-        
     @property
     def model_device(self):
         return next(self.predictor._model.parameters()).device
-
-    def initialize(self, vocab=None, token_embedding=None):
-        if vocab is None:
-            self.token_embedding = self._construct_embedding_matrix()
-        else:
-            self.vocab = vocab
-            self.token_embedding = token_embedding.to(self.model_device)
-
+        
     def _construct_embedding_matrix(self):
         """
         For HotFlip, we need a word embedding matrix to search over. The below is necessary for
@@ -125,3 +112,4 @@ class EmbedAttacker(Attacker):
         #                  embedding_dim=embedding_matrix.shape[1],
         #                  weight=embedding_matrix,
         #                  trainable=False)
+

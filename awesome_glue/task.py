@@ -23,6 +23,7 @@ from luna import flt2str
 from allennlpx import allenutil
 from allennlpx.interpret.attackers.attacker import DEFAULT_IGNORE_TOKENS
 from allennlpx.interpret.attackers.bruteforce import BruteForce
+from allennlpx.interpret.attackers.pwws import PWWS
 from allennlpx.interpret.attackers.bert_bruteforce import BertBruteForce
 from allennlpx.interpret.attackers.hotflip import HotFlip
 from allennlpx.interpret.attackers.pgd import PGD
@@ -337,7 +338,8 @@ class Task:
             attacker.initialize(vocab=spacy_vocab, token_embedding=spacy_weight)
         else:
             # attacker = HotFlip(predictor)
-            attacker = BruteForce(self.predictor)
+#             attacker = BruteForce(self.predictor)
+            attacker = PWWS(self.predictor)
             attacker.initialize()
 
         if self.config.attack_data_split == 'train':
@@ -379,10 +381,11 @@ class Task:
                                                    field_to_change=field_to_change,
                                                    ignore_tokens=forbidden_words,
                                                    forbidden_tokens=forbidden_words,
-                                                   max_change_num=3,
+                                                   max_change_num_or_ratio=0.25,
                                                    measure='euc',
                                                    topk=30,
-                                                   search_num=256)
+#                                                    search_num=256
+                                                  )
 
                 att_text = allenutil.as_sentence(result['att'])
 

@@ -8,11 +8,11 @@ class Config(ProgramArgs):
         # basic settings
         self.task_id = "SST"
         self.finetunable = True
-        self.arch = 'bert'
+        self.arch = 'lstm'
         self.pretrain = 'glove'      
-        self._model_name = "SST-bert"
+        self._model_name = "SST-lstm-glove"
 #         self._model_name = ""
-        self.mode = 'transfer'
+        self.mode = 'attack'
         
         # transfer settings
         self.adv_data = 'nogit/SST-bert.adv.tsv' 
@@ -24,9 +24,9 @@ class Config(ProgramArgs):
         # attack settings
         self.attack_vectors = 'glove'
         self.attack_data_split = 'dev'
-        self.attack_size = 400        
+        self.attack_size = 100        
         self.attack_gen_aug = False
-        self.attack_gen_adv = True
+        self.attack_gen_adv = False
         
         # other settings
         self.alchemist = False

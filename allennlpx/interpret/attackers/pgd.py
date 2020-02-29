@@ -14,14 +14,14 @@ from allennlp.modules.token_embedders import Embedding
 
 from allennlpx.predictors.predictor import Predictor
 from allennlpx.interpret.attackers.util import select
-from allennlpx.interpret.attackers.attacker import Attacker, EmbedAttacker, DEFAULT_IGNORE_TOKENS
+from allennlpx.interpret.attackers.attacker import Attacker, DEFAULT_IGNORE_TOKENS
 
 from luna import cast_list
 from luna import lazy_property
 from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
 
 
-class PGD(EmbedAttacker):
+class PGD(Attacker):
     @lazy_property
     def embed_searcher(self) -> EmbeddingSearcher:
         return EmbeddingSearcher(embed=self.token_embedding.weight,
