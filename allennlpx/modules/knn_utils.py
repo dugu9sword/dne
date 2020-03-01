@@ -1,8 +1,9 @@
-import h5py
-import torch
-import numpy as np
 from pathlib import Path
+
 import faiss
+import h5py
+import numpy as np
+import torch
 
 
 class H5pyCollector:

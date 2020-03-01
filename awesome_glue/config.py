@@ -22,7 +22,7 @@ class Config(ProgramArgs):
         self.aug_data = ''
 
         # attack settings
-        self.attack_vectors = 'glove'
+        self.attack_vectors = 'counter'
         self.attack_data_split = 'dev'
         self.attack_size = 100        
         self.attack_gen_aug = False
@@ -57,4 +57,3 @@ class Config(ProgramArgs):
         assert self.tokenizer in ['spacy', 'spacyx', 'bert']
         assert self.pretrain in ['glove', 'fasttext', 'random']
         # assert self.mode in ['train', 'evaluate']
-        pass

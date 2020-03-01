@@ -6,17 +6,16 @@ At its core it uses Hugging Face's PyTorch implementation
 (https://github.com/huggingface/pytorch-pretrained-BERT),
 so thanks to them!
 """
-from typing import Dict, List
 import logging
+from typing import Dict, List
 
 import torch
 import torch.nn.functional as F
-
-from .modeling_bert import BertModel
-
 from allennlp.modules.scalar_mix import ScalarMix
 from allennlp.modules.token_embedders.token_embedder import TokenEmbedder
 from allennlp.nn import util
+
+from .modeling_bert import BertModel
 
 logger = logging.getLogger(__name__)
 

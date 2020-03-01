@@ -4,17 +4,18 @@ from typing import List
 
 import numpy
 import torch
-
 from allennlp.common.util import JsonDict, sanitize
 from allennlp.data.fields import TextField
-from allennlp.data.token_indexers import ELMoTokenCharactersIndexer, TokenCharactersIndexer
+from allennlp.data.token_indexers import (ELMoTokenCharactersIndexer,
+                                          TokenCharactersIndexer)
 from allennlp.data.tokenizers import Token
-from allennlp.modules.text_field_embedders.text_field_embedder import TextFieldEmbedder
+from allennlp.modules.text_field_embedders.text_field_embedder import \
+    TextFieldEmbedder
 from allennlp.modules.token_embedders import Embedding
+
+from allennlpx.interpret.attackers.attacker import (DEFAULT_IGNORE_TOKENS,
+                                                    Attacker)
 from luna import cast_list
-
-from allennlpx.interpret.attackers.attacker import Attacker, DEFAULT_IGNORE_TOKENS
-
 
 
 class HotFlip(Attacker):
@@ -28,11 +29,9 @@ class HotFlip(Attacker):
                          inputs: JsonDict = None,
                          field_to_change: str = 'tokens',
                          field_to_attack: str = 'label',
-                         grad_input_field: str = 'grad_input_1',
-                         ignore_tokens: List[str] = DEFAULT_IGNORE_TOKENS,
-                         forbidden_tokens: List[str] = DEFAULT_IGNORE_TOKENS) -> JsonDict:
+                         grad_input_field: str = 'grad_input_1') -> JsonDict:
         if self.token_embedding is None:
-            self.initialize()
+            raise Exception()
 
         raw_instance = self.predictor.json_to_labeled_instances(inputs)[0]
         raw_text_field: TextField = raw_instance[field_to_change]  # type: ignore
@@ -48,7 +47,7 @@ class HotFlip(Attacker):
         # ignore any token that is in the ignore_tokens list by setting the token to already flipped
         ignored_positions: List[int] = []
         for index, token in enumerate(att_tokens):
-            if token.text in ignore_tokens:
+            if token.text in self.ignore_tokens:
                 ignored_positions.append(index)
                 
         successful=False

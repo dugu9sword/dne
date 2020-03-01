@@ -1,21 +1,19 @@
-from typing import List, Iterator, Dict, Tuple, Any, Union
-import json
+import re
 from contextlib import contextmanager
-import numpy
-from torch.utils.hooks import RemovableHandle
-from torch import Tensor
+from typing import Any, Dict, Iterator, List, Tuple, Union
 
+import numpy
 from allennlp.common import Registrable
 from allennlp.common.checks import ConfigurationError
 from allennlp.common.util import JsonDict, sanitize
 from allennlp.data import DatasetReader, Instance
+from allennlp.data.dataset import Batch
 from allennlp.models import Model
 from allennlp.models.archival import Archive, load_archive
 from allennlp.modules.text_field_embedders import TextFieldEmbedder
-from allennlp.data.dataset import Batch
-
 from allennlp.predictors.predictor import Predictor as Predictor_
-import re
+from torch import Tensor
+from torch.utils.hooks import RemovableHandle
 
 
 class Predictor(Predictor_):

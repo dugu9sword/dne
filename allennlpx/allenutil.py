@@ -1,6 +1,7 @@
-from allennlp.data.instance import Instance
 from allennlp.data.fields import TextField
+from allennlp.data.instance import Instance
 from allennlp.data.tokenizers import Token
+
 
 def as_sentence(something, field=None):
     if isinstance(something, Instance):
@@ -23,5 +24,3 @@ def as_sentence(something, field=None):
     sent = " ".join(tkstrs)
     sent = sent.replace(" ##" , "", -1)  # replace word piece
     return sent
-
-    

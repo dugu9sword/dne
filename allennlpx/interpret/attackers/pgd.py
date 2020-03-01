@@ -4,21 +4,21 @@ from typing import List
 
 import numpy
 import torch
-
 from allennlp.common.util import JsonDict, sanitize
 from allennlp.data.fields import TextField
-from allennlp.data.token_indexers import ELMoTokenCharactersIndexer, TokenCharactersIndexer
+from allennlp.data.token_indexers import (ELMoTokenCharactersIndexer,
+                                          TokenCharactersIndexer)
 from allennlp.data.tokenizers import Token
-from allennlp.modules.text_field_embedders.text_field_embedder import TextFieldEmbedder
+from allennlp.modules.text_field_embedders.text_field_embedder import \
+    TextFieldEmbedder
 from allennlp.modules.token_embedders import Embedding
 
-from allennlpx.predictors.predictor import Predictor
-from allennlpx.interpret.attackers.util import select
-from allennlpx.interpret.attackers.attacker import Attacker, DEFAULT_IGNORE_TOKENS
-
-from luna import cast_list
-from luna import lazy_property
+from allennlpx.interpret.attackers.attacker import (DEFAULT_IGNORE_TOKENS,
+                                                    Attacker)
 from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
+from allennlpx.interpret.attackers.util import select
+from allennlpx.predictors.predictor import Predictor
+from luna import cast_list, lazy_property
 
 
 class PGD(Attacker):
@@ -36,9 +36,7 @@ class PGD(Attacker):
                          step_size: float = 100.,
                          max_step: int = 20,
                          max_change_num: int = 3,
-                         iter_change_num: int = 2,
-                         ignore_tokens: List[str] = DEFAULT_IGNORE_TOKENS,
-                         forbidden_tokens: List[str] = DEFAULT_IGNORE_TOKENS) -> JsonDict:
+                         iter_change_num: int = 2,) -> JsonDict:
         if self.token_embedding is None:
             self.initialize()
 
@@ -53,7 +51,7 @@ class PGD(Attacker):
         # set up some states
         change_positions__ = set()
         forbidden_idxs__ = set()
-        for forbidden_token in forbidden_tokens:
+        for forbidden_token in self.forbidden_tokens:
             if forbidden_token in self.vocab._token_to_index['tokens']:
                 forbidden_idxs__.add(self.vocab._token_to_index['tokens'][forbidden_token])
 
@@ -66,7 +64,7 @@ class PGD(Attacker):
             position_mask = [False for _ in range(len(att_tokens))]
             is_max_changed = len(change_positions__) > max_change_num
             for idx, token in enumerate(att_tokens):
-                if token.text in ignore_tokens:
+                if token.text in self.ignore_tokens:
                     position_mask[idx] = True
                 if is_max_changed and idx not in change_positions__:
                     position_mask[idx] = True

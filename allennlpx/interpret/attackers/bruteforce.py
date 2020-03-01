@@ -1,37 +1,35 @@
 # pylint: disable=protected-access
-from copy import deepcopy
+import random
+from collections import defaultdict
+from functools import lru_cache
+from itertools import product
 from typing import List
 
-import numpy
-import torch
 import numpy as np
+import torch
 from allennlp.common.util import JsonDict, sanitize
 from allennlp.data.fields import TextField
-from allennlp.data.token_indexers import ELMoTokenCharactersIndexer, TokenCharactersIndexer
-from allennlp.data.tokenizers import Token
-from allennlp.modules.text_field_embedders.text_field_embedder import TextFieldEmbedder
+from allennlp.data.token_indexers import (ELMoTokenCharactersIndexer,
+                                          TokenCharactersIndexer)
+from allennlp.data.tokenizers import SpacyTokenizer, Token
+from allennlp.modules.text_field_embedders.text_field_embedder import \
+    TextFieldEmbedder
 from allennlp.modules.token_embedders import Embedding
-from luna import cast_list, lazy_property
 
-from allennlpx.interpret.attackers.attacker import Attacker, DEFAULT_IGNORE_TOKENS
-from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
 from allennlpx import allenutil
-from itertools import product
-from collections import defaultdict
-import random
+from allennlpx.interpret.attackers.attacker import (DEFAULT_IGNORE_TOKENS,
+                                                    Attacker)
+from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
+from allennlpx.interpret.attackers.policies import (CandidatePolicy,
+                                                    EmbeddingPolicy,
+                                                    SynonymPolicy)
 from allennlpx.interpret.attackers.synonym_searcher import SynonymSearcher
-
-from functools import lru_cache
-from allennlp.data.tokenizers import SpacyTokenizer
-from luna import time_record
-
-from allennlpx.interpret.attackers.policies import CandidatePolicy, EmbeddingPolicy, SynonymPolicy
+from luna import cast_list, lazy_property, time_record
 
 
 class BruteForce(Attacker):
-    def __init__(self, predictor):
-        super().__init__(predictor)
-        self.spacy = SpacyTokenizer()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     @torch.no_grad()
     def attack_from_json(self,
@@ -39,9 +37,6 @@ class BruteForce(Attacker):
                          field_to_change: str = 'tokens',
                          field_to_attack: str = 'label',
                          grad_input_field: str = 'grad_input_1',
-                         ignore_tokens: List[str] = DEFAULT_IGNORE_TOKENS,
-                         forbidden_tokens: List[str] = DEFAULT_IGNORE_TOKENS,
-                         max_change_num_or_ratio: int = 5,
                          policy: CandidatePolicy= None,
                          search_num: int = 256) -> JsonDict:
         if self.token_embedding is None:
@@ -54,24 +49,20 @@ class BruteForce(Attacker):
         sids_to_change = []
         nbr_dct = defaultdict(lambda: [])
         for i in range(len(raw_tokens)):
-            if raw_tokens[i] not in ignore_tokens:
+            if raw_tokens[i] not in self.ignore_tokens:
                 word = raw_tokens[i]
                 if isinstance(policy, EmbeddingPolicy):
                     nbrs = self.neariest_neighbours(word, policy.measure, policy.topk, policy.rho)
                 elif isinstance(policy, SynonymPolicy):
                     nbrs = self.synom_searcher.search(word)
                     
-                nbrs = [nbr for nbr in nbrs if nbr not in forbidden_tokens]
+                nbrs = [nbr for nbr in nbrs if nbr not in self.forbidden_tokens]
                 if len(nbrs) > 0:
                     sids_to_change.append(i)
                     nbr_dct[i] = nbrs
                     
         # max number of tokens that can be changed
-        if max_change_num_or_ratio < 1:
-            max_change_num = int(len(raw_tokens) * max_change_num_or_ratio)
-        else:
-            max_change_num = max_change_num_or_ratio
-        max_change_num = min(max_change_num, len(sids_to_change))
+        max_change_num = min(self.max_change_num(len(raw_tokens)), len(sids_to_change))
 
         # Construct adversarial instances
         adv_instances = []

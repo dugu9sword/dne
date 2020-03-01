@@ -1,5 +1,6 @@
-from nltk.corpus import wordnet as wn
 from functools import lru_cache
+
+from nltk.corpus import wordnet as wn
 
 
 class SynonymSearcher:
@@ -40,5 +41,3 @@ class SynonymSearcher:
                     if legal:
                         synonyms.append(synonym)
         return synonyms
-
-            

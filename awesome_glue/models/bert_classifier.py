@@ -1,16 +1,17 @@
 import torch
 import torch.nn.functional as F
 from allennlp.models import Model
+from allennlp.modules.text_field_embedders.basic_text_field_embedder import \
+    BasicTextFieldEmbedder
 from allennlp.training.metrics import CategoricalAccuracy
-
-from allennlpx.modules.token_embedders.bert_token_embedder import PretrainedBertEmbedder, PretrainedBertModel
-from allennlp.modules.text_field_embedders.basic_text_field_embedder import BasicTextFieldEmbedder
-
-from luna import LabelSmoothingLoss
-
 # from allennlp.training.optimizers import BertAdam
 # from torch.optim import AdamW
 from transformers import AdamW
+
+from allennlpx.modules.token_embedders.bert_token_embedder import (
+    PretrainedBertEmbedder, PretrainedBertModel)
+from luna import LabelSmoothingLoss, ram_globalize
+
 
 class BertPooler(torch.nn.Module):
     def forward(self, bert_outputs):
@@ -102,7 +103,6 @@ class BertClassifier(Model):
         return AdamW(self.parameters(), lr=2e-5, weight_decay=0.01)
 
 
-from luna import ram_globalize
 
 
 @ram_globalize()

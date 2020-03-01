@@ -1,55 +1,57 @@
-from awesome_glue.config import Config
+import csv
+import random
+from collections import Counter
+from statistics import mode
+
+import faiss
+import nlpaug.augmenter.word as naw
+import numpy as np
+import pandas
+import torch
+from allennlp.data import Instance
+from allennlp.data.iterators.basic_iterator import BasicIterator
+from allennlp.data.iterators.bucket_iterator import BucketIterator
+from allennlp.data.vocabulary import Vocabulary
+from allennlp.modules.text_field_embedders import TextFieldEmbedder
+from allennlp.modules.token_embedders.embedding import \
+    _read_pretrained_embeddings_file
+from allennlp.training.learning_rate_schedulers.slanted_triangular import \
+    SlantedTriangular
+from allennlp.training.optimizers import DenseSparseAdam
+from pytorch_pretrained_bert.optimization import BertAdam
+from torch.optim import AdamW
+from torch.optim.adam import Adam
+from tqdm import tqdm
+
+from allennlpx import allenutil
 from allennlpx.data.dataset_readers.berty_tsv import BertyTSVReader
 from allennlpx.data.dataset_readers.spacy_tsv import SpacyTSVReader
-from awesome_glue.task_specs import TASK_SPECS
-from allennlp.data.vocabulary import Vocabulary
-from torch.optim.adam import Adam
-from allennlp.training.optimizers import DenseSparseAdam
-from allennlp.data.iterators.bucket_iterator import BucketIterator
-from allennlpx.training.callback_trainer import CallbackTrainer
-from allennlpx.training.callbacks.evaluate_callback import EvaluateCallback, evaluate
-from luna.pytorch import save_model
-from allennlp.data.iterators.basic_iterator import BasicIterator
-import torch
-from allennlp.modules.text_field_embedders import TextFieldEmbedder
-from luna.public import auto_create
-from luna.pytorch import load_model
-from awesome_glue.models.bert_classifier import BertClassifier
-from awesome_glue.models.lstm_classifier import LstmClassifier
-from allennlp.training.learning_rate_schedulers.slanted_triangular import SlantedTriangular
-from pytorch_pretrained_bert.optimization import BertAdam
-from luna.logging import log
-from luna import flt2str
-from allennlpx import allenutil
 from allennlpx.interpret.attackers.attacker import DEFAULT_IGNORE_TOKENS
 from allennlpx.interpret.attackers.bruteforce import BruteForce
-from allennlpx.interpret.attackers.pwws import PWWS
-from allennlpx.interpret.attackers.bert_bruteforce import BertBruteForce
 from allennlpx.interpret.attackers.hotflip import HotFlip
 from allennlpx.interpret.attackers.pgd import PGD
+from allennlpx.interpret.attackers.pwws import PWWS
+from allennlpx.interpret.attackers.genetic import Genetic
+from allennlpx.interpret.attackers.policies import (CandidatePolicy,
+                                                    EmbeddingPolicy,
+                                                    SynonymPolicy)
+from allennlpx.modules.knn_utils import build_faiss_index
 from allennlpx.predictors.predictor import Predictor
 from allennlpx.predictors.text_classifier import TextClassifierPredictor
-from tqdm import tqdm
-import pandas
-import csv
-from torch.optim import AdamW
-import numpy as np
-from awesome_glue.utils import AttackMetric, WORD2VECS
-from typing import List
-from allennlp.data import Instance
-from allennlp.modules.token_embedders.embedding import _read_pretrained_embeddings_file
-from awesome_glue.utils import EMBED_DIM, WORD2VECS
-from luna import ram_read, ram_write, ram_append, ram_reset, ram_has
-from allennlpx.modules.knn_utils import build_faiss_index
-import faiss
-from collections import Counter
-from luna.pytorch import set_seed
-import random
-from statistics import mode
-import nlpaug.augmenter.word as naw
-from allennlpx.interpret.attackers.policies import CandidatePolicy, EmbeddingPolicy, SynonymPolicy
+from allennlpx.training.callback_trainer import CallbackTrainer
+from allennlpx.training.callbacks.evaluate_callback import (EvaluateCallback,
+                                                            evaluate)
+from awesome_glue.config import Config
+from awesome_glue.models.bert_classifier import BertClassifier
+from awesome_glue.models.lstm_classifier import LstmClassifier
+from awesome_glue.task_specs import TASK_SPECS
+from awesome_glue.utils import EMBED_DIM, WORD2VECS, AttackMetric
+from luna import flt2str, ram_append, ram_has, ram_read, ram_reset, ram_write
+from luna.logging import log
+from luna.public import auto_create, Aggregator
+from luna.pytorch import load_model, save_model, set_seed
 
-    
+
 def load_data(task_id: str, tokenizer: str):
     spec = TASK_SPECS[task_id]
 
@@ -103,7 +105,7 @@ class Task:
         num_epochs = 2
         pseudo_batch_size = 32
         accumulate_num = 1
-        batch_size = pseudo_batch_size * accumulate_num
+        pseudo_batch_size * accumulate_num
 
         optimizer = self.model.get_optimizer()
 
@@ -304,20 +306,19 @@ class Task:
         self.from_pretrained()
         self.model.eval()
 
-        if self.config.arch == 'bert':
-            spacy_data = load_data(self.config.task_id, "spacy")
-            spacy_vocab: Vocabulary = spacy_data['vocab']
-            spacy_weight = auto_create(
-                f"{self.config.task_id}-{self.config.tokenizer}-{self.config.attack_vectors}",
-                lambda: _read_pretrained_embeddings_file(WORD2VECS[self.config.attack_vectors],
-                                                         embedding_dim=EMBED_DIM[self.config.
-                                                                                 attack_vectors],
-                                                         vocab=spacy_vocab,
-                                                         namespace="tokens"), True)
+        spacy_data = load_data(self.config.task_id, "spacy")
+        spacy_vocab: Vocabulary = spacy_data['vocab']
+        spacy_weight = auto_create(
+            f"{self.config.task_id}-{self.config.tokenizer}-{self.config.attack_vectors}",
+            lambda: _read_pretrained_embeddings_file(WORD2VECS[self.config.attack_vectors],
+                                                     embedding_dim=EMBED_DIM[self.config.
+                                                                             attack_vectors],
+                                                     vocab=spacy_vocab,
+                                                     namespace="tokens"), True)
 
         if self.config.attack_gen_adv:
             f_adv = open(f"nogit/{self.config.model_name}.adv.tsv", 'w')
-            f_adv.write("raw\tatt\tlabel\n")
+            f_adv.write("raw\tadv\tlabel\n")
 
         if self.config.attack_gen_aug:
             f_aug = open(f"nogit/{self.config.model_name}.aug.tsv", 'w')
@@ -334,14 +335,17 @@ class Task:
         forbidden_words = pos_words + neg_words + not_words + DEFAULT_IGNORE_TOKENS
 
         # self.predictor._model.cpu()
-        if self.config.arch == 'bert':
-            attacker = BertBruteForce(self.predictor)
-            attacker.initialize(vocab=spacy_vocab, token_embedding=spacy_weight)
-        else:
-            # attacker = HotFlip(predictor)
-            attacker = BruteForce(self.predictor)
-#             attacker = PWWS(self.predictor)
-            attacker.initialize()
+        kwargs = { 
+            "ignore_tokens": forbidden_words,
+            "forbidden_tokens": forbidden_words,
+            "max_change_num_or_ratio": 0.25
+        }
+        attacker = HotFlip(self.predictor)
+        attacker.initialize()
+#         attacker = BruteForce(self.predictor, **kwargs)
+#         attacker = PWWS(self.predictor, **kwargs)
+#         attacker = Genetic(self.predictor, **kwargs)
+#         attacker.initialize(vocab=spacy_vocab, token_embedding=spacy_weight)
 
         if self.config.attack_data_split == 'train':
             data_to_attack = self.train_data
@@ -361,6 +365,7 @@ class Task:
         data_to_attack = data_to_attack[:adv_number]
 
         attack_metric = AttackMetric()
+        agg = Aggregator()
         for i in tqdm(range(adv_number)):
             raw_text = allenutil.as_sentence(data_to_attack[i])
             raw_pred = np.argmax(self.predictor.predict(raw_text)['probs'])
@@ -380,18 +385,23 @@ class Task:
 
                 result = attacker.attack_from_json({field_to_change: raw_text},
                                                    field_to_change=field_to_change,
-                                                   ignore_tokens=forbidden_words,
-                                                   forbidden_tokens=forbidden_words,
-                                                   max_change_num_or_ratio=0.25,
-                                                   policy=EmbeddingPolicy(measure='euc', topk=10, rho=None),
+#                                                    policy=EmbeddingPolicy(measure='euc', topk=10, rho=None),
 #                                                    policy=SynonymPolicy(), 
 #                                                    search_num=256
                                                   )
-
-                adv_text = allenutil.as_sentence(result['adv'])
+    
 
                 if result["success"] == 1:
+                    changed_num = 0
+                    for wr, wa in zip(result['raw'], result['adv']):
+                        if wr != wa:
+                            changed_num += 1
+                    to_aggregate = [('changed', changed_num)]
+                    if "generation" in result:
+                        to_aggregate.append(('generation', result['generation']))
+                    agg.aggregate(*to_aggregate)
                     attack_metric.succeed()
+                    adv_text = allenutil.as_sentence(result['adv'])
                     log("[raw]", raw_text)
                     log("\t", flt2str(self.predictor.predict(raw_text)['probs']))
                     log("[adv]", adv_text)
@@ -399,6 +409,9 @@ class Task:
                     if "changed" in result:
                         log("[changed]", result['changed'])
                     log()
+                    log("Changed", agg.mean("changed"))
+                    if "generation" in result:
+                        log("Generation", agg.mean("generation"))
                     log("Aggregated metric:", attack_metric)
                 else:
                     attack_metric.fail()

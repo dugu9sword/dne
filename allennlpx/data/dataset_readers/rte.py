@@ -1,17 +1,16 @@
-from typing import Dict, List, Union, Optional
+import csv
 import logging
-import json
-from overrides import overrides
+from typing import Dict, Optional
+
+import pandas
 from allennlp.common.file_utils import cached_path
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
-from allennlp.data.fields import LabelField, TextField, Field, ListField
+from allennlp.data.fields import Field, LabelField, ListField, TextField
 from allennlp.data.instance import Instance
-from allennlp.data.token_indexers import TokenIndexer, SingleIdTokenIndexer
+from allennlp.data.token_indexers import SingleIdTokenIndexer, TokenIndexer
 from allennlp.data.tokenizers import Tokenizer, WordTokenizer
 from allennlp.data.tokenizers.sentence_splitter import SpacySentenceSplitter
-import pandas
-import csv
-
+from overrides import overrides
 
 logger = logging.getLogger(__name__)
 

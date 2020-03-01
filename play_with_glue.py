@@ -1,3 +1,6 @@
+import os
+os.environ["TORCH_HOME"] = "/disks/sdb/torch_home"
+
 from awesome_glue.config import Config
 from awesome_glue.task import Task
 from allennlp.common.tqdm import Tqdm

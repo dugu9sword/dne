@@ -1,5 +1,7 @@
-import torch
 import os
+
+import torch
+
 
 def back_translation():
     os.environ["TORCH_HOME"] = '/disks/sdb/torch_home'

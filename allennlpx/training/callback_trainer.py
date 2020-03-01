@@ -4,22 +4,25 @@ import math
 import os
 import time
 import traceback
-from typing import Dict, Optional, Tuple, Union, Iterable, Any
+from typing import Any, Dict, Iterable, Optional, Tuple, Union
 
 import torch
 import torch.distributed as dist
 import torch.optim.lr_scheduler
-from torch.nn.parallel import DistributedDataParallel
-
 from allennlp.common import Params
-from allennlp.common.checks import ConfigurationError, parse_cuda_device, check_for_gpu
+from allennlp.common.checks import (ConfigurationError, check_for_gpu,
+                                    parse_cuda_device)
 from allennlp.common.tqdm import Tqdm
-from allennlp.common.util import dump_metrics, gpu_memory_mb, peak_memory_mb, lazy_groups_of
+from allennlp.common.util import (dump_metrics, gpu_memory_mb, lazy_groups_of,
+                                  peak_memory_mb)
 from allennlp.data.instance import Instance
 from allennlp.data.iterators.data_iterator import DataIterator, TensorDict
 from allennlp.models.model import Model
 from allennlp.nn import util as nn_util
 from allennlp.training import util as training_util
+from allennlp.training.callbacks.callback import Callback
+from allennlp.training.callbacks.callback_handler import CallbackHandler
+from allennlp.training.callbacks.events import Events
 from allennlp.training.checkpointer import Checkpointer
 from allennlp.training.learning_rate_schedulers import LearningRateScheduler
 from allennlp.training.metric_tracker import MetricTracker
@@ -28,9 +31,7 @@ from allennlp.training.moving_average import MovingAverage
 from allennlp.training.optimizers import Optimizer
 from allennlp.training.tensorboard_writer import TensorboardWriter
 from allennlp.training.trainer_base import TrainerBase
-from allennlp.training.callbacks.callback import Callback
-from allennlp.training.callbacks.events import Events
-from allennlp.training.callbacks.callback_handler import CallbackHandler
+from torch.nn.parallel import DistributedDataParallel
 
 logger = logging.getLogger(__name__)
 

@@ -1,9 +1,11 @@
 import pathlib
-import hashlib
-from allennlp.data import Vocabulary
-from allennlp.modules.token_embedders.embedding import _read_pretrained_embeddings_file
-from luna import auto_create
 from collections import defaultdict
+
+from allennlp.data import Vocabulary
+from allennlp.modules.token_embedders.embedding import \
+    _read_pretrained_embeddings_file
+
+from luna import auto_create
 
 
 class AttackMetric:
@@ -63,6 +65,8 @@ WORD2VECS = {
     "glove":
     maybe_path("/disks/sdb/zjiehang/embeddings/glove/glove.42B.300d.txt",
                "/root/glove/glove.42B.300d.txt", "http://nlp.stanford.edu/data/glove.42B.300d.zip"),
+    "counter":
+    maybe_path("/disks/sdb/zjiehang/embeddings/counter/counter.txt")
 }
 
 EMBED_DIM = defaultdict(lambda: 300, {"elmo": 256})

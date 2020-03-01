@@ -1,24 +1,43 @@
 from typing import List
+from functools import lru_cache
 
+import torch
 from allennlp.common import Registrable
 from allennlp.common.util import JsonDict
-import torch
-from allennlp.modules.token_embedders import Embedding
-from allennlp.data.token_indexers.token_characters_indexer import TokenCharactersIndexer
+from allennlp.data.token_indexers.elmo_indexer import \
+    ELMoTokenCharactersIndexer
+from allennlp.data.token_indexers.token_characters_indexer import \
+    TokenCharactersIndexer
 from allennlp.data.tokenizers.token import Token
-from allennlp.data.vocabulary import Vocabulary, DEFAULT_OOV_TOKEN
-from allennlp.data.token_indexers.elmo_indexer import ELMoTokenCharactersIndexer
-from allennlp.modules.text_field_embedders.text_field_embedder import TextFieldEmbedder
+from allennlp.data.vocabulary import DEFAULT_OOV_TOKEN, Vocabulary
+from allennlp.modules.text_field_embedders.text_field_embedder import \
+    TextFieldEmbedder
+from allennlp.modules.token_embedders import Embedding
+from allennlp.data.tokenizers import SpacyTokenizer, Token
+
 from allennlpx.predictors.predictor import Predictor
 
+from nltk.corpus import stopwords
+
 DEFAULT_IGNORE_TOKENS = [
-    "@@NULL@@", "@@UNKNOWN@@", ".", ",", ";", "!", "?", "[MASK]", "[SEP]", "[CLS]", "-LRB-", "-RRB-"
-]
+    "@@NULL@@", "@@UNKNOWN@@", ".", ",", ";", "!", "?", "[MASK]", "[SEP]", "[CLS]", "-LRB-", "-RRB-", "(", ")", "[", "]", "-", "$", "&", "*", "...", "'", '"'
+] # + stopwords.words("english")
 
 
 class Attacker(Registrable):
-    def __init__(self, predictor: Predictor) -> None:
+    def __init__(self, 
+                 predictor: Predictor,
+                 ignore_tokens: List[str] = DEFAULT_IGNORE_TOKENS,
+                 forbidden_tokens: List[str] = DEFAULT_IGNORE_TOKENS,
+                 max_change_num_or_ratio = None
+                ):
         self.predictor = predictor
+        
+        self.spacy = SpacyTokenizer()
+        
+        self.ignore_tokens = ignore_tokens
+        self.forbidden_tokens = forbidden_tokens
+        self.max_change_num_or_ratio = max_change_num_or_ratio
         
         self.vocab : Vocabulary = None
         self.token_embedding: Embedding = None
@@ -26,11 +45,22 @@ class Attacker(Registrable):
     def initialize(self, vocab=None, token_embedding=None):
         if vocab is None:
             self.vocab = self.predictor._model.vocab
-            self.token_embedding = self._construct_embedding_matrix()
+            self.token_embedding = self._construct_embedding_matrix().to(self.model_device)
         else:
             self.vocab = vocab
             self.token_embedding = token_embedding.to(self.model_device)
-            
+    
+    @lru_cache(maxsize=None)
+    def max_change_num(self, len_tokens):
+        if self.max_change_num_or_ratio is None:
+            return 100000
+        else:
+            if self.max_change_num_or_ratio < 1:
+                max_change_num = int(len_tokens * self.max_change_num_or_ratio)
+            else:
+                max_change_num = self.max_change_num_or_ratio
+            return max_change_num
+    
     def _tokens_to_instance(self, tokens):
         return self.predictor._dataset_reader.text_to_instance(" ".join(tokens))
 
@@ -38,9 +68,7 @@ class Attacker(Registrable):
                          inputs: JsonDict,
                          field_to_change: str,
                          field_to_attack: str,
-                         grad_input_field: str,
-                         ignore_tokens: List[str] = DEFAULT_IGNORE_TOKENS,
-                         forbidden_tokens: List[str] = DEFAULT_IGNORE_TOKENS) -> JsonDict:
+                         grad_input_field: str) -> JsonDict:
         """
         This function finds a modification to the input text that would change the model's
         prediction in some desired manner (e.g., an adversarial attack).
@@ -115,4 +143,3 @@ class Attacker(Registrable):
         #                  embedding_dim=embedding_matrix.shape[1],
         #                  weight=embedding_matrix,
         #                  trainable=False)
-
