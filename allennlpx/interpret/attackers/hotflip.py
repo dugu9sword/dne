@@ -92,7 +92,7 @@ class HotFlip(Attacker):
                 successful = True
                 break
 
-        return sanitize({"att": att_tokens,
+        return sanitize({"adv": att_tokens,
                          "raw": raw_tokens,
                          "outputs": outputs,
                          "success": 1 if successful else 0})

@@ -30,6 +30,9 @@ class Attacker(Registrable):
         else:
             self.vocab = vocab
             self.token_embedding = token_embedding.to(self.model_device)
+            
+    def _tokens_to_instance(self, tokens):
+        return self.predictor._dataset_reader.text_to_instance(" ".join(tokens))
 
     def attack_from_json(self,
                          inputs: JsonDict,

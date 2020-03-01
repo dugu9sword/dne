@@ -47,6 +47,7 @@ from luna.pytorch import set_seed
 import random
 from statistics import mode
 import nlpaug.augmenter.word as naw
+from allennlpx.interpret.attackers.policies import CandidatePolicy, EmbeddingPolicy, SynonymPolicy
 
     
 def load_data(task_id: str, tokenizer: str):
@@ -262,34 +263,34 @@ class Task:
             
         for rid in tqdm(range(df.shape[0])):
             raw = df.iloc[rid]['raw']
-            att = df.iloc[rid]['att']
+            adv = df.iloc[rid]['adv']
             
-#             new_att = []
+#             new_adv = []
 #             for wr, wa in zip(raw.split(" "), att.split(" ")):
 #                 if wr == wa:
 #                     new_att.append(wa)
 #                 else:
 #                     pass
 # #                     new_att.append()
-#             att = " ".join(new_att)
+#             adv = " ".join(new_att)
 
-            raw_instances, att_instances = [], []
+            raw_instances, adv_instances = [], []
             for i in range(ensemble_num):
                 raw_instances.append(self.reader.text_to_instance(transform(raw)))
-                att_instances.append(self.reader.text_to_instance(transform(att)))
-            results = self.model.forward_on_instances(raw_instances + att_instances)
+                adv_instances.append(self.reader.text_to_instance(transform(adv)))
+            results = self.model.forward_on_instances(raw_instances + adv_instances)
             
-            raw_preds, att_preds = [], []
+            raw_preds, adv_preds = [], []
             for i in range(ensemble_num):
                 raw_preds.append(np.argmax(results[i]['probs']))
-                att_preds.append(np.argmax(results[i + ensemble_num]['probs']))
+                adv_preds.append(np.argmax(results[i + ensemble_num]['probs']))
             raw_pred = mode(raw_preds)
-            att_pred = mode(att_preds)
+            adv_pred = mode(adv_preds)
             
             label = df.iloc[rid]['label']
             
             if raw_pred == label:
-                if att_pred != raw_pred:
+                if adv_pred != raw_pred:
                     attack_metric.succeed()
                 else:
                     attack_metric.fail()
@@ -338,8 +339,8 @@ class Task:
             attacker.initialize(vocab=spacy_vocab, token_embedding=spacy_weight)
         else:
             # attacker = HotFlip(predictor)
-#             attacker = BruteForce(self.predictor)
-            attacker = PWWS(self.predictor)
+            attacker = BruteForce(self.predictor)
+#             attacker = PWWS(self.predictor)
             attacker.initialize()
 
         if self.config.attack_data_split == 'train':
@@ -382,31 +383,33 @@ class Task:
                                                    ignore_tokens=forbidden_words,
                                                    forbidden_tokens=forbidden_words,
                                                    max_change_num_or_ratio=0.25,
-                                                   measure='euc',
-                                                   topk=30,
+                                                   policy=EmbeddingPolicy(measure='euc', topk=10, rho=None),
+#                                                    policy=SynonymPolicy(), 
 #                                                    search_num=256
                                                   )
 
-                att_text = allenutil.as_sentence(result['att'])
+                adv_text = allenutil.as_sentence(result['adv'])
 
                 if result["success"] == 1:
                     attack_metric.succeed()
                     log("[raw]", raw_text)
                     log("\t", flt2str(self.predictor.predict(raw_text)['probs']))
-                    log("[att]", att_text)
-                    log('\t', flt2str(self.predictor.predict(att_text)['probs']))
+                    log("[adv]", adv_text)
+                    log('\t', flt2str(self.predictor.predict(adv_text)['probs']))
+                    if "changed" in result:
+                        log("[changed]", result['changed'])
                     log()
                     log("Aggregated metric:", attack_metric)
                 else:
                     attack_metric.fail()
             else:
                 attack_metric.escape()
-                att_text = raw_text
+                adv_text = raw_text
 
             if self.config.attack_gen_adv:
-                f_adv.write(f"{raw_text}\t{att_text}\t{raw_label}\n")
+                f_adv.write(f"{raw_text}\t{adv_text}\t{raw_label}\n")
             if self.config.attack_gen_aug:
-                f_aug.write(f"{att_text}\t{raw_label}\n")
+                f_aug.write(f"{adv_text}\t{raw_label}\n")
 
         if self.config.attack_gen_adv: 
             f_adv.close()

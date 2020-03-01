@@ -136,7 +136,7 @@ class PGD(Attacker):
                 break
 
         return sanitize({
-            "att": att_tokens,
+            "adv": att_tokens,
             "raw": raw_tokens,
             "outputs": outputs,
             "success": 1 if successful else 0

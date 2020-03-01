@@ -19,10 +19,13 @@ from allennlpx import allenutil
 from itertools import product
 from collections import defaultdict
 import random
+from allennlpx.interpret.attackers.synonym_searcher import SynonymSearcher
 
 from functools import lru_cache
 from allennlp.data.tokenizers import SpacyTokenizer
 from luna import time_record
+
+from allennlpx.interpret.attackers.policies import CandidatePolicy, EmbeddingPolicy, SynonymPolicy
 
 
 class BruteForce(Attacker):
@@ -39,10 +42,8 @@ class BruteForce(Attacker):
                          ignore_tokens: List[str] = DEFAULT_IGNORE_TOKENS,
                          forbidden_tokens: List[str] = DEFAULT_IGNORE_TOKENS,
                          max_change_num_or_ratio: int = 5,
-                         measure='euc',
-                         topk=20,
-                         rho=None,
-                         search_num: int = 512) -> JsonDict:
+                         policy: CandidatePolicy= None,
+                         search_num: int = 256) -> JsonDict:
         if self.token_embedding is None:
             raise Exception('initialize it first~')
 
@@ -55,7 +56,11 @@ class BruteForce(Attacker):
         for i in range(len(raw_tokens)):
             if raw_tokens[i] not in ignore_tokens:
                 word = raw_tokens[i]
-                nbrs = self.neariest_neighbours(word, measure, topk, rho)
+                if isinstance(policy, EmbeddingPolicy):
+                    nbrs = self.neariest_neighbours(word, policy.measure, policy.topk, policy.rho)
+                elif isinstance(policy, SynonymPolicy):
+                    nbrs = self.synom_searcher.search(word)
+                    
                 nbrs = [nbr for nbr in nbrs if nbr not in forbidden_tokens]
                 if len(nbrs) > 0:
                     sids_to_change.append(i)
@@ -69,29 +74,29 @@ class BruteForce(Attacker):
         max_change_num = min(max_change_num, len(sids_to_change))
 
         # Construct adversarial instances
-        att_instances = []
+        adv_instances = []
         for i in range(search_num):
-            att_tokens = [ele for ele in raw_tokens]
+            adv_tokens = [ele for ele in raw_tokens]
             word_sids = random.choices(sids_to_change, k=max_change_num)
             for word_sid in word_sids:
-                att_tokens[word_sid] = random.choice(nbr_dct[word_sid])
-            att_instances.append(
-                self.predictor._dataset_reader.text_to_instance(" ".join(att_tokens)))
+                adv_tokens[word_sid] = random.choice(nbr_dct[word_sid])
+            adv_instances.append(
+                self.predictor._dataset_reader.text_to_instance(" ".join(adv_tokens)))
 
         # Checking attacking status, early stop
         successful = False
-        results = self.predictor._model.forward_on_instances(att_instances)
+        results = self.predictor._model.forward_on_instances(adv_instances)
         for i, result in enumerate(results):
-            att_instance = self.predictor.predictions_to_labeled_instances(att_instances[i], result)[0]
-            if att_instance[field_to_attack].label != raw_instance[field_to_attack].label:
+            adv_instance = self.predictor.predictions_to_labeled_instances(adv_instances[i], result)[0]
+            if adv_instance[field_to_attack].label != raw_instance[field_to_attack].label:
                 successful = True
                 break
-        att_tokens = att_instances[i][field_to_change].tokens
+        adv_tokens = adv_instances[i][field_to_change].tokens
         outputs = result
 
         
         return sanitize({
-            "att": att_tokens,
+            "adv": adv_tokens,
             "raw": raw_tokens,
             "outputs": outputs,
             "success": 1 if successful else 0
@@ -102,6 +107,11 @@ class BruteForce(Attacker):
         return EmbeddingSearcher(embed=self.token_embedding,
                                  idx2word=lambda x: self.vocab.get_token_from_index(x),
                                  word2idx=lambda x: self.vocab.get_token_index(x))
+
+    @lazy_property
+    def synom_searcher(self) -> SynonymSearcher:
+        return SynonymSearcher(vocab_list=self.vocab.get_index_to_token_vocabulary().values())
+
 
     @lru_cache(maxsize=None)
     def neariest_neighbours(self, word, measure, topk, rho):

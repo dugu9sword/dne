@@ -3,6 +3,8 @@ from tabulate import tabulate
 import numpy as np
 from typing import Union
 from luna import show_mean_std, cast_list
+from functools import lru_cache
+
 
 class EmbeddingSearcher:
     def __init__(
@@ -109,6 +111,7 @@ class EmbeddingSearcher:
                      ],
                      floatfmt='.2f'))
 
+    @lru_cache(maxsize=None)
     @torch.no_grad()
     def find_neighbours(self,
                         element: Union[int, str, torch.Tensor],
