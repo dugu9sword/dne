@@ -1,26 +1,25 @@
 import hashlib
-import pathlib
-from collections import Counter
 
 import numpy as np
 import torch
 import torch.nn.functional as F
 from allennlp.models import Model
-from allennlpx.modules.seq2vec_encoders.pytorch_seq2vec_wrapper import PytorchSeq2VecWrapper
-from allennlp.modules.text_field_embedders import (BasicTextFieldEmbedder, TextFieldEmbedder)
+from allennlp.modules.text_field_embedders import (BasicTextFieldEmbedder,
+                                                   TextFieldEmbedder)
 from allennlp.modules.token_embedders import Embedding, TokenEmbedder
-from allennlp.modules.token_embedders.embedding import \
-    _read_pretrained_embeddings_file
+from allennlp.modules.token_embedders.elmo_token_embedder import \
+    ElmoTokenEmbedder
 from allennlp.nn.util import get_text_field_mask
 from allennlp.training.metrics import CategoricalAccuracy
 from allennlp.training.optimizers import DenseSparseAdam
 
-from luna import (auto_create, flt2str, log, log_config, ram_read, ram_reset, ram_write,
-                  ram_globalize)
-from allennlp.modules.token_embedders.elmo_token_embedder import ElmoTokenEmbedder
-from collections import defaultdict
-
-from awesome_glue.utils import WORD2VECS, EMBED_DIM
+from allennlpx.modules.seq2vec_encoders.pytorch_seq2vec_wrapper import \
+    PytorchSeq2VecWrapper
+from allennlpx.modules.token_embedders.embedding import \
+    _read_pretrained_embeddings_file
+from awesome_glue.utils import EMBED_DIM, WORD2VECS
+from luna import (LabelSmoothingLoss, auto_create, flt2str, log, log_config,
+                  ram_globalize, ram_read, ram_reset, ram_write)
 
 ELMO_OPTION = 'https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x1024_128_2048cnn_1xhighway/elmo_2x1024_128_2048cnn_1xhighway_options.json'
 ELMO_WEIGHT = 'https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x1024_128_2048cnn_1xhighway/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5'
@@ -62,7 +61,8 @@ class LstmClassifier(Model):
                                       out_features=vocab.get_vocab_size('label'))
 
         self.accuracy = CategoricalAccuracy()
-        self.loss_function = torch.nn.CrossEntropyLoss()
+#         self.loss_function = torch.nn.CrossEntropyLoss()
+        self.loss_function = LabelSmoothingLoss(0.1)
 
     def get_optimizer(self):
         return DenseSparseAdam(self.parameters(), lr=1e-3)

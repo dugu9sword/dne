@@ -1,8 +1,7 @@
-from typing import Any, Dict, Iterable
 import logging
+from typing import Any, Dict, Iterable
 
 import torch
-
 from allennlp.common.checks import check_for_gpu
 from allennlp.common.tqdm import Tqdm
 from allennlp.data import Instance

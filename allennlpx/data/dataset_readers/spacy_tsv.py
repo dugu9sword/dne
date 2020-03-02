@@ -1,20 +1,20 @@
-from typing import Dict, List, Union, Optional
+import csv
+import itertools
 import logging
-import json
-from overrides import overrides
-from allennlp.common.file_utils import cached_path
-from allennlp.data.dataset_readers.dataset_reader import DatasetReader
-from allennlp.data.fields import LabelField, TextField, Field, ListField
-from allennlp.data.instance import Instance
-from allennlp.data.token_indexers import TokenIndexer, SingleIdTokenIndexer
-from allennlp.data.tokenizers import SpacyTokenizer
+from typing import Dict, Optional
+
 # from allennlp.data.tokenizers.sentence_splitter import SpacySentenceSplitter
 import pandas
-import csv
-from pytorch_pretrained_bert import BertTokenizer
+from allennlp.common.file_utils import cached_path
+from allennlp.data.dataset_readers.dataset_reader import DatasetReader
+from allennlp.data.fields import Field, LabelField, ListField, TextField
+from allennlp.data.instance import Instance
+from allennlp.data.token_indexers import SingleIdTokenIndexer, TokenIndexer
+from allennlp.data.tokenizers import SpacyTokenizer
 # from allennlp.data.token_indexers.wordpiece_indexer import PretrainedBertIndexer
 from allennlp.data.tokenizers.token import Token
-import itertools
+from overrides import overrides
+from pytorch_pretrained_bert import BertTokenizer
 
 logger = logging.getLogger(__name__)
 

@@ -1,15 +1,15 @@
 from typing import List
 
-from overrides import overrides
 import torch
-from torch.nn import Dropout
-
 from allennlp.modules.feedforward import FeedForward
 from allennlp.modules.layer_norm import LayerNorm
-from allennlp.modules.seq2seq_encoders.multi_head_self_attention import MultiHeadSelfAttention
+from allennlp.modules.seq2seq_encoders.multi_head_self_attention import \
+    MultiHeadSelfAttention
 from allennlp.modules.seq2seq_encoders.seq2seq_encoder import Seq2SeqEncoder
 from allennlp.nn.activations import Activation
 from allennlp.nn.util import add_positional_features
+from overrides import overrides
+from torch.nn import Dropout
 
 
 # @Seq2SeqEncoder.register("stacked_self_attention")

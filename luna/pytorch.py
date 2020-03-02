@@ -1,5 +1,7 @@
 from .public import *
 import torch
+import random
+import numpy as np
 from torch.nn.utils.rnn import PackedSequence
 import torch.nn.functional as F
 from .logging import log
@@ -80,11 +82,12 @@ def load_model(model, saved_model_name, checkpoint=-1):
         os.makedirs(__model_path__, exist_ok=True)
     if checkpoint == -1:
         for file in os.listdir(__model_path__):
-            file = file[:-5]
-            name = file.split('@')[0]
-            ckpt = int(file.split('@')[1])
-            if name == saved_model_name and ckpt > checkpoint:
-                checkpoint = ckpt
+            if file[-5:] == '.ckpt':
+                file = file[:-5]
+                name = file.split('@')[0]
+                ckpt = int(file.split('@')[1])
+                if name == saved_model_name and ckpt > checkpoint:
+                    checkpoint = ckpt
     path = "{}/{}@{}.ckpt".format(__model_path__, saved_model_name, checkpoint)
     if not os.path.exists(path):
         log("Checkpoint {} not found.".format(path))
@@ -221,6 +224,13 @@ def msk_to_idx(msk):
     return msk.nonzero()[:, 1].flatten()
 
 
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
 # def flip_by_length(inputs, lengths):
 #     rev_inputs = []
 #     for it_id, it_input in enumerate(inputs):
@@ -232,6 +242,22 @@ def msk_to_idx(msk):
 #         rev_inputs.append(rev_input)
 #     rev_inputs = torch.stack(rev_inputs)
 #     return rev_inputs
+
+
+class LabelSmoothingLoss(torch.nn.Module):
+    def __init__(self, smoothing=0.0, dim=-1):
+        super(LabelSmoothingLoss, self).__init__()
+        self.smoothing = smoothing
+        self.dim = dim
+
+    def forward(self, pred, target):
+        pred = pred.log_softmax(dim=self.dim)
+        with torch.no_grad():
+            # true_dist = pred.data.clone()
+            true_dist = torch.zeros_like(pred)
+            true_dist.fill_(self.smoothing / (pred.size(-1) - 1))
+            true_dist.scatter_(1, target.data.unsqueeze(1), 1 - self.smoothing)
+        return torch.mean(torch.sum(-true_dist * pred, dim=self.dim))
 
 
 # def focal_loss(inputs,

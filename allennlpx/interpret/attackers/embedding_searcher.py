@@ -1,7 +1,11 @@
+from functools import lru_cache
+from typing import Union
+
+import numpy as np
 import torch
 from tabulate import tabulate
-import numpy as np
-from typing import Union
+
+from luna import cast_list, show_mean_std
 
 
 class EmbeddingSearcher:
@@ -15,6 +19,22 @@ class EmbeddingSearcher:
         self.word2idx = word2idx
         self.idx2word = idx2word
         self.faiss_index = None
+        
+    def is_pretrained(self, element: Union[int, str]):
+        return all(self.as_vector(element) == 0.0)
+
+    def as_vector(self, element: Union[int, str, torch.Tensor]):
+        if isinstance(element, int):
+            idx = element
+            query_vector = self.embed[idx]
+        elif isinstance(element, str):
+            idx = self.word2idx(element)
+            query_vector = self.embed[idx]
+        elif isinstance(element, torch.Tensor):
+            query_vector = element
+        else:
+            raise TypeError('You passed a {}, int/str/torch.Tensor required'.format(type(element)))
+        return query_vector
 
     def use_faiss_backend(
         self,
@@ -54,7 +74,7 @@ class EmbeddingSearcher:
             index = faiss.index_cpu_to_gpu(res, 0, index)
         self.faiss_index = index
 
-    def show_embedding_info(self):
+    def show_embedding_info(self, measure='euc'):
         print('*** Statistics of parameters and 2-norm ***')
         show_mean_std(self.embed, 'Param')
         show_mean_std(torch.norm(self.embed, p=2, dim=1), 'Norm')
@@ -65,7 +85,7 @@ class EmbeddingSearcher:
         for ele in cast_list(torch.randint(self.embed.size(0), (50, ))):
             if self.embed[ele].sum() == 0.:
                 continue
-            idxs, vals = self.find_neighbours(ele, -1, 'euc', False)
+            vals, idxs = self.find_neighbours(ele, measure,  None)
             for nbr in nbr_num:
                 dists[nbr].append(vals[1:nbr + 1])
         table = []
@@ -86,9 +106,9 @@ class EmbeddingSearcher:
                 continue
             vect = torch.rand_like(self.embed[ele])
             vect = vect / torch.norm(vect)
-            ridxs, rvals = self.find_neighbours(self.embed[ele], -1, 'euc', False)
+            rvals, ridxs = self.find_neighbours(self.embed[ele], measure, None)
             for mve in mve_nom:
-                idxs, vals = self.find_neighbours(self.embed[ele] + vect * mve, 500, 'euc', False)
+                vals, idxs = self.find_neighbours(self.embed[ele] + vect * mve, measure, 500)
                 for nbr in nbr_num:
                     dists[mve][nbr].append(vals[1:nbr + 1])
                     cover[mve][nbr].append(compare_idxes(idxs[1:nbr + 1], ridxs[1:nbr + 1]))
@@ -109,6 +129,7 @@ class EmbeddingSearcher:
                      ],
                      floatfmt='.2f'))
 
+    @lru_cache(maxsize=None)
     @torch.no_grad()
     def find_neighbours(self,
                         element: Union[int, str, torch.Tensor],
@@ -123,22 +144,17 @@ class EmbeddingSearcher:
                 measure == 'cos' and 0 < rho < 1), "threshold for euc distance must be larger than 0, for cos distance must be between 0 and 1"
 
         measure_fn = cos_dist if measure == 'cos' else euc_dist
-        if isinstance(element, int):
-            idx = element
-            query_vector = self.embed[idx]
-        elif isinstance(element, str):
-            idx = self.word2idx(element)
-            query_vector = self.embed[idx]
-        elif isinstance(element, torch.Tensor):
-            query_vector = element
-        else:
-            raise TypeError('You passed a {}, int/str/torch.Tensor required'.format(type(element)))
+        query_vector = self.as_vector(element)
 
+        # Assume that a vector equals to 0 has no neighbours
+        if self.is_pretrained(query_vector):
+            return None, None
+        
         if topk is None:
             _topk = self.embed.size(0)
         else:
             _topk = topk
-
+            
         if self.faiss_index is None:
             dists = measure_fn(query_vector, self.embed)
             tk_vals, tk_idxs = torch.topk(dists, _topk, largest=False)

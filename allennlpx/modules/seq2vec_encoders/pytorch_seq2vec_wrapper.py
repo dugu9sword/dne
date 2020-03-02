@@ -1,8 +1,9 @@
 import torch
-
 from allennlp.common.checks import ConfigurationError
 from allennlp.modules.seq2vec_encoders.seq2vec_encoder import Seq2VecEncoder
+
 from luna import ram_write
+
 
 class PytorchSeq2VecWrapper(Seq2VecEncoder):
     """

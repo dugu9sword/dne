@@ -1,21 +1,19 @@
-from typing import List, Iterator, Dict, Tuple, Any, Union
-import json
+import re
 from contextlib import contextmanager
-import numpy
-from torch.utils.hooks import RemovableHandle
-from torch import Tensor
+from typing import Any, Dict, Iterator, List, Tuple, Union
 
+import numpy
 from allennlp.common import Registrable
 from allennlp.common.checks import ConfigurationError
 from allennlp.common.util import JsonDict, sanitize
 from allennlp.data import DatasetReader, Instance
+from allennlp.data.dataset import Batch
 from allennlp.models import Model
 from allennlp.models.archival import Archive, load_archive
 from allennlp.modules.text_field_embedders import TextFieldEmbedder
-from allennlp.data.dataset import Batch
-
 from allennlp.predictors.predictor import Predictor as Predictor_
-import re
+from torch import Tensor
+from torch.utils.hooks import RemovableHandle
 
 
 class Predictor(Predictor_):
@@ -60,49 +58,49 @@ class Predictor(Predictor_):
     #     new_instances = self.predictions_to_labeled_instances(instance, outputs)
     #     return new_instances
 
-    def get_gradients(self, instances: List[Instance]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        """
-        Gets the gradients of the loss with respect to the model inputs.
+#     def get_gradients(self, instances: List[Instance]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+#         """
+#         Gets the gradients of the loss with respect to the model inputs.
 
-        Parameters
-        ----------
-        instances: List[Instance]
+#         Parameters
+#         ----------
+#         instances: List[Instance]
 
-        Returns
-        -------
-        Tuple[Dict[str, Any], Dict[str, Any]]
-        The first item is a Dict of gradient entries for each input.
-        The keys have the form  ``{grad_input_1: ..., grad_input_2: ... }``
-        up to the number of inputs given. The second item is the model's output.
+#         Returns
+#         -------
+#         Tuple[Dict[str, Any], Dict[str, Any]]
+#         The first item is a Dict of gradient entries for each input.
+#         The keys have the form  ``{grad_input_1: ..., grad_input_2: ... }``
+#         up to the number of inputs given. The second item is the model's output.
 
-        Notes
-        -----
-        Takes a ``JsonDict`` representing the inputs of the model and converts
-        them to :class:`~allennlp.data.instance.Instance`s, sends these through
-        the model :func:`forward` function after registering hooks on the embedding
-        layer of the model. Calls :func:`backward` on the loss and then removes the
-        hooks.
-        """
-        embedding_gradients: List[Tensor] = []
-        hooks: List[RemovableHandle] = self._register_embedding_gradient_hooks(embedding_gradients)
+#         Notes
+#         -----
+#         Takes a ``JsonDict`` representing the inputs of the model and converts
+#         them to :class:`~allennlp.data.instance.Instance`s, sends these through
+#         the model :func:`forward` function after registering hooks on the embedding
+#         layer of the model. Calls :func:`backward` on the loss and then removes the
+#         hooks.
+#         """
+#         embedding_gradients: List[Tensor] = []
+#         hooks: List[RemovableHandle] = self._register_embedding_gradient_hooks(embedding_gradients)
 
-        dataset = Batch(instances)
-        dataset.index_instances(self._model.vocab)
-        outputs = self._model.decode(self._model.forward(**dataset.as_tensor_dict()))
+#         dataset = Batch(instances)
+#         dataset.index_instances(self._model.vocab)
+#         outputs = self._model.decode(self._model.forward(**dataset.as_tensor_dict()))
 
-        loss = outputs['loss']
-        self._model.zero_grad()
-        loss.backward()
+#         loss = outputs['loss']
+#         self._model.zero_grad()
+#         loss.backward()
 
-        for hook in hooks:
-            hook.remove()
+#         for hook in hooks:
+#             hook.remove()
 
-        grad_dict = dict()
-        for idx, grad in enumerate(embedding_gradients):
-            key = 'grad_input_' + str(idx + 1)
-            grad_dict[key] = grad.squeeze_(0)
+#         grad_dict = dict()
+#         for idx, grad in enumerate(embedding_gradients):
+#             key = 'grad_input_' + str(idx + 1)
+#             grad_dict[key] = grad.squeeze_(0)
 
-        return grad_dict, outputs
+#         return grad_dict, outputs
 
     def _register_embedding_gradient_hooks(self, embedding_gradients):
         """

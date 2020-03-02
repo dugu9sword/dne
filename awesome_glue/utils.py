@@ -1,9 +1,11 @@
 import pathlib
-import hashlib
-from allennlp.data import Vocabulary
-from allennlp.modules.token_embedders.embedding import _read_pretrained_embeddings_file
-from luna import auto_create
 from collections import defaultdict
+
+from allennlp.data import Vocabulary
+from allennlp.modules.token_embedders.embedding import \
+    _read_pretrained_embeddings_file
+
+from luna import auto_create
 
 
 class AttackMetric:
@@ -42,7 +44,7 @@ class AttackMetric:
 
     @property
     def flip_ratio(self):
-        return self._succ_num / (self._succ_num + self._fail_num) * 100
+        return self._succ_num / (self._succ_num + self._fail_num + 1e-40) * 100
 
     def __repr__(self):
         return "Accu before: {:.2f}%, after: {:.2f}%, Flip ratio {:.2f}%".format(
@@ -63,6 +65,8 @@ WORD2VECS = {
     "glove":
     maybe_path("/disks/sdb/zjiehang/embeddings/glove/glove.42B.300d.txt",
                "/root/glove/glove.42B.300d.txt", "http://nlp.stanford.edu/data/glove.42B.300d.zip"),
+    "counter":
+    maybe_path("/disks/sdb/zjiehang/embeddings/counter/counter.txt", "https://raw.githubusercontent.com/nmrksic/counter-fitting/master/word_vectors/counter-fitted-vectors.txt.zip")
 }
 
 EMBED_DIM = defaultdict(lambda: 300, {"elmo": 256})
