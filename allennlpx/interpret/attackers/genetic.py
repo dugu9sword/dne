@@ -27,10 +27,26 @@ from allennlpx.interpret.attackers.policies import (CandidatePolicy,
 from allennlpx.interpret.attackers.synonym_searcher import SynonymSearcher
 from luna import cast_list, lazy_property, time_record
 
+import pysnooper
+
 
 class Genetic(Attacker):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self,
+                 predictor,
+                 *,
+                 num_generation = 5,
+                 num_population = 20,
+                 policy: CandidatePolicy= None,
+                 lm_topk = 4, # if lm_topk=-1, the lm re-ranking will be passed
+                 **kwargs):
+        super().__init__(predictor, **kwargs)
+        self.num_generation = num_generation
+        self.num_population = num_population
+        self.policy = policy
+        self.lm_topk = lm_topk
+        
+        # during an attack, there may be many temp variables
+        self.ram_pool = {}
     
     def perturb(self,
                 raw_tokens,
@@ -38,29 +54,21 @@ class Genetic(Attacker):
                 target_idx = -1
                ):
         # randomly select a word
-        legal_sids = []
-        for i in range(len(raw_tokens)):
-            if raw_tokens[i] not in self.ignore_tokens and self.embed_searcher.is_pretrained(raw_tokens[i]):
-                legal_sids.append(i)
+        legal_sids = self.ram_pool['legal_sids']
         sid = random.choice(legal_sids)
-        lucky_dog = raw_tokens[sid]          # use the original word
-#         print("Selected ", sid, lucky_dog)
-        
-        # find top-k neighbours using word vectors
-        cands = self.neariest_neighbours(lucky_dog, 'cos', 10, None)
-        cands = [ele for ele in cands if ele not in self.forbidden_tokens]
-#         print(cands)
-        
+        cands = self.ram_pool['nbr_dct'][sid]
+                
         # re-ranking words with language model
-        cand_sents = []
-        for cand in cands:
-            tmp_tokens = copy.copy(cur_tokens)
-            tmp_tokens[sid] = cand
-            cand_sents.append(" ".join(tmp_tokens))
-        scores = self.lang_model.score(cand_sents)
-        ppls = np.array([ele['positional_scores'].mean().neg().exp().item() for ele in scores])
-        cand_idxs = ppls.argsort()[:5]
-        cands = [cands[i] for i in cand_idxs]
+        if self.lm_topk > 0:
+            cand_sents = []
+            for cand in cands:
+                tmp_tokens = copy.copy(cur_tokens)
+                tmp_tokens[sid] = cand
+                cand_sents.append(" ".join(tmp_tokens))
+            scores = self.lang_model.score(cand_sents)
+            ppls = np.array([ele['positional_scores'].mean().neg().exp().item() for ele in scores])
+            cand_idxs = ppls.argsort()[:self.lm_topk]
+            cands = [cands[i] for i in cand_idxs]
         
         # select the one that maximize the drop
         tmp_instances = [self._tokens_to_instance(raw_tokens)]
@@ -113,35 +121,52 @@ class Genetic(Attacker):
                          inputs: JsonDict = None,
                          field_to_change: str = 'tokens',
                          field_to_attack: str = 'label',
-                         grad_input_field: str = 'grad_input_1',
-                         num_generation = 5,
-                         num_population = 20,
-                         policy: CandidatePolicy= None) -> JsonDict:
-        if self.token_embedding is None:
-            raise Exception('initialize it first~')
-
+                         grad_input_field: str = 'grad_input_1') -> JsonDict:
 #         raw_instance = self.predictor.json_to_labeled_instances(inputs)[0]
         raw_tokens = list(map(lambda x: x.text, self.spacy.tokenize(inputs[field_to_change])))
         
-        # initialzie the population
-        P = [self.perturb(raw_tokens, raw_tokens) for _ in range(num_population)] 
+        # pre-compute some variables for later operations
+        self.ram_pool.clear()
+        legal_sids = []
+        nbr_dct = {}
+        for i in range(len(raw_tokens)):
+            if raw_tokens[i] not in self.ignore_tokens and self.embed_searcher.is_pretrained(raw_tokens[i]):
+                lucky_dog = raw_tokens[i]          # use the original word
+                if isinstance(self.policy, EmbeddingPolicy):
+                    cands = self.neariest_neighbours(lucky_dog, 
+                                                     self.policy.measure, 
+                                                     self.policy.topk, 
+                                                     self.policy.rho)
+                elif isinstance(self.policy, SynonymPolicy):
+                    cands = self.synom_searcher.search(lucky_dog)
+                cands = [ele for ele in cands if ele not in self.forbidden_tokens]
+                if len(cands) > 0:
+                    legal_sids.append(i)
+                    nbr_dct[i]=cands
+        self.ram_pool['legal_sids'] = legal_sids
+        self.ram_pool['nbr_dct'] = nbr_dct
         
         adv_tokens = None
-        for gid in range(num_generation):
-            fitnesses = np.array([ele['fitness'] for ele in P])
-            best = P[np.argmax(fitnesses)]
-            if best['success']:
-                adv_tokens = best['individual']
-                break
-            else:
-                new_P = [best]
-                for _ in range(num_population - 1):
-                    select_prob = fitnesses / fitnesses.sum()
-                    p1, p2 = np.random.choice(P, 2, False, select_prob)
-                    child_tokens = self.crossover(p1['individual'], p2['individual'])
-                    new_tokens = self.perturb(raw_tokens, child_tokens)
-                    new_P.append(new_tokens)
-                P = new_P
+        gid = -1
+        if len(legal_sids) != 0:
+            # initialzie the population
+            P = [self.perturb(raw_tokens, raw_tokens) for _ in range(self.num_population)] 
+
+            for gid in range(self.num_generation):
+                fitnesses = np.array([ele['fitness'] for ele in P])
+                best = P[np.argmax(fitnesses)]
+                if best['success']:
+                    adv_tokens = best['individual']
+                    break
+                else:
+                    new_P = [best]
+                    for _ in range(self.num_population - 1):
+                        select_prob = fitnesses / fitnesses.sum()
+                        p1, p2 = np.random.choice(P, 2, False, select_prob)
+                        child_tokens = self.crossover(p1['individual'], p2['individual'])
+                        new_tokens = self.perturb(raw_tokens, child_tokens)
+                        new_P.append(new_tokens)
+                    P = new_P
         
         if adv_tokens is not None:
             result = self.predictor._model.forward_on_instance(
@@ -167,24 +192,3 @@ class Genetic(Attacker):
         en_lm.eval()
         en_lm.cuda()
         return en_lm
-
-        
-    @lazy_property
-    def embed_searcher(self) -> EmbeddingSearcher:
-        return EmbeddingSearcher(embed=self.token_embedding,
-                                 idx2word=lambda x: self.vocab.get_token_from_index(x),
-                                 word2idx=lambda x: self.vocab.get_token_index(x))
-
-    @lazy_property
-    def synom_searcher(self) -> SynonymSearcher:
-        return SynonymSearcher(vocab_list=self.vocab.get_index_to_token_vocabulary().values())
-
-
-    @lru_cache(maxsize=None)
-    def neariest_neighbours(self, word, measure, topk, rho):
-        # May be accelerated by caching a the distance
-        vals, idxs = self.embed_searcher.find_neighbours(word, measure=measure, topk=topk, rho=rho)
-        if idxs is None:
-            return []
-        else:
-            return [self.vocab.get_token_from_index(idx) for idx in cast_list(idxs)]

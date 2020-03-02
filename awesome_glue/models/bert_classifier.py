@@ -77,8 +77,8 @@ class BertClassifier(Model):
         )
 
         self.accuracy = CategoricalAccuracy()
-#         self.loss_function = torch.nn.CrossEntropyLoss()
-        self.loss_function = LabelSmoothingLoss(0.05)
+        self.loss_function = torch.nn.CrossEntropyLoss()
+#         self.loss_function = LabelSmoothingLoss(0.05)
     
     def forward(self, berty_tokens, label=None):
         # embeddings = self.word_embedders(berty_tokens)

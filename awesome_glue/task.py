@@ -47,6 +47,7 @@ from awesome_glue.models.bert_classifier import BertClassifier
 from awesome_glue.models.lstm_classifier import LstmClassifier
 from awesome_glue.task_specs import TASK_SPECS
 from awesome_glue.utils import EMBED_DIM, WORD2VECS, AttackMetric
+from awesome_glue.transforms import identity, rand_drop, embed_aug, syn_aug, bert_aug
 from luna import flt2str, ram_append, ram_has, ram_read, ram_reset, ram_write
 from luna.logging import log
 from luna.public import auto_create, Aggregator
@@ -177,90 +178,7 @@ class Task:
         set_seed(11221)
         df = pandas.read_csv(self.config.adv_data, sep='\t', quoting=csv.QUOTE_NONE)
         attack_metric = AttackMetric()
-        
-        def identity(x):
-            return x
-        
-        def rand_drop(x):
-            x_split = x.split(" ")
-            for i in range(min(3, len(x_split) - 1)):
-                x_split.pop(random.randrange(len(x_split)))
-            return " ".join(x_split)
-        
-        def rand_stop(x):
-            x_split = x.split(" ")
-            idxs = random.choices(range(len(x_split)), k=5)
-            for i in idxs:
-                x_split[i] = 'the'
-            return " ".join(x_split)
-        
-        def embed_aug(x):
-            aug_num = 5
-            if ram_has("emb_aug"):
-                aug = ram_read("emb_aug")
-            else:
-                aug = naw.WordEmbsAug(  
-                    model_type = 'glove',
-                    top_k=30,
-                    model_path = '/home/zhouyi/counter-fitting/word_vectors/counter-fitted-vectors.txt',
-#                     model_path = '/home/zhouyi/counter-fitting/word_vectors/glove.txt',
-                    aug_min = aug_num,
-                    aug_max = aug_num,
-                    stopwords = ['a', 'the'],
-                    stopwords_regex = '@',
-                )
-                ram_write("emb_aug", aug)
-            if len(x.split(' ')) < aug_num:
-                aug.aug_min = 1
-            ret = aug.substitute(x)
-            aug.aug_min = aug_num
-            return ret
-        
-        def syn_aug(x):
-            aug_num = 5
-            if ram_has("syn_aug"):
-                aug = ram_read("syn_aug")
-            else:
-                while True:
-                    try:
-                        aug = naw.SynonymAug(
-                            aug_min = aug_num,
-                            aug_max = aug_num,
-                            stopwords = ['a', 'the'],
-                            stopwords_regex = '@',
-                        )
-                        break
-                    except:
-                        import nltk
-                        nltk.download('wordnet')
-                        nltk.download('averaged_perceptron_tagger')
-                ram_write("syn_aug", aug)
-            if len(x.split(' ')) < aug_num:
-                aug.aug_min = 1
-            ret = aug.substitute(x)
-            aug.aug_min = aug_num
-            return ret
-            
-        def bert_aug(x):
-            aug_num = 5
-            if ram_has("bert_aug"):
-                aug = ram_read("bert_aug")
-            else:
-                aug = naw.ContextualWordEmbsAug(
-                    model_path='bert-base-uncased', 
-                    top_k = 30,
-                    aug_min = aug_num,
-                    aug_max = aug_num,
-                    stopwords = ['a', 'the'],
-                    stopwords_regex = '@',
-                    action="substitute")
-                ram_write("bert_aug", aug)
-            if len(x.split(' ')) < aug_num:
-                aug.aug_min = 1
-            ret = aug.augment(x)
-            aug.aug_min = aug_num
-            return ret    
-                
+                        
         transform = bert_aug
         ensemble_num = 9
             
@@ -336,19 +254,36 @@ class Task:
         forbidden_words = pos_words + neg_words + not_words + DEFAULT_IGNORE_TOKENS
 
         # self.predictor._model.cpu()
-        kwargs = { 
-#             "ignore_tokens": forbidden_words,
-#             "forbidden_tokens": forbidden_words,
-            "max_change_num_or_ratio": 0.99
+        general_kwargs = { 
+            "ignore_tokens": forbidden_words,
+            "forbidden_tokens": forbidden_words,
+            "max_change_num_or_ratio": 0.25
         }
-#         attacker = PGD(self.predictor, **kwargs)
-        attacker = HotFlip(self.predictor, **kwargs)
-#         attacker = RawHotFlip(self.predictor)
-        attacker.initialize()
-#         attacker = BruteForce(self.predictor, **kwargs)
-#         attacker = PWWS(self.predictor, **kwargs)
-#         attacker = Genetic(self.predictor, **kwargs)
-#         attacker.initialize(vocab=spacy_vocab, token_embedding=spacy_weight)
+        blackbox_kwargs = {
+            "vocab": spacy_vocab,
+            "token_embedding": spacy_weight
+        }
+        attacker = PGD(self.predictor,
+                       step_size = 100.,
+                       max_step = 20,
+                       iter_change_num = 1,
+                       **general_kwargs)
+#         attacker = HotFlip(self.predictor, **general_kwargs)
+
+#         attacker = BruteForce(self.predictor, 
+#                               policy=EmbeddingPolicy(measure='euc', topk=10, rho=None),
+#                               **general_kwargs, **blackbox_kwargs)
+    
+#         attacker = PWWS(self.predictor,
+#                         policy=EmbeddingPolicy(measure='euc', topk=10, rho=None),
+#                         **general_kwargs, **blackbox_kwargs)
+
+#         attacker = Genetic(self.predictor, 
+#                            num_generation = 5,
+#                            num_population = 20,
+#                            policy=EmbeddingPolicy(measure='euc', topk=10, rho=None),
+#                            lm_topk = 4,
+#                            **general_kwargs, **blackbox_kwargs)
 
         if self.config.attack_data_split == 'train':
             data_to_attack = self.train_data
@@ -379,36 +314,9 @@ class Task:
                     field_to_change = 'berty_tokens'
                 elif self.config.arch == 'lstm':
                     field_to_change = 'sent'
-                
-                result = attacker.attack_from_json({field_to_change: raw_text},
-                                                   field_to_change=field_to_change,
-#                                                    input_field_to_attack=field_to_change,
-#                                                    ignore_tokens=forbidden_words,
-#                                                    step_size=100,
-#                                                    iter_change_num=1
-                                                  )
 
-#                 result = attacker.attack_from_json({field_to_change: raw_text},
-#                                                    field_to_change=field_to_change,
-#                                                    policy=EmbeddingPolicy(measure='euc', topk=10, rho=None),
-#                                                    policy=SynonymPolicy(), 
-#                                                    search_num=256
-#                                                   )
-                if "original" in result:
-                    result['raw'] = result['original'][0]
-                    result['adv'] = result['final'][0]
-#                     print(result)
-                    raw_instance = self.predictor._dataset_reader.text_to_instance(" ".join(result['raw']))
-                    r = self.predictor._model.forward_on_instance(raw_instance)
-                    raw_instance = self.predictor.predictions_to_labeled_instances(raw_instance, r)[0]
-                    adv_instance = self.predictor._dataset_reader.text_to_instance(" ".join(result['adv']))
-                    r = self.predictor._model.forward_on_instance(adv_instance)
-                    adv_instance = self.predictor.predictions_to_labeled_instances(adv_instance, r)[0]
-                    if raw_instance['label'].label != adv_instance['label'].label:
-                        result["success"] = 1
-                    else:
-                        result['success'] = 0
-                    
+                result = attacker.attack_from_json({field_to_change: raw_text},
+                                                   field_to_change=field_to_change)
 
                 if result["success"] == 1:
                     changed_num = 0

@@ -61,8 +61,8 @@ class LstmClassifier(Model):
                                       out_features=vocab.get_vocab_size('label'))
 
         self.accuracy = CategoricalAccuracy()
-#         self.loss_function = torch.nn.CrossEntropyLoss()
-        self.loss_function = LabelSmoothingLoss(0.1)
+        self.loss_function = torch.nn.CrossEntropyLoss()
+#         self.loss_function = LabelSmoothingLoss(0.1)
 
     def get_optimizer(self):
         return DenseSparseAdam(self.parameters(), lr=1e-3)

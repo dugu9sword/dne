@@ -22,23 +22,25 @@ from luna import cast_list, lazy_property
 
 
 class PGD(Attacker):
-    @lazy_property
-    def embed_searcher(self) -> EmbeddingSearcher:
-        return EmbeddingSearcher(embed=self.token_embedding,
-                                 idx2word=lambda x: self.vocab.get_token_from_index(x),
-                                 word2idx=lambda x: self.vocab.get_token_index(x))
-
+    def __init__(self, 
+                 predictor, 
+                 *,
+                 step_size: float = 100.,
+                 max_step: int = 20,
+                 iter_change_num: int = 2,
+                 **kwargs,
+                ):
+        super().__init__(predictor, **kwargs)
+        self.step_size = step_size
+        self.max_step = max_step
+        self.iter_change_num = iter_change_num
+        
     def attack_from_json(self,
                          inputs: JsonDict,
                          field_to_change: str = 'tokens',
                          field_to_attack: str = 'label',
                          grad_input_field: str = 'grad_input_1',
-                         step_size: float = 100.,
-                         max_step: int = 20,
-                         iter_change_num: int = 2,) -> JsonDict:
-        if self.token_embedding is None:
-            raise Exception()
-
+                         ) -> JsonDict:
         raw_instance = self.predictor.json_to_labeled_instances(inputs)[0]
         raw_text_field: TextField = raw_instance[field_to_change]
         raw_tokens = raw_text_field.tokens
@@ -55,7 +57,7 @@ class PGD(Attacker):
                 forbidden_idxs__.add(self.vocab._token_to_index['tokens'][forbidden_token])
 
         successful = False
-        for step in range(max_step):
+        for step in range(self.max_step):
             grads, _ = self.predictor.get_gradients([adv_instance])
             grad = torch.from_numpy(grads[grad_input_field][0]).to(self.model_device)
             grad_norm = grad.norm(dim=-1)
@@ -81,7 +83,7 @@ class PGD(Attacker):
 
             _, topk_idxs = grad_norm.sort(descending=True)
             token_sids = select(ordered_idxs=cast_list(topk_idxs),
-                                num_to_select=iter_change_num,
+                                num_to_select=self.iter_change_num,
                                 selected=change_positions__,
                                 max_num=self.max_change_num(len(raw_tokens)))
             token_sids = [ele for ele in token_sids if position_mask[ele] is False]
@@ -96,9 +98,9 @@ class PGD(Attacker):
                 change_positions__.add(token_sid)
                 forbidden_idxs__.add(token_vid)
 
-                print(change_positions__)
+#                 print(change_positions__)
 
-                delta = token_grad / torch.norm(token_grad) * step_size
+                delta = token_grad / torch.norm(token_grad) * self.step_size
                 new_token_emb = token_emb + delta
 
                 tk_vals, tk_idxs = self.embed_searcher.find_neighbours(

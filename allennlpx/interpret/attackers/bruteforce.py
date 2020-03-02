@@ -28,8 +28,15 @@ from luna import cast_list, lazy_property, time_record
 
 
 class BruteForce(Attacker):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, 
+                 predictor,
+                 *,
+                 policy: CandidatePolicy= None,
+                 search_num: int = 256,
+                 **kwargs):
+        super().__init__(predictor, **kwargs)
+        self.policy = policy
+        self.search_num = search_num
 
     @torch.no_grad()
     def attack_from_json(self,
@@ -37,11 +44,7 @@ class BruteForce(Attacker):
                          field_to_change: str = 'tokens',
                          field_to_attack: str = 'label',
                          grad_input_field: str = 'grad_input_1',
-                         policy: CandidatePolicy= None,
-                         search_num: int = 256) -> JsonDict:
-        if self.token_embedding is None:
-            raise Exception('initialize it first~')
-
+                         ) -> JsonDict:
         raw_instance = self.predictor.json_to_labeled_instances(inputs)[0]
         raw_tokens = list(map(lambda x: x.text, self.spacy.tokenize(inputs[field_to_change])))
 
@@ -51,9 +54,12 @@ class BruteForce(Attacker):
         for i in range(len(raw_tokens)):
             if raw_tokens[i] not in self.ignore_tokens:
                 word = raw_tokens[i]
-                if isinstance(policy, EmbeddingPolicy):
-                    nbrs = self.neariest_neighbours(word, policy.measure, policy.topk, policy.rho)
-                elif isinstance(policy, SynonymPolicy):
+                if isinstance(self.policy, EmbeddingPolicy):
+                    nbrs = self.neariest_neighbours(word, 
+                                                    self.policy.measure, 
+                                                    self.policy.topk, 
+                                                    self.policy.rho)
+                elif isinstance(self.policy, SynonymPolicy):
                     nbrs = self.synom_searcher.search(word)
                     
                 nbrs = [nbr for nbr in nbrs if nbr not in self.forbidden_tokens]
@@ -66,7 +72,7 @@ class BruteForce(Attacker):
 
         # Construct adversarial instances
         adv_instances = []
-        for i in range(search_num):
+        for i in range(self.search_num):
             adv_tokens = [ele for ele in raw_tokens]
             word_sids = random.choices(sids_to_change, k=max_change_num)
             for word_sid in word_sids:
@@ -92,23 +98,3 @@ class BruteForce(Attacker):
             "outputs": outputs,
             "success": 1 if successful else 0
         })
-
-    @lazy_property
-    def embed_searcher(self) -> EmbeddingSearcher:
-        return EmbeddingSearcher(embed=self.token_embedding,
-                                 idx2word=lambda x: self.vocab.get_token_from_index(x),
-                                 word2idx=lambda x: self.vocab.get_token_index(x))
-
-    @lazy_property
-    def synom_searcher(self) -> SynonymSearcher:
-        return SynonymSearcher(vocab_list=self.vocab.get_index_to_token_vocabulary().values())
-
-
-    @lru_cache(maxsize=None)
-    def neariest_neighbours(self, word, measure, topk, rho):
-        # May be accelerated by caching a the distance
-        vals, idxs = self.embed_searcher.find_neighbours(word, measure=measure, topk=topk, rho=rho)
-        if idxs is None:
-            return []
-        else:
-            return [self.vocab.get_token_from_index(idx) for idx in cast_list(idxs)]

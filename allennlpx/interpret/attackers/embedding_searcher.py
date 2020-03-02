@@ -21,7 +21,7 @@ class EmbeddingSearcher:
         self.faiss_index = None
         
     def is_pretrained(self, element: Union[int, str]):
-        return all(self.as_vector(element) == 0.0)
+        return not all(self.as_vector(element) == 0.0)
 
     def as_vector(self, element: Union[int, str, torch.Tensor]):
         if isinstance(element, int):
@@ -147,7 +147,7 @@ class EmbeddingSearcher:
         query_vector = self.as_vector(element)
 
         # Assume that a vector equals to 0 has no neighbours
-        if self.is_pretrained(query_vector):
+        if not self.is_pretrained(query_vector):
             return None, None
         
         if topk is None:

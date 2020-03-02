@@ -29,9 +29,13 @@ from luna import cast_list, lazy_property, time_record
 
 
 class PWWS(Attacker):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        
+    def __init__(self, 
+                 predictor, 
+                 *, 
+                 policy: CandidatePolicy = None,
+                 **kwargs):
+        super().__init__(predictor, **kwargs)
+        self.policy = policy
 
     @torch.no_grad()
     def attack_from_json(self,
@@ -39,12 +43,7 @@ class PWWS(Attacker):
                          field_to_change: str = 'tokens',
                          field_to_attack: str = 'label',
                          grad_input_field: str = 'grad_input_1',
-                         policy: CandidatePolicy = None) -> JsonDict:
-        if self.vocab is None:
-            raise Exception('initialize it first~')
-        if policy is None:
-            raise Exception('You must specify a policy for generating word candidates first')
-        
+                         ) -> JsonDict:
         raw_instance = self.predictor.json_to_labeled_instances(inputs)[0]
         raw_tokens = list(map(lambda x: x.text, self.spacy.tokenize(inputs[field_to_change])))
 
@@ -54,9 +53,12 @@ class PWWS(Attacker):
         for i in range(len(raw_tokens)):
             if raw_tokens[i] not in self.ignore_tokens:
                 word = raw_tokens[i]
-                if isinstance(policy, EmbeddingPolicy):
-                    nbrs = self.neariest_neighbours(word, policy.measure, policy.topk, policy.rho)
-                elif isinstance(policy, SynonymPolicy):
+                if isinstance(self.policy, EmbeddingPolicy):
+                    nbrs = self.neariest_neighbours(word, 
+                                                    self.policy.measure, 
+                                                    self.policy.topk, 
+                                                    self.policy.rho)
+                elif isinstance(self.policy, SynonymPolicy):
                     nbrs = self.synom_searcher.search(word)
                 nbrs = [nbr for nbr in nbrs if nbr not in self.forbidden_tokens]
                 if len(nbrs) > 0:
@@ -131,22 +133,3 @@ class PWWS(Attacker):
             "changed": i + 1,
             "success": 1 if successful else 0
         })
-
-    @lazy_property
-    def embed_searcher(self) -> EmbeddingSearcher:
-        return EmbeddingSearcher(embed=self.token_embedding,
-                                 idx2word=lambda x: self.vocab.get_token_from_index(x),
-                                 word2idx=lambda x: self.vocab.get_token_index(x))
-    
-    @lazy_property
-    def synom_searcher(self) -> SynonymSearcher:
-        return SynonymSearcher(vocab_list=self.vocab.get_index_to_token_vocabulary().values())
-
-    @lru_cache(maxsize=None)
-    def neariest_neighbours(self, word, measure, topk, rho):
-        # May be accelerated by caching a the distance
-        vals, idxs = self.embed_searcher.find_neighbours(word, measure=measure, topk=topk, rho=rho)
-        if idxs is None:
-            return []
-        else:
-            return [self.vocab.get_token_from_index(idx) for idx in cast_list(idxs)]

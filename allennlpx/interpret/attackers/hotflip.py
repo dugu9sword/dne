@@ -32,8 +32,6 @@ class HotFlip(Attacker):
                          field_to_change: str = 'tokens',
                          field_to_attack: str = 'label',
                          grad_input_field: str = 'grad_input_1') -> JsonDict:
-        if self.token_embedding is None:
-            raise Exception()
 
         raw_instance = self.predictor.json_to_labeled_instances(inputs)[0]
         raw_text_field: TextField = raw_instance[field_to_change]  # type: ignore
@@ -125,6 +123,6 @@ def _first_order_taylor(grad,
     # solves equation (3) here https://arxiv.org/abs/1903.06620
     new_embed_dot_grad = torch.einsum("bij,kj->bik", (grad, embedding_matrix))
     prev_embed_dot_grad = torch.einsum("bij,bij->bi", (grad, word_embeds)).unsqueeze(-1)
-    neg_dir_dot_grad = 1 * (prev_embed_dot_grad - new_embed_dot_grad)
+    neg_dir_dot_grad = -1 * (prev_embed_dot_grad - new_embed_dot_grad)
     _, best_at_each_step = neg_dir_dot_grad.max(2)
     return best_at_each_step[0].data[0].detach().cpu().item()  # return the best candidate
