@@ -19,6 +19,22 @@ class EmbeddingSearcher:
         self.word2idx = word2idx
         self.idx2word = idx2word
         self.faiss_index = None
+        
+    def is_pretrained(self, element: Union[int, str]):
+        return all(self.as_vector(element) == 0.0)
+
+    def as_vector(self, element: Union[int, str, torch.Tensor]):
+        if isinstance(element, int):
+            idx = element
+            query_vector = self.embed[idx]
+        elif isinstance(element, str):
+            idx = self.word2idx(element)
+            query_vector = self.embed[idx]
+        elif isinstance(element, torch.Tensor):
+            query_vector = element
+        else:
+            raise TypeError('You passed a {}, int/str/torch.Tensor required'.format(type(element)))
+        return query_vector
 
     def use_faiss_backend(
         self,
@@ -128,22 +144,17 @@ class EmbeddingSearcher:
                 measure == 'cos' and 0 < rho < 1), "threshold for euc distance must be larger than 0, for cos distance must be between 0 and 1"
 
         measure_fn = cos_dist if measure == 'cos' else euc_dist
-        if isinstance(element, int):
-            idx = element
-            query_vector = self.embed[idx]
-        elif isinstance(element, str):
-            idx = self.word2idx(element)
-            query_vector = self.embed[idx]
-        elif isinstance(element, torch.Tensor):
-            query_vector = element
-        else:
-            raise TypeError('You passed a {}, int/str/torch.Tensor required'.format(type(element)))
+        query_vector = self.as_vector(element)
 
+        # Assume that a vector equals to 0 has no neighbours
+        if self.is_pretrained(query_vector):
+            return None, None
+        
         if topk is None:
             _topk = self.embed.size(0)
         else:
             _topk = topk
-
+            
         if self.faiss_index is None:
             dists = measure_fn(query_vector, self.embed)
             tk_vals, tk_idxs = torch.topk(dists, _topk, largest=False)

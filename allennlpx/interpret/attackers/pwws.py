@@ -146,4 +146,7 @@ class PWWS(Attacker):
     def neariest_neighbours(self, word, measure, topk, rho):
         # May be accelerated by caching a the distance
         vals, idxs = self.embed_searcher.find_neighbours(word, measure=measure, topk=topk, rho=rho)
-        return [self.vocab.get_token_from_index(idx) for idx in cast_list(idxs)]
+        if idxs is None:
+            return []
+        else:
+            return [self.vocab.get_token_from_index(idx) for idx in cast_list(idxs)]

@@ -9,14 +9,14 @@ from allennlp.modules.text_field_embedders import (BasicTextFieldEmbedder,
 from allennlp.modules.token_embedders import Embedding, TokenEmbedder
 from allennlp.modules.token_embedders.elmo_token_embedder import \
     ElmoTokenEmbedder
-from allennlp.modules.token_embedders.embedding import \
-    _read_pretrained_embeddings_file
 from allennlp.nn.util import get_text_field_mask
 from allennlp.training.metrics import CategoricalAccuracy
 from allennlp.training.optimizers import DenseSparseAdam
 
 from allennlpx.modules.seq2vec_encoders.pytorch_seq2vec_wrapper import \
     PytorchSeq2VecWrapper
+from allennlpx.modules.token_embedders.embedding import \
+    _read_pretrained_embeddings_file
 from awesome_glue.utils import EMBED_DIM, WORD2VECS
 from luna import (LabelSmoothingLoss, auto_create, flt2str, log, log_config,
                   ram_globalize, ram_read, ram_reset, ram_write)

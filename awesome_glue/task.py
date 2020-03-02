@@ -13,8 +13,6 @@ from allennlp.data.iterators.basic_iterator import BasicIterator
 from allennlp.data.iterators.bucket_iterator import BucketIterator
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.modules.text_field_embedders import TextFieldEmbedder
-from allennlp.modules.token_embedders.embedding import \
-    _read_pretrained_embeddings_file
 from allennlp.training.learning_rate_schedulers.slanted_triangular import \
     SlantedTriangular
 from allennlp.training.optimizers import DenseSparseAdam
@@ -28,6 +26,7 @@ from allennlpx.data.dataset_readers.berty_tsv import BertyTSVReader
 from allennlpx.data.dataset_readers.spacy_tsv import SpacyTSVReader
 from allennlpx.interpret.attackers.attacker import DEFAULT_IGNORE_TOKENS
 from allennlpx.interpret.attackers.bruteforce import BruteForce
+from allennlp.interpret.attackers.hotflip import Hotflip as RawHotFlip
 from allennlpx.interpret.attackers.hotflip import HotFlip
 from allennlpx.interpret.attackers.pgd import PGD
 from allennlpx.interpret.attackers.pwws import PWWS
@@ -35,6 +34,8 @@ from allennlpx.interpret.attackers.genetic import Genetic
 from allennlpx.interpret.attackers.policies import (CandidatePolicy,
                                                     EmbeddingPolicy,
                                                     SynonymPolicy)
+from allennlpx.modules.token_embedders.embedding import \
+    _read_pretrained_embeddings_file
 from allennlpx.modules.knn_utils import build_faiss_index
 from allennlpx.predictors.predictor import Predictor
 from allennlpx.predictors.text_classifier import TextClassifierPredictor
@@ -75,7 +76,7 @@ def load_data(task_id: str, tokenizer: str):
         return train_data, dev_data, test_data, vocab
 
     # The cache name is {task}-{tokenizer}
-    train_data, dev_data, test_data, vocab = auto_create(f"{task_id}-{tokenizer}", __load_data,
+    train_data, dev_data, test_data, vocab = auto_create(f"{task_id}-{tokenizer}.data", __load_data,
                                                          True)
 
     return {"reader": reader, "data": (train_data, dev_data, test_data), "vocab": vocab}
@@ -309,7 +310,7 @@ class Task:
         spacy_data = load_data(self.config.task_id, "spacy")
         spacy_vocab: Vocabulary = spacy_data['vocab']
         spacy_weight = auto_create(
-            f"{self.config.task_id}-{self.config.tokenizer}-{self.config.attack_vectors}",
+            f"{self.config.task_id}-{self.config.tokenizer}-{self.config.attack_vectors}.vec",
             lambda: _read_pretrained_embeddings_file(WORD2VECS[self.config.attack_vectors],
                                                      embedding_dim=EMBED_DIM[self.config.
                                                                              attack_vectors],
@@ -336,11 +337,13 @@ class Task:
 
         # self.predictor._model.cpu()
         kwargs = { 
-            "ignore_tokens": forbidden_words,
-            "forbidden_tokens": forbidden_words,
-            "max_change_num_or_ratio": 0.25
+#             "ignore_tokens": forbidden_words,
+#             "forbidden_tokens": forbidden_words,
+            "max_change_num_or_ratio": 0.99
         }
-        attacker = HotFlip(self.predictor)
+#         attacker = PGD(self.predictor, **kwargs)
+        attacker = HotFlip(self.predictor, **kwargs)
+#         attacker = RawHotFlip(self.predictor)
         attacker.initialize()
 #         attacker = BruteForce(self.predictor, **kwargs)
 #         attacker = PWWS(self.predictor, **kwargs)
@@ -372,24 +375,40 @@ class Task:
             raw_label = data_to_attack[i]['label'].label
             # Only attack correct instance
             if raw_pred == raw_label:
-                # result = attacker.attack_from_json({"sentence": raw_text},
-                #                                    ignore_tokens=forbidden_words,
-                #                                    forbidden_tokens=forbidden_words,
-                #                                    step_size=100,
-                #                                    max_change_num=3,
-                #                                    iter_change_num=2)
                 if self.config.arch == 'bert':
                     field_to_change = 'berty_tokens'
                 elif self.config.arch == 'lstm':
                     field_to_change = 'sent'
-
+                
                 result = attacker.attack_from_json({field_to_change: raw_text},
                                                    field_to_change=field_to_change,
+#                                                    input_field_to_attack=field_to_change,
+#                                                    ignore_tokens=forbidden_words,
+#                                                    step_size=100,
+#                                                    iter_change_num=1
+                                                  )
+
+#                 result = attacker.attack_from_json({field_to_change: raw_text},
+#                                                    field_to_change=field_to_change,
 #                                                    policy=EmbeddingPolicy(measure='euc', topk=10, rho=None),
 #                                                    policy=SynonymPolicy(), 
 #                                                    search_num=256
-                                                  )
-    
+#                                                   )
+                if "original" in result:
+                    result['raw'] = result['original'][0]
+                    result['adv'] = result['final'][0]
+#                     print(result)
+                    raw_instance = self.predictor._dataset_reader.text_to_instance(" ".join(result['raw']))
+                    r = self.predictor._model.forward_on_instance(raw_instance)
+                    raw_instance = self.predictor.predictions_to_labeled_instances(raw_instance, r)[0]
+                    adv_instance = self.predictor._dataset_reader.text_to_instance(" ".join(result['adv']))
+                    r = self.predictor._model.forward_on_instance(adv_instance)
+                    adv_instance = self.predictor.predictions_to_labeled_instances(adv_instance, r)[0]
+                    if raw_instance['label'].label != adv_instance['label'].label:
+                        result["success"] = 1
+                    else:
+                        result['success'] = 0
+                    
 
                 if result["success"] == 1:
                     changed_num = 0

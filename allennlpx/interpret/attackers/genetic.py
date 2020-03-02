@@ -40,7 +40,7 @@ class Genetic(Attacker):
         # randomly select a word
         legal_sids = []
         for i in range(len(raw_tokens)):
-            if raw_tokens[i] not in self.ignore_tokens:
+            if raw_tokens[i] not in self.ignore_tokens and self.embed_searcher.is_pretrained(raw_tokens[i]):
                 legal_sids.append(i)
         sid = random.choice(legal_sids)
         lucky_dog = raw_tokens[sid]          # use the original word
@@ -184,4 +184,7 @@ class Genetic(Attacker):
     def neariest_neighbours(self, word, measure, topk, rho):
         # May be accelerated by caching a the distance
         vals, idxs = self.embed_searcher.find_neighbours(word, measure=measure, topk=topk, rho=rho)
-        return [self.vocab.get_token_from_index(idx) for idx in cast_list(idxs)]
+        if idxs is None:
+            return []
+        else:
+            return [self.vocab.get_token_from_index(idx) for idx in cast_list(idxs)]

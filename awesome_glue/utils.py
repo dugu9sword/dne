@@ -66,7 +66,7 @@ WORD2VECS = {
     maybe_path("/disks/sdb/zjiehang/embeddings/glove/glove.42B.300d.txt",
                "/root/glove/glove.42B.300d.txt", "http://nlp.stanford.edu/data/glove.42B.300d.zip"),
     "counter":
-    maybe_path("/disks/sdb/zjiehang/embeddings/counter/counter.txt")
+    maybe_path("/disks/sdb/zjiehang/embeddings/counter/counter.txt", "https://raw.githubusercontent.com/nmrksic/counter-fitting/master/word_vectors/counter-fitted-vectors.txt.zip")
 }
 
 EMBED_DIM = defaultdict(lambda: 300, {"elmo": 256})
