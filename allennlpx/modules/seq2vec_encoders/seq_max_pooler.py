@@ -1,3 +1,4 @@
+import torch
 from allennlp.modules.seq2vec_encoders import PytorchSeq2VecWrapper, Seq2VecEncoder
 from torch.nn.utils.rnn import pad_packed_sequence
 
