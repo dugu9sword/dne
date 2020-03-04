@@ -94,7 +94,11 @@ class Task:
         if config.arch == 'bert':
             self.model = BertClassifier(self.vocab, config.finetunable).cuda()
         elif config.arch == 'lstm':
-            self.model = LstmClassifier(self.vocab, config.pretrain, config.finetunable).cuda()
+            self.model = LstmClassifier(self.vocab, 
+                                        TASK_SPECS[config.task_id]['num_labels'],
+                                        config.pretrain, 
+                                        config.finetunable,
+                                        f"{config.task_id}-{config.pretrain}.vec").cuda()
         else:
             raise Exception
 
@@ -102,7 +106,7 @@ class Task:
             self.model, self.reader, key='sent' if self.config.arch != 'bert' else 'berty_tokens')
 
     def train(self):
-        num_epochs = 2
+        num_epochs = 5
         pseudo_batch_size = 32
         accumulate_num = 1
         pseudo_batch_size * accumulate_num
@@ -284,7 +288,7 @@ class Task:
         spacy_data = load_data(self.config.task_id, "spacy")
         spacy_vocab: Vocabulary = spacy_data['vocab']
         spacy_weight = auto_create(
-            f"{self.config.task_id}-{self.config.tokenizer}-{self.config.attack_vectors}.vec",
+            f"{self.config.task_id}-{self.config.attack_vectors}.vec",
             lambda: _read_pretrained_embeddings_file(WORD2VECS[self.config.attack_vectors],
                                                      embedding_dim=EMBED_DIM[self.config.
                                                                              attack_vectors],

@@ -6,6 +6,7 @@ TASK_SPECS = {
         "sent2_col": None,
         "label_col": "label",
         "skip_label_indexing": True,
+        "num_labels": 2,  # if skip_label_indexing, this key should be specified
     },
     "AGNEWS": {
         "path": "datasets/agnews/",
@@ -13,6 +14,15 @@ TASK_SPECS = {
         "sent2_col": None,
         "label_col": "label",
         "skip_label_indexing": True,
+        "num_labels": 4,
+    },
+    "IMDB": {
+        "path": "datasets/imdb/",
+        "sent1_col": "sentence",
+        "sent2_col": None,
+        "label_col": "label",
+        "skip_label_indexing": True,
+        "num_labels": 2,
     },
     "RTE": {
         "path": "datasets/glue_data/RTE/",

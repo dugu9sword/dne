@@ -56,6 +56,8 @@ class SpacyTSVReader(DatasetReader):
                 if has_label:
                     label = df.iloc[rid][self._label_col]
                     if self._skip_label_indexing:
+#                         print(df.iloc[rid]['id'])
+#                         print(label)
                         label = int(label)
                 else:
                     label = None

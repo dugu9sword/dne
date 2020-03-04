@@ -6,7 +6,7 @@ class Config(ProgramArgs):
         super().__init__()
         
         # basic settings
-        self.task_id = "AGNEWS"
+        self.task_id = "IMDB"
         self.finetunable = True
         self.arch = 'lstm'
         self.pretrain = 'glove'      

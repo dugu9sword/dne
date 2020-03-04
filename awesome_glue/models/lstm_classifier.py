@@ -26,12 +26,16 @@ ELMO_WEIGHT = 'https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x1024_12
 
 
 class LstmClassifier(Model):
-    def __init__(self, vocab, pretrain, finetunable=False):
+    def __init__(self, 
+                 vocab, 
+                 num_labels, 
+                 pretrain, 
+                 finetunable=False, 
+                 cache_embed_path=None):
         super().__init__(vocab)
-
         if pretrain in WORD2VECS:
             embedding_path = WORD2VECS[pretrain]
-            cache_embed_path = hashlib.md5(embedding_path.encode()).hexdigest()
+#             cache_embed_path = hashlib.md5(embedding_path.encode()).hexdigest()
             weight = auto_create(
                 cache_embed_path,
                 lambda: _read_pretrained_embeddings_file(embedding_path,
@@ -56,9 +60,12 @@ class LstmClassifier(Model):
                                                      allow_unmatched_keys=True)
 
         self.encoder = PytorchSeq2VecWrapper(
-            torch.nn.LSTM(EMBED_DIM[pretrain], hidden_size=300, num_layers=3, batch_first=True))
+            torch.nn.LSTM(EMBED_DIM[pretrain], 
+                          hidden_size=300, 
+                          num_layers=2, 
+                          batch_first=True))
         self.linear = torch.nn.Linear(in_features=self.encoder.get_output_dim(),
-                                      out_features=vocab.get_vocab_size('label'))
+                                      out_features=num_labels)
 
         self.accuracy = CategoricalAccuracy()
         self.loss_function = torch.nn.CrossEntropyLoss()
