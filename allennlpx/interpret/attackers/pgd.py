@@ -48,6 +48,9 @@ class PGD(Attacker):
         adv_instance = deepcopy(raw_instance)
         adv_text_field: TextField = adv_instance[field_to_change]
         adv_tokens = adv_text_field.tokens
+        
+        # equal to the raw one...
+        _, outputs = self.predictor.get_gradients([adv_instance])
 
         # set up some states
         change_positions__ = set()

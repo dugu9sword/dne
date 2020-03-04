@@ -6,27 +6,28 @@ class Config(ProgramArgs):
         super().__init__()
         
         # basic settings
-        self.task_id = "SST"
+        self.task_id = "AGNEWS"
         self.finetunable = True
         self.arch = 'lstm'
         self.pretrain = 'glove'      
-        self._model_name = "SST-lstm-glove"
-#         self._model_name = ""
-        self.mode = 'attack'
+#         self._model_name = "SST-lstm-glove"
+        self._model_name = ""
+        self.mode = 'train'
         
         # transfer settings
-        self.adv_data = 'nogit/SST-bert.adv.tsv' 
+        self.adv_data = 'nogit/SST-lstm-glove.pgd.adv.tsv' 
         
         # training settings
 #         self.aug_data = 'nogit/SST-lstm-glove.advaug.tsv'
         self.aug_data = ''
 
         # attack settings
+        self.attack_method = 'hotflip'
         self.attack_vectors = 'counter'
         self.attack_data_split = 'dev'
-        self.attack_size = 100        
+        self.attack_size = 400
         self.attack_gen_aug = False
-        self.attack_gen_adv = False
+        self.attack_gen_adv = True
         
         # other settings
         self.alchemist = False
@@ -53,7 +54,7 @@ class Config(ProgramArgs):
             return self._model_name
 
     def _check_args(self):
-        assert self.arch in ['lstm', 'bert', 'transformer']
-        assert self.tokenizer in ['spacy', 'spacyx', 'bert']
+        assert self.arch in ['lstm', 'bert']
+        assert self.tokenizer in ['spacy', 'bert']
         assert self.pretrain in ['glove', 'fasttext', 'random']
         # assert self.mode in ['train', 'evaluate']

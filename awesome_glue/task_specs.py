@@ -1,30 +1,35 @@
-DEFAULT_TASK_PATH = 'glue_data'
-
 # yapf:disable
 TASK_SPECS = {
     "SST": {
-        "path": f"{DEFAULT_TASK_PATH}/SST-2/",
+        "path": "datasets/glue_data/SST-2/",
+        "sent1_col": "sentence",
+        "sent2_col": None,
+        "label_col": "label",
+        "skip_label_indexing": True,
+    },
+    "AGNEWS": {
+        "path": "datasets/agnews/",
         "sent1_col": "sentence",
         "sent2_col": None,
         "label_col": "label",
         "skip_label_indexing": True,
     },
     "RTE": {
-        "path": f"{DEFAULT_TASK_PATH}/RTE/",
+        "path": "datasets/glue_data/RTE/",
         "sent1_col": "sentence1",
         "sent2_col": "sentence2",
         "label_col": "label",
         "skip_label_indexing": False,
     },
     "CoLA": {
-        "path": f"{DEFAULT_TASK_PATH}/CoLA/transformed",
+        "path": "datasets/glue_data/CoLA/transformed",
         "sent1_col": "sentence",
         "sent2_col": None,
         "label_col": "label",
         "skip_label_indexing": True,
     },
     "QNLI": {
-        "path": f"{DEFAULT_TASK_PATH}/QNLI",
+        "path": "datasets/glue_data/QNLI",
         "sent1_col": "question",
         "sent2_col": "sentence",
         "label_col": "label",

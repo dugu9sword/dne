@@ -152,7 +152,10 @@ class Genetic(Attacker):
             # initialzie the population
             P = [self.perturb(raw_tokens, raw_tokens) for _ in range(self.num_population)] 
 
-            for gid in range(self.num_generation):
+#             for gid in range(self.num_generation):
+            # after G generation, the maximum change maybe 2^(G-1)
+            max_change_num = self.max_change_num(len(raw_tokens))
+            for gid in range(min(self.num_generation, max_change_num)):
                 fitnesses = np.array([ele['fitness'] for ele in P])
                 best = P[np.argmax(fitnesses)]
                 if best['success']:

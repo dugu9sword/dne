@@ -1,6 +1,9 @@
 import os
 os.environ["TORCH_HOME"] = "/disks/sdb/torch_home"
 
+import logging
+logging.getLogger().setLevel(logging.WARNING)
+
 from awesome_glue.config import Config
 from awesome_glue.task import Task
 from allennlp.common.tqdm import Tqdm
@@ -32,5 +35,8 @@ task = Task(config)
     'knn_build': task.knn_build_index,
     'knn_eval': task.knn_evaluate,
     'knn_attack': task.knn_attack,
-    'transfer': task.transfer_attack
+    'transfer': task.transfer_attack,
+    'build_manifold': task.build_manifold,
+    'test_distance': task.test_distance,
+    'test_ppl': task.test_ppl
 }[config.mode]()

@@ -35,7 +35,7 @@ def build_faiss_index(data_or_name, gpu=True, ann=False, ann_center=10, ann_npro
         data = h5py.File(data_or_name, "r")['data'][:]
     else:
         data = data_or_name
-    print('BUILDING INDEX...')
+    print(f'BUILDING INDEX WITH DATA {data.shape}...')
 
     dim = data.shape[1]
     if ann:

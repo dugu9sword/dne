@@ -21,6 +21,8 @@ from torch.optim import AdamW
 from torch.optim.adam import Adam
 from tqdm import tqdm
 
+from sentence_transformers import SentenceTransformer
+
 from allennlpx import allenutil
 from allennlpx.data.dataset_readers.berty_tsv import BertyTSVReader
 from allennlpx.data.dataset_readers.spacy_tsv import SpacyTSVReader
@@ -36,7 +38,7 @@ from allennlpx.interpret.attackers.policies import (CandidatePolicy,
                                                     SynonymPolicy)
 from allennlpx.modules.token_embedders.embedding import \
     _read_pretrained_embeddings_file
-from allennlpx.modules.knn_utils import build_faiss_index
+from allennlpx.modules.knn_utils import build_faiss_index, H5pyCollector
 from allennlpx.predictors.predictor import Predictor
 from allennlpx.predictors.text_classifier import TextClassifierPredictor
 from allennlpx.training.callback_trainer import CallbackTrainer
@@ -57,17 +59,13 @@ from luna.pytorch import load_model, save_model, set_seed
 def load_data(task_id: str, tokenizer: str):
     spec = TASK_SPECS[task_id]
 
-    if tokenizer in ['spacy', 'xspacy']:
-        reader = SpacyTSVReader(sent1_col=spec['sent1_col'],
-                                sent2_col=spec['sent2_col'],
-                                label_col=spec['label_col'],
-                                skip_label_indexing=spec['skip_label_indexing'],
-                                add_cls=tokenizer == 'xspacy')
-    else:
-        reader = BertyTSVReader(sent1_col=spec['sent1_col'],
-                                sent2_col=spec['sent2_col'],
-                                label_col=spec['label_col'],
-                                skip_label_indexing=spec['skip_label_indexing'])
+    reader = {
+        'spacy': SpacyTSVReader, 'bert': BertyTSVReader
+    }[tokenizer](sent1_col=spec['sent1_col'],
+                 sent2_col=spec['sent2_col'],
+                 label_col=spec['label_col'],
+                 skip_label_indexing=spec['skip_label_indexing']
+    )
 
     def __load_data():
         train_data = reader.read(f'{spec["path"]}/train.tsv')
@@ -111,7 +109,7 @@ class Task:
 
         optimizer = self.model.get_optimizer()
 
-        if self.config.tokenizer in ['spacy', 'spacyx']:
+        if self.config.tokenizer == 'spacy':
             sorting_keys = [("sent", "num_tokens")]
         else:
             sorting_keys = [("berty_tokens", "num_tokens")]
@@ -163,6 +161,64 @@ class Task:
     def knn_attack(self):
         ram_write("knn_flag", "infer")
         self.attack()
+        
+    def build_manifold(self):
+        spacy_data = load_data(self.config.task_id, "spacy")
+        train_data, dev_data, _ = spacy_data['data']
+        if self.config.task_id == 'SST':
+            train_data = list(filter(lambda x: len(x["sent"].tokens) > 15, train_data))
+        spacy_vocab: Vocabulary = spacy_data['vocab']
+            
+        embedder = SentenceTransformer('bert-base-nli-stsb-mean-tokens')
+
+        collector = H5pyCollector(f'{self.config.task_id}.train.h5py', 768)
+
+        batch_size = 32
+        total_size = len(train_data)
+        for i in range(0, total_size, batch_size):
+            sents = []
+            for j in range(i, min(i + batch_size, total_size)):
+                sents.append(allenutil.as_sentence(train_data[j]))
+            collector.collect(np.array(embedder.encode(sents)))
+        collector.close()
+        
+    def test_distance(self):
+        embedder = SentenceTransformer('bert-base-nli-stsb-mean-tokens')
+        index = build_faiss_index(f'{self.config.task_id}.train.h5py')
+        
+        df = pandas.read_csv(self.config.adv_data, sep='\t', quoting=csv.QUOTE_NONE)
+        agg_D = []
+        for rid in tqdm(range(df.shape[0])):
+            raw = df.iloc[rid]['raw']
+            adv = df.iloc[rid]['adv']
+            if raw != adv:
+                sent_embed = embedder.encode([raw, adv])
+                D, _ = index.search(np.array(sent_embed), 3)
+                agg_D.append(D.mean(axis=1))
+        agg_D = np.array(agg_D)
+        print(agg_D.mean(axis=0), agg_D.std(axis=0))
+        print(sum(agg_D[:, 0] < agg_D[:, 1]), 'of', agg_D.shape[0])
+        
+    def test_ppl(self):
+        en_lm = torch.hub.load('pytorch/fairseq', 
+                               'transformer_lm.wmt19.en', 
+                               tokenizer='moses', 
+                               bpe='fastbpe')
+        en_lm.eval()
+        en_lm.cuda()
+        
+        df = pandas.read_csv(self.config.adv_data, sep='\t', quoting=csv.QUOTE_NONE)
+        agg_ppls = []
+        for rid in tqdm(range(df.shape[0])):
+            raw = df.iloc[rid]['raw']
+            adv = df.iloc[rid]['adv']
+            if raw != adv:
+                scores = en_lm.score([raw, adv])
+                ppls = np.array([ele['positional_scores'].mean().neg().exp().item() for ele in scores])
+                agg_ppls.append(ppls)
+        agg_ppls = np.array(agg_ppls)
+        print(agg_ppls.mean(axis=0), agg_ppls.std(axis=0))
+        print(sum(agg_ppls[:, 0] < agg_ppls[:, 1]), 'of', agg_ppls.shape[0])
 
     @torch.no_grad()
     def evaluate(self):
@@ -236,11 +292,11 @@ class Task:
                                                      namespace="tokens"), True)
 
         if self.config.attack_gen_adv:
-            f_adv = open(f"nogit/{self.config.model_name}.adv.tsv", 'w')
+            f_adv = open(f"nogit/{self.config.model_name}.{self.config.attack_method}.adv.tsv", 'w')
             f_adv.write("raw\tadv\tlabel\n")
 
         if self.config.attack_gen_aug:
-            f_aug = open(f"nogit/{self.config.model_name}.aug.tsv", 'w')
+            f_aug = open(f"nogit/{self.config.model_name}.{self.config.attack_method}.aug.tsv", 'w')
             f_aug.write("sentence\tlabel\n")
 
         for module in self.model.modules():
@@ -263,28 +319,33 @@ class Task:
             "vocab": spacy_vocab,
             "token_embedding": spacy_weight
         }
-        attacker = PGD(self.predictor,
-                       step_size = 100.,
-                       max_step = 20,
-                       iter_change_num = 1,
-                       **general_kwargs)
-#         attacker = HotFlip(self.predictor, **general_kwargs)
-
-#         attacker = BruteForce(self.predictor, 
-#                               policy=EmbeddingPolicy(measure='euc', topk=10, rho=None),
-#                               **general_kwargs, **blackbox_kwargs)
-    
-#         attacker = PWWS(self.predictor,
-#                         policy=EmbeddingPolicy(measure='euc', topk=10, rho=None),
-#                         **general_kwargs, **blackbox_kwargs)
-
-#         attacker = Genetic(self.predictor, 
-#                            num_generation = 5,
-#                            num_population = 20,
-#                            policy=EmbeddingPolicy(measure='euc', topk=10, rho=None),
-#                            lm_topk = 4,
-#                            **general_kwargs, **blackbox_kwargs)
-
+        if self.config.attack_method == 'pgd':
+            attacker = PGD(self.predictor,
+                           step_size = 100.,
+                           max_step = 20,
+                           iter_change_num = 1,
+                           **general_kwargs)
+        elif self.config.attack_method == 'hotflip':
+            attacker = HotFlip(self.predictor, **general_kwargs)
+        elif self.config.attack_method == 'bruteforce':
+            attacker = BruteForce(self.predictor, 
+                                  policy=EmbeddingPolicy(measure='euc', topk=10, rho=None),
+                                  **general_kwargs, **blackbox_kwargs)
+        elif self.config.attack_method == 'pwws':
+            attacker = PWWS(self.predictor,
+                            policy=EmbeddingPolicy(measure='euc', topk=10, rho=None),
+#                             policy=SynonymPolicy(),
+                            **general_kwargs, **blackbox_kwargs)
+        elif self.config.attack_method == 'genetic':
+            attacker = Genetic(self.predictor, 
+                               num_generation = 10,
+                               num_population = 20,
+                               policy=EmbeddingPolicy(measure='euc', topk=10, rho=None),
+                               lm_topk = 4,
+                               **general_kwargs, **blackbox_kwargs)
+        else:
+            raise Exception()
+            
         if self.config.attack_data_split == 'train':
             data_to_attack = self.train_data
             if self.config.task_id == 'SST':
@@ -305,7 +366,7 @@ class Task:
         attack_metric = AttackMetric()
         agg = Aggregator()
         for i in tqdm(range(adv_number)):
-            raw_text = allenutil.as_sentence(data_to_attack[i])
+            adv_text = raw_text = allenutil.as_sentence(data_to_attack[i])
             raw_pred = np.argmax(self.predictor.predict(raw_text)['probs'])
             raw_label = data_to_attack[i]['label'].label
             # Only attack correct instance
@@ -338,7 +399,7 @@ class Task:
                     log()
                     log("Changed", agg.mean("changed"))
                     if "generation" in result:
-                        log("Generation", agg.mean("generation"))
+                        log("Aggregated generation", agg.mean("generation"))
                     log("Aggregated metric:", attack_metric)
                 else:
                     attack_metric.fail()

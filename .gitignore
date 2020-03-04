@@ -1,3 +1,5 @@
+datasets/*
+*.h5py
 *.h5
 *.pt
 nogit/*
