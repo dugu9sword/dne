@@ -6,16 +6,17 @@ class Config(ProgramArgs):
         super().__init__()
         
         # basic settings
-        self.task_id = "IMDB"
+        self.task_id = "AGNEWS"
         self.finetunable = True
         self.arch = 'lstm'
         self.pretrain = 'glove'      
 #         self._model_name = "SST-lstm-glove"
         self._model_name = ""
-        self.mode = 'train'
+        self.mode = 'transfer'
         
         # transfer settings
-        self.adv_data = 'nogit/SST-lstm-glove.pgd.adv.tsv' 
+        self.adv_data = 'nogit/AGNEWS-lstm.hotflip.adv.bt.tsv' 
+        self.transform = 'identity'
         
         # training settings
 #         self.aug_data = 'nogit/SST-lstm-glove.advaug.tsv'
@@ -43,13 +44,14 @@ class Config(ProgramArgs):
     @property
     def model_name(self):
         if not self._model_name:
-            if self.arch in ['bert', 'elmo']:
-                model_name = f"{self.task_id}-{self.arch}"
-            else:
-                model_name =  f"{self.task_id}-{self.arch}-{self.pretrain}"
-            if not self.finetunable:
-                model_name += '-fix'
-            return model_name
+#             if self.arch in ['bert', 'elmo']:
+#                 model_name = f"{self.task_id}-{self.arch}"
+#             else:
+#                 model_name =  f"{self.task_id}-{self.arch}-{self.pretrain}"
+#             if not self.finetunable:
+#                 model_name += '-fix'
+#             return model_name
+            return f"{self.task_id}-{self.arch}"
         else:
             return self._model_name
 

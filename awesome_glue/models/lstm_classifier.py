@@ -25,6 +25,18 @@ ELMO_OPTION = 'https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x1024_12
 ELMO_WEIGHT = 'https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x1024_128_2048cnn_1xhighway/elmo_2x1024_128_2048cnn_1xhighway_weights.hdf5'
 
 
+class EmbeddingDropout(torch.nn.Module):
+    def __init__(self, p=0.5):
+        super(EmbeddingDropout, self).__init__()
+        self.p = p
+
+    def forward(self, x):
+        if self.training:
+            x_mask = torch.bernoulli(x.new_full(x.shape[:2], 1 - self.p))
+            x *= x_mask.unsqueeze(dim=-1)
+        return x
+
+    
 class LstmClassifier(Model):
     def __init__(self, 
                  vocab, 
@@ -59,6 +71,8 @@ class LstmClassifier(Model):
         self.word_embedders = BasicTextFieldEmbedder({"tokens": token_embedder},
                                                      allow_unmatched_keys=True)
 
+        self.word_drop = EmbeddingDropout(0.3)
+        
         self.encoder = PytorchSeq2VecWrapper(
             torch.nn.LSTM(EMBED_DIM[pretrain], 
                           hidden_size=300, 
@@ -77,6 +91,7 @@ class LstmClassifier(Model):
     def forward(self, sent, label=None):
         mask = get_text_field_mask(sent)
         embeddings = self.word_embedders(sent)
+        embeddings = self.word_drop(embeddings)
         # if self.training \
         #     and ram_read("config").pretrain!='bert':
         #     embeddings = noise(embeddings, ram_read("config").embed_noise)

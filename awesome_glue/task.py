@@ -2,6 +2,7 @@ import csv
 import random
 from collections import Counter
 from statistics import mode
+from functools import partial
 
 import faiss
 import nlpaug.augmenter.word as naw
@@ -48,7 +49,7 @@ from awesome_glue.config import Config
 from awesome_glue.models.bert_classifier import BertClassifier
 from awesome_glue.models.lstm_classifier import LstmClassifier
 from awesome_glue.task_specs import TASK_SPECS
-from awesome_glue.utils import EMBED_DIM, WORD2VECS, AttackMetric
+from awesome_glue.utils import EMBED_DIM, WORD2VECS, AttackMetric, text_diff
 from awesome_glue.transforms import identity, rand_drop, embed_aug, syn_aug, bert_aug
 from luna import flt2str, ram_append, ram_has, ram_read, ram_reset, ram_write
 from luna.logging import log
@@ -137,16 +138,17 @@ class Task:
             grad_clipping=1.,
             cuda_device=0,
             num_gradient_accumulation_steps=accumulate_num,
-            # serialization_dir='saved/allenmodels',
-            # num_serialized_models_to_keep=1
+            serialization_dir=f'saved/models/{self.config.model_name}',
+            num_serialized_models_to_keep=3
             # callbacks=[EvaluateCallback(self.dev_data)],
         )
         trainer.train()
-        log(evaluate(self.model, self.dev_data, iterator, 0, None))
-        save_model(self.model, self.config.model_name)
+#         log(evaluate(self.model, self.dev_data, iterator, 0, None))
+#         save_model(self.model, self.config.model_name)
 
     def from_pretrained(self):
-        load_model(self.model, self.config.model_name)
+        self.model.load_state_dict(torch.load(f'saved/models/{self.config.model_name}/best.th'))
+#         load_model(self.model, self.config.model_name)
 
     def knn_build_index(self):
         self.from_pretrained()
@@ -239,8 +241,15 @@ class Task:
         df = pandas.read_csv(self.config.adv_data, sep='\t', quoting=csv.QUOTE_NONE)
         attack_metric = AttackMetric()
                         
-        transform = bert_aug
-        ensemble_num = 9
+#         transform = identity
+        transform = {
+            "identity": identity,
+            "rand_drop": partial(rand_drop, 0.15),
+            "embed_aug": partial(embed_aug, 0.15),
+            "syn_aug": partial(syn_aug, 0.15),
+            "bert_aug": partial(bert_aug, 0.15),
+        }[self.config.transform]
+        ensemble_num = 5
             
         for rid in tqdm(range(df.shape[0])):
             raw = df.iloc[rid]['raw']
@@ -265,8 +274,8 @@ class Task:
             for i in range(ensemble_num):
                 raw_preds.append(np.argmax(results[i]['probs']))
                 adv_preds.append(np.argmax(results[i + ensemble_num]['probs']))
-            raw_pred = mode(raw_preds)
-            adv_pred = mode(adv_preds)
+            raw_pred = Counter(raw_preds).most_common()[0][0]
+            adv_pred = Counter(adv_preds).most_common()[0][0]
             
             label = df.iloc[rid]['label']
             
@@ -285,8 +294,11 @@ class Task:
         self.from_pretrained()
         self.model.eval()
 
-        spacy_data = load_data(self.config.task_id, "spacy")
-        spacy_vocab: Vocabulary = spacy_data['vocab']
+        if self.config.tokenizer != 'spacy':
+            spacy_data = load_data(self.config.task_id, "spacy")
+            spacy_vocab: Vocabulary = spacy_data['vocab']
+        else:
+            spacy_vocab = self.vocab
         spacy_weight = auto_create(
             f"{self.config.task_id}-{self.config.attack_vectors}.vec",
             lambda: _read_pretrained_embeddings_file(WORD2VECS[self.config.attack_vectors],
@@ -307,17 +319,17 @@ class Task:
             if isinstance(module, TextFieldEmbedder):
                 for embed in module._token_embedders.keys():
                     module._token_embedders[embed].weight.requires_grad = True
-
-        pos_words = [line.rstrip('\n') for line in open("sentiment-words/positive-words.txt")]
-        neg_words = [line.rstrip('\n') for line in open("sentiment-words/negative-words.txt")]
-        not_words = [line.rstrip('\n') for line in open("sentiment-words/negation-words.txt")]
-        forbidden_words = pos_words + neg_words + not_words + DEFAULT_IGNORE_TOKENS
+        
+        forbidden_words = DEFAULT_IGNORE_TOKENS
+        if 'banned_words' in TASK_SPECS[self.config.task_id]:
+            forbidden_words.extend([line.rstrip('\n') 
+                                    for line in open(TASK_SPECS[self.config.task_id]['banned_words'])])
 
         # self.predictor._model.cpu()
         general_kwargs = { 
             "ignore_tokens": forbidden_words,
             "forbidden_tokens": forbidden_words,
-            "max_change_num_or_ratio": 0.25
+            "max_change_num_or_ratio": 0.15
         }
         blackbox_kwargs = {
             "vocab": spacy_vocab,
@@ -370,7 +382,8 @@ class Task:
         attack_metric = AttackMetric()
         agg = Aggregator()
         for i in tqdm(range(adv_number)):
-            adv_text = raw_text = allenutil.as_sentence(data_to_attack[i])
+            raw_text = allenutil.as_sentence(data_to_attack[i])
+            adv_text = None
             raw_pred = np.argmax(self.predictor.predict(raw_text)['probs'])
             raw_label = data_to_attack[i]['label'].label
             # Only attack correct instance
@@ -384,11 +397,9 @@ class Task:
                                                    field_to_change=field_to_change)
 
                 if result["success"] == 1:
-                    changed_num = 0
-                    for wr, wa in zip(result['raw'], result['adv']):
-                        if wr != wa:
-                            changed_num += 1
-                    to_aggregate = [('changed', changed_num)]
+                    diff = text_diff(result['raw'], result['adv'])
+                    to_aggregate = [('change_num', diff['change_num']),
+                                    ('change_ratio', diff['change_ratio'])]
                     if "generation" in result:
                         to_aggregate.append(('generation', result['generation']))
                     agg.aggregate(*to_aggregate)
@@ -401,7 +412,8 @@ class Task:
                     if "changed" in result:
                         log("[changed]", result['changed'])
                     log()
-                    log("Changed", agg.mean("changed"))
+                    log("Avg.change#", round(agg.mean("change_num"), 2), 
+                        "Avg.change%", round(100 * agg.mean("change_ratio"), 2))
                     if "generation" in result:
                         log("Aggregated generation", agg.mean("generation"))
                     log("Aggregated metric:", attack_metric)
@@ -409,6 +421,8 @@ class Task:
                     attack_metric.fail()
             else:
                 attack_metric.escape()
+            
+            if adv_text is None:
                 adv_text = raw_text
 
             if self.config.attack_gen_adv:

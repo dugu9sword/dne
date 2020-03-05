@@ -58,6 +58,27 @@ def maybe_path(*args):
     return arg
 
 
+def text_diff(a_text, b_text):
+    if isinstance(a_text, list):
+        a_lst, b_lst = a_text, b_text
+    else:
+        a_lst = a_text.split(" ")
+        b_lst = b_text.split(" ")
+    assert len(a_lst) == len(b_lst), (a_lst, b_lst)
+    a_changes = []
+    b_changes = []
+    for a_word, b_word in zip(a_lst, b_lst):
+        if a_word != b_word:
+            a_changes.append(a_word)
+            b_changes.append(b_word)
+    return {
+        "a_changes": a_changes,
+        "b_changes": b_changes,
+        "change_num": len(a_changes),
+        "change_ratio": len(a_changes)/len(a_lst)
+    }
+
+
 WORD2VECS = {
     "fasttext":
     maybe_path("/disks/sdb/zjiehang/embeddings/fasttext/crawl-300d-2M.vec",
