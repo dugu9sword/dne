@@ -36,6 +36,7 @@ from allennlpx.interpret.attackers.pwws import PWWS
 from allennlpx.interpret.attackers.genetic import Genetic
 from allennlpx.interpret.attackers.policies import (CandidatePolicy,
                                                     EmbeddingPolicy,
+                                                    SpecifiedPolicy,
                                                     SynonymPolicy)
 from allennlpx.modules.token_embedders.embedding import \
     _read_pretrained_embeddings_file
@@ -98,6 +99,7 @@ class Task:
             self.model = LstmClassifier(self.vocab, 
                                         TASK_SPECS[config.task_id]['num_labels'],
                                         config.pretrain, 
+                                        0.0 if config.task_id == 'SST' else 0.3,
                                         config.finetunable,
                                         f"{config.task_id}-{config.pretrain}.vec").cuda()
         else:
@@ -324,7 +326,16 @@ class Task:
         if 'banned_words' in TASK_SPECS[self.config.task_id]:
             forbidden_words.extend([line.rstrip('\n') 
                                     for line in open(TASK_SPECS[self.config.task_id]['banned_words'])])
-
+        
+        from nltk.corpus import stopwords
+        ALL_WORDS = list(self.vocab.get_index_to_token_vocabulary().values())
+        STOP_WORDS = stopwords.words("english")
+        for ele in ['nor', 'above']:
+            STOP_WORDS.remove(ele)
+        for ele in STOP_WORDS:
+            if "'" in ele:
+                STOP_WORDS.remove(ele)
+        
         # self.predictor._model.cpu()
         general_kwargs = { 
             "ignore_tokens": forbidden_words,
@@ -349,7 +360,8 @@ class Task:
                                   **general_kwargs, **blackbox_kwargs)
         elif self.config.attack_method == 'pwws':
             attacker = PWWS(self.predictor,
-                            policy=EmbeddingPolicy(measure='euc', topk=10, rho=None),
+                            policy=SpecifiedPolicy(words=STOP_WORDS),
+#                             policy=EmbeddingPolicy(measure='euc', topk=10, rho=None),
 #                             policy=SynonymPolicy(),
                             **general_kwargs, **blackbox_kwargs)
         elif self.config.attack_method == 'genetic':

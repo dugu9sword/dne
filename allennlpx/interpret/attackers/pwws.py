@@ -23,6 +23,7 @@ from allennlpx.interpret.attackers.attacker import (DEFAULT_IGNORE_TOKENS,
 from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
 from allennlpx.interpret.attackers.policies import (CandidatePolicy,
                                                     EmbeddingPolicy,
+                                                    SpecifiedPolicy,
                                                     SynonymPolicy)
 from allennlpx.interpret.attackers.synonym_searcher import SynonymSearcher
 from luna import cast_list, lazy_property, time_record
@@ -60,6 +61,8 @@ class PWWS(Attacker):
                                                     self.policy.rho)
                 elif isinstance(self.policy, SynonymPolicy):
                     nbrs = self.synom_searcher.search(word)
+                elif isinstance(self.policy, SpecifiedPolicy):
+                    nbrs = self.policy.words
                 nbrs = [nbr for nbr in nbrs if nbr not in self.forbidden_tokens]
                 if len(nbrs) > 0:
                     sids_to_change.append(i)

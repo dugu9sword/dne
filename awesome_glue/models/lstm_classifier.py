@@ -42,6 +42,7 @@ class LstmClassifier(Model):
                  vocab, 
                  num_labels, 
                  pretrain, 
+                 word_drop_rate=0.3,
                  finetunable=False, 
                  cache_embed_path=None):
         super().__init__(vocab)
@@ -71,7 +72,7 @@ class LstmClassifier(Model):
         self.word_embedders = BasicTextFieldEmbedder({"tokens": token_embedder},
                                                      allow_unmatched_keys=True)
 
-        self.word_drop = EmbeddingDropout(0.3)
+        self.word_drop = EmbeddingDropout(word_drop_rate)
         
         self.encoder = PytorchSeq2VecWrapper(
             torch.nn.LSTM(EMBED_DIM[pretrain], 
