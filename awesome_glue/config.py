@@ -6,29 +6,30 @@ class Config(ProgramArgs):
         super().__init__()
         
         # basic settings
-        self.task_id = "IMDB"
+        self.task_id = "SST"
         self.finetunable = True
         self.arch = 'lstm'
         self.pretrain = 'glove'      
 #         self._model_name = "SST-lstm-glove"
         self._model_name = ""
-        self.mode = 'attack'
+        self.mode = 'transfer'
         
         # transfer settings
-        self.adv_data = 'nogit/IMDB-lstm.hotflip.adv.bt.tsv' 
-        self.transform = 'identity'
+        self.adv_data = 'nogit/SST-lstm.hotflip.adv.tsv' 
+        self.transform = 'embed_aug'
+        self.randomness = False
         
         # training settings
 #         self.aug_data = 'nogit/SST-lstm-glove.advaug.tsv'
         self.aug_data = ''
 
         # attack settings
-        self.attack_method = 'pwws'
+        self.attack_method = 'hotflip'
         self.attack_vectors = 'counter'
         self.attack_data_split = 'dev'
         self.attack_size = 400
         self.attack_gen_aug = False
-        self.attack_gen_adv = False
+        self.attack_gen_adv = True
         
         # other settings
         self.alchemist = False

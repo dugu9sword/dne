@@ -240,7 +240,10 @@ class Task:
     @torch.no_grad()
     def transfer_attack(self):
         self.from_pretrained()
-        # self.model.eval()
+        if self.config.randomness:
+            self.model.train()
+        else:
+            self.model.eval()
         set_seed(11221)
         df = pandas.read_csv(self.config.adv_data, sep='\t', quoting=csv.QUOTE_NONE)
         attack_metric = AttackMetric()
@@ -258,6 +261,8 @@ class Task:
         for rid in tqdm(range(df.shape[0])):
             raw = df.iloc[rid]['raw']
             adv = df.iloc[rid]['adv']
+            
+#             print(text_diff(raw, adv))
             
 #             new_adv = []
 #             for wr, wa in zip(raw.split(" "), att.split(" ")):
@@ -363,8 +368,8 @@ class Task:
                                   **general_kwargs, **blackbox_kwargs)
         elif self.config.attack_method == 'pwws':
             attacker = PWWS(self.predictor,
-                            policy=SpecifiedPolicy(words=STOP_WORDS),
-#                             policy=EmbeddingPolicy(measure='euc', topk=10, rho=None),
+#                             policy=SpecifiedPolicy(words=STOP_WORDS),
+                            policy=EmbeddingPolicy(measure='euc', topk=10, rho=None),
 #                             policy=SynonymPolicy(),
                             **general_kwargs, **blackbox_kwargs)
         elif self.config.attack_method == 'genetic':
@@ -462,8 +467,8 @@ class Task:
         if self.config.attack_gen_aug:
             f_aug.close()
 
-        print("raw\t", raw_counter.most_common())
-        print("adv\t", adv_counter.most_common())
+#         print("raw\t", raw_counter.most_common())
+#         print("adv\t", adv_counter.most_common())
         print("Avg.change#", round(agg.mean("change_num"), 2), 
               "Avg.change%", round(100 * agg.mean("change_ratio"), 2))
         print(attack_metric)
