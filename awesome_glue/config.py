@@ -6,7 +6,7 @@ class Config(ProgramArgs):
         super().__init__()
         
         # basic settings
-        self.task_id = "SST"
+        self.task_id = "IMDB"
         self.finetunable = True
         self.arch = 'lstm'
         self.pretrain = 'glove'      
@@ -15,7 +15,7 @@ class Config(ProgramArgs):
         self.mode = 'attack'
         
         # transfer settings
-        self.adv_data = 'nogit/AGNEWS-lstm.hotflip.adv.bt.tsv' 
+        self.adv_data = 'nogit/IMDB-lstm.hotflip.adv.bt.tsv' 
         self.transform = 'identity'
         
         # training settings

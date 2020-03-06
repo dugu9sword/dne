@@ -4,17 +4,6 @@ from collections import Counter
 from allennlp.data import Vocabulary
 
 
-def analyze_frequency(vocab: Vocabulary):
-    counter = Counter(dict(vocab._retained_counter['tokens']))
-    num = len(counter)
-    freqs = counter.most_common(num)
-
-    for i in range(1, 10):
-        before = num // 10 * i
-        print(before, '\t', freqs[before][1])
-    print()
-
-
 def frequency_analysis(counter, src_words, tgt_words):
     src_freqs = [counter[word] for word in src_words]
     tgt_freqs = [counter[word] for word in tgt_words]

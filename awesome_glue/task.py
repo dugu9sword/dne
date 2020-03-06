@@ -21,6 +21,8 @@ from pytorch_pretrained_bert.optimization import BertAdam
 from torch.optim import AdamW
 from torch.optim.adam import Adam
 from tqdm import tqdm
+from tabulate import tabulate
+from nltk.corpus import stopwords
 
 from sentence_transformers import SentenceTransformer
 
@@ -50,7 +52,7 @@ from awesome_glue.config import Config
 from awesome_glue.models.bert_classifier import BertClassifier
 from awesome_glue.models.lstm_classifier import LstmClassifier
 from awesome_glue.task_specs import TASK_SPECS
-from awesome_glue.utils import EMBED_DIM, WORD2VECS, AttackMetric, text_diff
+from awesome_glue.utils import EMBED_DIM, WORD2VECS, AttackMetric, text_diff, FreqUtil
 from awesome_glue.transforms import identity, rand_drop, embed_aug, syn_aug, bert_aug
 from luna import flt2str, ram_append, ram_has, ram_read, ram_reset, ram_write
 from luna.logging import log
@@ -327,14 +329,15 @@ class Task:
             forbidden_words.extend([line.rstrip('\n') 
                                     for line in open(TASK_SPECS[self.config.task_id]['banned_words'])])
         
-        from nltk.corpus import stopwords
+        
         ALL_WORDS = list(self.vocab.get_index_to_token_vocabulary().values())
-        STOP_WORDS = stopwords.words("english")
-        for ele in ['nor', 'above']:
-            STOP_WORDS.remove(ele)
-        for ele in STOP_WORDS:
-            if "'" in ele:
-                STOP_WORDS.remove(ele)
+#         STOP_WORDS = stopwords.words("english")
+#         for ele in ['nor', 'above']:
+#             STOP_WORDS.remove(ele)
+#         for ele in STOP_WORDS:
+#             if "'" in ele:
+#                 STOP_WORDS.remove(ele)
+        STOP_WORDS = FreqUtil.topk_frequency(self.vocab, 100, 'least', forbidden_words)        
         
         # self.predictor._model.cpu()
         general_kwargs = { 
@@ -385,14 +388,24 @@ class Task:
                     filter(lambda x: len(x[field_name].tokens) > 20, data_to_attack))
         elif self.config.attack_data_split == 'dev':
             data_to_attack = self.dev_data
+            
+        if self.config.arch == 'bert':
+            field_name = 'berty_tokens'
+        else:
+            field_name = 'sent'
+        data_to_attack = list(filter(lambda x: len(x[field_name].tokens) < 300, data_to_attack))
+            
         if self.config.attack_size == -1:
             adv_number = len(data_to_attack)
         else:
             adv_number = self.config.attack_size
         data_to_attack = data_to_attack[:adv_number]
+        
 
         attack_metric = AttackMetric()
         agg = Aggregator()
+        raw_counter = Counter()
+        adv_counter = Counter()
         for i in tqdm(range(adv_number)):
             raw_text = allenutil.as_sentence(data_to_attack[i])
             adv_text = None
@@ -410,6 +423,8 @@ class Task:
 
                 if result["success"] == 1:
                     diff = text_diff(result['raw'], result['adv'])
+                    raw_counter.update(diff['a_changes'])
+                    adv_counter.update(diff['b_changes'])
                     to_aggregate = [('change_num', diff['change_num']),
                                     ('change_ratio', diff['change_ratio'])]
                     if "generation" in result:
@@ -447,4 +462,8 @@ class Task:
         if self.config.attack_gen_aug:
             f_aug.close()
 
+        print("raw\t", raw_counter.most_common())
+        print("adv\t", adv_counter.most_common())
+        print("Avg.change#", round(agg.mean("change_num"), 2), 
+              "Avg.change%", round(100 * agg.mean("change_ratio"), 2))
         print(attack_metric)

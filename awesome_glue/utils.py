@@ -5,8 +5,49 @@ from allennlp.data import Vocabulary
 from allennlp.modules.token_embedders.embedding import \
     _read_pretrained_embeddings_file
 
+import numpy as np
+from tabulate import tabulate
+from collections import Counter
 from luna import auto_create
 
+
+class FreqUtil:
+    @staticmethod
+    def print_statistics(vocab: Vocabulary):
+        tokens_with_counts = list(vocab._retained_counter['tokens'].items())
+        tokens_with_counts.sort(key=lambda x: x[1], reverse=True)
+        num = len(tokens_with_counts)
+        
+        tables = []
+        for i in range(1, 11):
+            before = min(num // 10 * i, num - 1)
+            tables.append([before, tokens_with_counts[before][1]])
+        print(tabulate(tables, headers=['top-k', 'min frequency']))
+        
+    @staticmethod
+    def get_group_by_frequency(vocab: Vocabulary, group_id, num_groups):
+        tokens_with_counts = list(vocab._retained_counter['tokens'].items())
+        tokens_with_counts.sort(key=lambda x: x[1], reverse=True)
+        num = len(tokens_with_counts)
+        
+        start_idx = int(num / num_groups * group_id)
+        end_idx = min(int(num / num_groups * (group_id + 1)), num)
+        selected = tokens_with_counts[start_idx: end_idx]
+        return list(map(lambda x: x[0], selected))
+    
+    @staticmethod
+    def topk_frequency(vocab: Vocabulary, number, order='most', exclude_words=[]):
+        assert order in ['most', 'least']
+        tokens_with_counts = list(vocab._retained_counter['tokens'].items())
+        tokens_with_counts.sort(key=lambda x: x[1], reverse=order =='most')
+        ret = []
+        for tok, cou in tokens_with_counts:
+            if tok not in exclude_words:
+                ret.append(tok)
+            if len(ret) == number:
+                break
+        return ret
+        
 
 class AttackMetric:
     def __init__(self):
