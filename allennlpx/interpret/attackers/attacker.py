@@ -34,7 +34,7 @@ class Attacker(Registrable):
                  forbidden_tokens: List[str] = DEFAULT_IGNORE_TOKENS,
                  max_change_num_or_ratio = None,
                  vocab = None,
-                 token_embedding = None,
+                 token_embedding = None
                 ):
         self.predictor = predictor
         
@@ -42,18 +42,14 @@ class Attacker(Registrable):
         self.forbidden_tokens = forbidden_tokens
         self.max_change_num_or_ratio = max_change_num_or_ratio
         
-        # black-box attacker may need a spacy tokenizer
         self.spacy = SpacyTokenizer()
-        
-        if vocab is None:
-            # white-box attacker often use the embedding from the model
-            self.vocab = self.predictor._model.vocab
-            self.token_embedding = self._construct_embedding_matrix().to(self.model_device)
-        else:
-            # black-box attacker need to specify a specified embedding
+        if vocab:
             self.vocab = vocab
             self.token_embedding = token_embedding.to(self.model_device)
-    
+        else:
+            self.vocab = self.predictor._model.vocab
+            self.token_embedding = self._construct_embedding_matrix().to(self.model_device)
+        
     def attack_from_json(self,
                          inputs: JsonDict,
                          field_to_change: str,
@@ -143,11 +139,7 @@ class Attacker(Registrable):
         # pass all tokens through the fake matrix and create an embedding out of it.
         embedding_matrix = embedder(all_inputs).squeeze()
         return embedding_matrix
-        # return Embedding(num_embeddings=self.vocab.get_vocab_size('tokens'),
-        #                  embedding_dim=embedding_matrix.shape[1],
-        #                  weight=embedding_matrix,
-        #                  trainable=False)
-
+    
     @lazy_property
     def embed_searcher(self) -> EmbeddingSearcher:
         return EmbeddingSearcher(embed=self.token_embedding,

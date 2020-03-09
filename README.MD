@@ -1,0 +1,2 @@
+allennlp version:
+commit id: bdb29a831ed68cb948b18b42fa61646b9ec11bf8

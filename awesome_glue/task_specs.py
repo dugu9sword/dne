@@ -32,6 +32,7 @@ TASK_SPECS = {
         "sent2_col": "sentence2",
         "label_col": "label",
         "skip_label_indexing": False,
+        "num_labels": 2,
     },
     "CoLA": {
         "path": "datasets/glue_data/CoLA/transformed",
@@ -48,4 +49,5 @@ TASK_SPECS = {
         "skip_label_indexing": False,
     }
 }
+TASK_SPECS['TOY'] = TASK_SPECS['SST']
 # yapf:enable

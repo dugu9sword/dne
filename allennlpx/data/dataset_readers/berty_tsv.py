@@ -8,8 +8,8 @@ from allennlp.data.dataset_readers.dataset_reader import DatasetReader
 from allennlp.data.fields import Field, LabelField, ListField, TextField
 from allennlp.data.instance import Instance
 from allennlp.data.token_indexers import SingleIdTokenIndexer, TokenIndexer
-from allennlp.data.token_indexers.wordpiece_indexer import \
-    PretrainedBertIndexer
+# from allennlp.data.token_indexers.wordpiece_indexer import \
+#     PretrainedBertIndexer
 from allennlp.data.tokenizers import Tokenizer
 from allennlp.data.tokenizers.sentence_splitter import SpacySentenceSplitter
 from allennlp.data.tokenizers.token import Token

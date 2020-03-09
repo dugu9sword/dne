@@ -35,19 +35,18 @@ class HotFlipX(Attacker):
 
         raw_instance = self.predictor.json_to_labeled_instances(inputs)[0]
         raw_text_field: TextField = raw_instance[field_to_change]  # type: ignore
-        raw_tokens = deepcopy(raw_text_field.tokens)
+        raw_tokens = list(map(lambda x: x.text, raw_instance[field_to_change].tokens))
 
         adv_instance = deepcopy(raw_instance)
 
         # Gets a list of the fields that we want to check to see if they change.
-        adv_text_field: TextField = adv_instance[field_to_change]  # type: ignore
-        adv_tokens = adv_text_field.tokens
+        adv_tokens = list(map(lambda x: x.text, adv_instance[field_to_change].tokens))
         grads, outputs = self.predictor.get_gradients([adv_instance])
 
         # ignore any token that is in the ignore_tokens list by setting the token to already flipped
         ignored_positions: List[int] = []
         for index, token in enumerate(adv_tokens):
-            if token.text in self.ignore_tokens:
+            if token in self.ignore_tokens:
                 ignored_positions.append(index)
                 
         successful=False
@@ -70,9 +69,11 @@ class HotFlipX(Attacker):
             # Get new token using taylor approximation
             input_tokens = adv_text_field._indexed_tokens["tokens"]
             token_vid = input_tokens[token_sid]
-            new_token_vid = _first_order_taylor(torch.from_numpy(grad[token_sid]).to(self.model_device),
-                                                self.token_embedding,  # type: ignore
-                                                token_vid)
+            new_token_vid = _first_order_taylor(
+                torch.from_numpy(grad[token_sid]).to(self.model_device),
+                self.token_embedding,  # type: ignore
+                token_vid
+            )
             # flip token
             new_token = Token(self.vocab._index_to_token["tokens"][new_token_vid])  # type: ignore
             adv_text_field.tokens[token_sid] = new_token
@@ -95,8 +96,8 @@ class HotFlipX(Attacker):
                 successful = True
                 break
         
-#         print()
-                        
+        adv_tokens = list(map(lambda x: x.text, adv_instance[field_to_change].tokens))
+
         return sanitize({"adv": adv_tokens,
                          "raw": raw_tokens,
                          "outputs": outputs,
@@ -104,7 +105,7 @@ class HotFlipX(Attacker):
 
 # @pysnooper.snoop()
 def _first_order_taylor(grad,
-                        embedding_matrix: torch.nn.parameter.Parameter,
+                        embedding_matrix,
                         token_idx: int) -> int:
     """
     The below code is based on
@@ -115,7 +116,6 @@ def _first_order_taylor(grad,
     function uses the grad, alongside the embedding_matrix to select the token that maximizes the
     first-order taylor approximation of the loss.
     """
-#     embedding_matrix = embedding_matrix.cpu()
     word_embeds = torch.nn.functional.embedding(torch.LongTensor([token_idx]).to(embedding_matrix.device),
                                                 embedding_matrix)
     word_embeds = word_embeds.detach().unsqueeze(0)

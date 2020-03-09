@@ -7,6 +7,13 @@ class CandidatePolicy:
     pass
 
 @dataclass
+class UnconstrainedPolicy:
+    """
+    Generate word candidates without constraints.
+    """
+    pass
+
+@dataclass
 class EmbeddingPolicy(CandidatePolicy):
     """
     Generate word candidates by word vectors.

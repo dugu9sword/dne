@@ -69,8 +69,7 @@ class LstmClassifier(Model):
                 #    sparse=True,
                 trainable=finetunable)
 
-        self.word_embedders = BasicTextFieldEmbedder({"tokens": token_embedder},
-                                                     allow_unmatched_keys=True)
+        self.word_embedders = BasicTextFieldEmbedder({"tokens": token_embedder})
 
         self.word_drop = EmbeddingDropout(word_drop_rate)
         
@@ -87,7 +86,7 @@ class LstmClassifier(Model):
 #         self.loss_function = LabelSmoothingLoss(0.1)
 
     def get_optimizer(self):
-        return DenseSparseAdam(self.parameters(), lr=1e-3)
+        return DenseSparseAdam(self.named_parameters(), lr=1e-3)
 
     def forward(self, sent, label=None):
         mask = get_text_field_mask(sent)
