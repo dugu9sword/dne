@@ -1,7 +1,7 @@
+
 import numpy as np
-from tabulate import tabulate
-from collections import Counter
 from allennlp.data import Vocabulary
+from tabulate import tabulate
 
 
 def frequency_analysis(counter, src_words, tgt_words):

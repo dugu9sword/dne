@@ -1,13 +1,12 @@
 import pathlib
 from collections import defaultdict
 
+import numpy as np
 from allennlp.data import Vocabulary
 from allennlp.modules.token_embedders.embedding import \
     _read_pretrained_embeddings_file
-
-import numpy as np
 from tabulate import tabulate
-from collections import Counter
+
 from luna import auto_create
 
 

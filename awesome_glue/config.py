@@ -12,7 +12,7 @@ class Config(ProgramArgs):
         self.pretrain = 'glove'      
 #         self._model_name = "SST-lstm-glove"
         self._model_name = ""
-        self.mode = 'attack'
+        self.mode = 'train'
         
         # transfer settings
         self.adv_data = 'nogit/AGNEWS-lstm.hotflip.adv.tsv' 

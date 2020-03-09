@@ -1,7 +1,7 @@
 import csv
 import itertools
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 # from allennlp.data.tokenizers.sentence_splitter import SpacySentenceSplitter
 import pandas
@@ -11,10 +11,11 @@ from allennlp.data.fields import Field, LabelField, ListField, TextField
 from allennlp.data.instance import Instance
 from allennlp.data.token_indexers import SingleIdTokenIndexer, TokenIndexer
 from allennlp.data.tokenizers import SpacyTokenizer
-# from allennlp.data.token_indexers.wordpiece_indexer import PretrainedBertIndexer
 from allennlp.data.tokenizers.token import Token
 from overrides import overrides
-from pytorch_pretrained_bert import BertTokenizer
+from typing import Callable
+from copy import deepcopy
+from allennlpx import allenutil
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +27,7 @@ class SpacyTSVReader(DatasetReader):
                  label_col: str = 'label',
                  max_sequence_length: int = 512,
                  skip_label_indexing: bool = False,
-                 lazy: bool = False,
-                 add_cls: bool = False) -> None:
+                 lazy: bool = False) -> None:
         super().__init__(lazy=lazy)
         self._sent1_col = sent1_col
         self._sent2_col = sent2_col
@@ -35,7 +35,7 @@ class SpacyTSVReader(DatasetReader):
         self._tokenizer = SpacyTokenizer()
         self._max_sequence_length = max_sequence_length
         self._skip_label_indexing = skip_label_indexing
-        self._add_cls = add_cls
+        self._add_cls = None 
 
         self._token_indexers = {"tokens": SingleIdTokenIndexer()}
 
@@ -56,8 +56,6 @@ class SpacyTSVReader(DatasetReader):
                 if has_label:
                     label = df.iloc[rid][self._label_col]
                     if self._skip_label_indexing:
-#                         print(df.iloc[rid]['id'])
-#                         print(label)
                         label = int(label)
                 else:
                     label = None
@@ -74,13 +72,8 @@ class SpacyTSVReader(DatasetReader):
         fields: Dict[str, Field] = {}
 
         tokens1 = self._tokenizer.tokenize(sent1)
-        if self._add_cls:
-            tokens1.insert(0, Token("@@CLS@@"))
-
         if sent2:
             tokens2 = self._tokenizer.tokenize(sent2)
-            if self._add_cls:
-                tokens2.insert(0, Token("@@CLS@@"))
 
         if sent2:
             fields['sent1'] = TextField(tokens1, self._token_indexers)
@@ -91,3 +84,25 @@ class SpacyTSVReader(DatasetReader):
         if label is not None:
             fields['label'] = LabelField(label, skip_indexing=self._skip_label_indexing)
         return Instance(fields)
+    
+    def transform_instances(self,
+                           transform: Callable[[List[str]], List[str]],
+                           instances: List[Instance],
+                          ) -> List[Instance]:
+        # For simple transformation, a single for-loop is enough.
+        # However for complex transformation such as back-translation/DAE/SpanBERT,
+        # a batch version is required.
+        ret_instances = deepcopy(instances)
+        sents = []
+        for instance in ret_instances:
+            sents.append(allenutil.as_sentence(instance.fields['sent']))
+        new_sents = transform(sents)
+        for i, instance in enumerate(ret_instances):
+            instance.fields['sent'] = TextField(self._tokenizer.tokenize(new_sents[i]), self._token_indexers)
+            instance.indexed = False
+#             instance.fields['sent'].tokens = self._tokenizer.tokenize(new_sents[i])
+#             instance.fields['sent'].indexed = False
+#             instance.fields['sent']._indexed_tokens = None
+#         import pdb
+#         pdb.set_trace()
+        return ret_instances

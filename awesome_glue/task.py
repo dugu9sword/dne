@@ -1,7 +1,5 @@
 import csv
-import random
 from collections import Counter
-from statistics import mode
 from functools import partial
 
 import faiss
@@ -10,6 +8,8 @@ import numpy as np
 import pandas
 import torch
 from allennlp.data import Instance
+from allennlp.data.dataloader import DataLoader, allennlp_collate
+from allennlp.data.samplers import BucketBatchSampler
 # from allennlp.data.iterators.basic_iterator import BasicIterator
 # from allennlp.data.iterators.bucket_iterator import BucketIterator
 from allennlp.data.vocabulary import Vocabulary
@@ -17,48 +17,49 @@ from allennlp.modules.text_field_embedders import TextFieldEmbedder
 from allennlp.training.learning_rate_schedulers.slanted_triangular import \
     SlantedTriangular
 from allennlp.training.optimizers import DenseSparseAdam
+# from allennlpx.training.callback_trainer import CallbackTrainer
+# from allennlpx.training.callbacks.evaluate_callback import (EvaluateCallback,
+#                                                             evaluate)
+from allennlp.training.trainer import Trainer
+from allennlp.training.util import evaluate
+from nltk.corpus import stopwords
 from pytorch_pretrained_bert.optimization import BertAdam
+from sentence_transformers import SentenceTransformer
+from tabulate import tabulate
 from torch.optim import AdamW
 from torch.optim.adam import Adam
 from tqdm import tqdm
-from tabulate import tabulate
-from nltk.corpus import stopwords
-
-from sentence_transformers import SentenceTransformer
 
 from allennlpx import allenutil
 from allennlpx.data.dataset_readers.berty_tsv import BertyTSVReader
 from allennlpx.data.dataset_readers.spacy_tsv import SpacyTSVReader
 from allennlpx.interpret.attackers.attacker import DEFAULT_IGNORE_TOKENS
 from allennlpx.interpret.attackers.bruteforce import BruteForce
+from allennlpx.interpret.attackers.genetic import Genetic
 from allennlpx.interpret.attackers.hotflip import HotFlip
 from allennlpx.interpret.attackers.pgd import PGD
+from allennlpx.interpret.attackers.policies import (CandidatePolicy,
+                                                    EmbeddingPolicy,
+                                                    SpecifiedPolicy,
+                                                    SynonymPolicy,
+                                                    UnconstrainedPolicy)
 from allennlpx.interpret.attackers.pwws import PWWS
-from allennlpx.interpret.attackers.genetic import Genetic
-from allennlpx.interpret.attackers.policies import (CandidatePolicy, EmbeddingPolicy,
-                                                    SpecifiedPolicy, UnconstrainedPolicy,
-                                                    SynonymPolicy)
+from allennlpx.modules.knn_utils import H5pyCollector, build_faiss_index
 from allennlpx.modules.token_embedders.embedding import \
     _read_pretrained_embeddings_file
-from allennlpx.modules.knn_utils import build_faiss_index, H5pyCollector
 from allennlpx.predictors.predictor import Predictor
 from allennlpx.predictors.text_classifier import TextClassifierPredictor
-# from allennlpx.training.callback_trainer import CallbackTrainer
-# from allennlpx.training.callbacks.evaluate_callback import (EvaluateCallback,
-#                                                             evaluate)
-from allennlp.training.trainer import Trainer
-from allennlp.training.util import evaluate
-from allennlp.data.samplers import BucketBatchSampler
-from allennlp.data.dataloader import DataLoader
 from awesome_glue.config import Config
 from awesome_glue.models.bert_classifier import BertClassifier
 from awesome_glue.models.lstm_classifier import LstmClassifier
 from awesome_glue.task_specs import TASK_SPECS
-from awesome_glue.utils import EMBED_DIM, WORD2VECS, AttackMetric, text_diff, FreqUtil
-from awesome_glue.transforms import identity, rand_drop, embed_aug, syn_aug, bert_aug
+from awesome_glue.transforms import (BertAug, Crop, EmbedAug, Identity,
+                                     RandDrop, SynAug, transform_collate)
+from awesome_glue.utils import (EMBED_DIM, WORD2VECS, AttackMetric, FreqUtil,
+                                text_diff)
 from luna import flt2str, ram_append, ram_has, ram_read, ram_reset, ram_write
 from luna.logging import log
-from luna.public import auto_create, Aggregator
+from luna.public import Aggregator, auto_create
 from luna.pytorch import load_model, save_model, set_seed
 
 
@@ -126,6 +127,8 @@ class Task:
             log(f'Augment data from {self.config.aug_data}')
             self.train_data.extend(self.reader.read(self.config.aug_data))
 
+#         collate_fn = partial(transform_collate, self.reader, self.vocab, RandDrop(0.3))
+        collate_fn = allennlp_collate
         trainer = Trainer(
             model=self.model,
             optimizer=optimizer,
@@ -134,7 +137,9 @@ class Task:
                 batch_sampler=BucketBatchSampler(
                     data_source=self.train_data,
                     batch_size=pseudo_batch_size,
-                )),
+                ),
+                collate_fn=collate_fn,
+            ),
             validation_data_loader=DataLoader(
                 self.dev_data,
                 batch_size=pseudo_batch_size,
@@ -331,7 +336,7 @@ class Task:
                 line.rstrip('\n') for line in open(TASK_SPECS[self.config.task_id]['banned_words'])
             ])
 
-        ALL_WORDS = list(self.vocab.get_index_to_token_vocabulary().values())
+        list(self.vocab.get_index_to_token_vocabulary().values())
         forbidden_words += stopwords.words("english")
         #         STOP_WORDS = stopwords.words("english")
         #         for ele in ['nor', 'above']:

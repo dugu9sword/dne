@@ -1,6 +1,6 @@
 import re
 from contextlib import contextmanager
-from typing import Any, Dict, Iterator, List, Tuple, Union
+from typing import Iterator, List, Union
 
 import numpy
 from allennlp.common import Registrable
