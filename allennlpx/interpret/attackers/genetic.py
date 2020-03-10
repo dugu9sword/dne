@@ -1,33 +1,22 @@
 # pylint: disable=protected-access
 import random
-from collections import defaultdict
-from functools import lru_cache
-from itertools import product
-from typing import List
 import copy
 
 import numpy as np
 import torch
 from allennlp.common.util import JsonDict, sanitize
-from allennlp.data.fields import TextField
 from allennlp.data.token_indexers import (ELMoTokenCharactersIndexer,
                                           TokenCharactersIndexer)
-from allennlp.data.tokenizers import SpacyTokenizer, Token
 from allennlp.modules.text_field_embedders.text_field_embedder import \
     TextFieldEmbedder
-from allennlp.modules.token_embedders import Embedding
 
-from allennlpx import allenutil
 from allennlpx.interpret.attackers.attacker import (DEFAULT_IGNORE_TOKENS,
                                                     Attacker)
-from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
 from allennlpx.interpret.attackers.policies import (CandidatePolicy,
                                                     EmbeddingPolicy,
                                                     SynonymPolicy)
-from allennlpx.interpret.attackers.synonym_searcher import SynonymSearcher
-from luna import cast_list, lazy_property, time_record
+from luna import lazy_property
 
-import pysnooper
 
 
 class Genetic(Attacker):

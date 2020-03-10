@@ -1,37 +1,22 @@
 # pylint: disable=protected-access
 import random
 from collections import defaultdict
-from functools import lru_cache
-from itertools import product
-from typing import List
 
-import numpy as np
 import torch
 from allennlp.common.util import JsonDict, sanitize
-from allennlp.data.fields import TextField
-from allennlp.data.token_indexers import (ELMoTokenCharactersIndexer,
-                                          TokenCharactersIndexer)
-from allennlp.data.tokenizers import SpacyTokenizer, Token
+from allennlp.data.token_indexers import (ELMoTokenCharactersIndexer, TokenCharactersIndexer)
 from allennlp.modules.text_field_embedders.text_field_embedder import \
     TextFieldEmbedder
-from allennlp.modules.token_embedders import Embedding
 
-from allennlpx import allenutil
-from allennlpx.interpret.attackers.attacker import (DEFAULT_IGNORE_TOKENS,
-                                                    Attacker)
-from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
-from allennlpx.interpret.attackers.policies import (CandidatePolicy,
-                                                    EmbeddingPolicy,
-                                                    SynonymPolicy)
-from allennlpx.interpret.attackers.synonym_searcher import SynonymSearcher
-from luna import cast_list, lazy_property, time_record
+from allennlpx.interpret.attackers.attacker import (DEFAULT_IGNORE_TOKENS, Attacker)
+from allennlpx.interpret.attackers.policies import (CandidatePolicy, EmbeddingPolicy, SynonymPolicy)
 
 
 class BruteForce(Attacker):
-    def __init__(self, 
+    def __init__(self,
                  predictor,
                  *,
-                 policy: CandidatePolicy= None,
+                 policy: CandidatePolicy = None,
                  search_num: int = 256,
                  **kwargs):
         super().__init__(predictor, **kwargs)
@@ -42,9 +27,7 @@ class BruteForce(Attacker):
     def attack_from_json(self,
                          inputs: JsonDict = None,
                          field_to_change: str = 'tokens',
-                         field_to_attack: str = 'label',
-                         grad_input_field: str = 'grad_input_1',
-                         ) -> JsonDict:
+                         field_to_attack: str = 'label') -> JsonDict:
         raw_instance = self.predictor.json_to_labeled_instances(inputs)[0]
         raw_tokens = list(map(lambda x: x.text, self.spacy.tokenize(inputs[field_to_change])))
 
@@ -55,18 +38,16 @@ class BruteForce(Attacker):
             if raw_tokens[i] not in self.ignore_tokens:
                 word = raw_tokens[i]
                 if isinstance(self.policy, EmbeddingPolicy):
-                    nbrs = self.neariest_neighbours(word, 
-                                                    self.policy.measure, 
-                                                    self.policy.topk, 
+                    nbrs = self.neariest_neighbours(word, self.policy.measure, self.policy.topk,
                                                     self.policy.rho)
                 elif isinstance(self.policy, SynonymPolicy):
                     nbrs = self.synom_searcher.search(word)
-                    
+
                 nbrs = [nbr for nbr in nbrs if nbr not in self.forbidden_tokens]
                 if len(nbrs) > 0:
                     sids_to_change.append(i)
                     nbr_dct[i] = nbrs
-                    
+
         # max number of tokens that can be changed
         max_change_num = min(self.max_change_num(len(raw_tokens)), len(sids_to_change))
 
@@ -82,16 +63,17 @@ class BruteForce(Attacker):
 
         # Checking attacking status, early stop
         successful = False
-        results = self.predictor._model.forward_on_instances(adv_instances)
+        results = self.predictor.predict_batch_instance(adv_instances)
+
         for i, result in enumerate(results):
-            adv_instance = self.predictor.predictions_to_labeled_instances(adv_instances[i], result)[0]
+            adv_instance = self.predictor.predictions_to_labeled_instances(
+                adv_instances[i], result)[0]
             if adv_instance[field_to_attack].label != raw_instance[field_to_attack].label:
                 successful = True
                 break
         adv_tokens = adv_instances[i][field_to_change].tokens
         outputs = result
 
-        
         return sanitize({
             "adv": adv_tokens,
             "raw": raw_tokens,

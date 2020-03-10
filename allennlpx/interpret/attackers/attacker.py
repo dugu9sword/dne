@@ -9,17 +9,14 @@ from allennlp.data.token_indexers.elmo_indexer import \
 from allennlp.data.token_indexers.token_characters_indexer import \
     TokenCharactersIndexer
 from allennlp.data.tokenizers.token import Token
-from allennlp.data.vocabulary import DEFAULT_OOV_TOKEN, Vocabulary
 from allennlp.modules.text_field_embedders.text_field_embedder import \
     TextFieldEmbedder
-from allennlp.modules.token_embedders import Embedding
 from allennlp.data.tokenizers import SpacyTokenizer, Token
 
 from allennlpx.predictors.predictor import Predictor
-from luna import cast_list, lazy_property, time_record
+from luna import cast_list, lazy_property
 from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
 from allennlpx.interpret.attackers.synonym_searcher import SynonymSearcher
-from nltk.corpus import stopwords
 
 DEFAULT_IGNORE_TOKENS = [
     "@@NULL@@", "@@PADDING@@", "@@UNKNOWN@@", ".", ",", ";", "!", "?", "[MASK]", "[SEP]", "[CLS]", "-LRB-", "-RRB-", "(", ")", "[", "]", "-", "$", "&", "*", "...", "'", '"'
@@ -53,8 +50,7 @@ class Attacker(Registrable):
     def attack_from_json(self,
                          inputs: JsonDict,
                          field_to_change: str,
-                         field_to_attack: str,
-                         grad_input_field: str) -> JsonDict:
+                         field_to_attack: str) -> JsonDict:
         """
         This function finds a modification to the input text that would change the model's
         prediction in some desired manner (e.g., an adversarial attack).

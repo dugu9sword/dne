@@ -6,22 +6,24 @@ class Config(ProgramArgs):
         super().__init__()
         
         # basic settings
-        self.task_id = "TOY"
+        self.task_id = "AGNEWS"
         self.finetunable = True
         self.arch = 'lstm'
         self.pretrain = 'glove'      
 #         self._model_name = "SST-lstm-glove"
         self._model_name = ""
-        self.mode = 'train'
+        self.mode = 'meval'
         
         # transfer settings
         self.adv_data = 'nogit/AGNEWS-lstm.hotflip.adv.tsv' 
-        self.transform = 'embed_aug'
-        self.randomness = False
         
         # training settings
 #         self.aug_data = 'nogit/SST-lstm-glove.advaug.tsv'
         self.aug_data = ''
+
+        # predictor settings
+        self.pred_ensemble = 3
+        self.pred_transform = 'embed_aug'
 
         # attack settings
         self.attack_method = 'pwws'

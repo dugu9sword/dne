@@ -1,11 +1,10 @@
 
-import numpy as np
 import torch
 import torch.nn.functional as F
 from allennlp.models import Model
 from allennlp.modules.text_field_embedders import (BasicTextFieldEmbedder,
                                                    TextFieldEmbedder)
-from allennlp.modules.token_embedders import Embedding, TokenEmbedder
+from allennlp.modules.token_embedders import Embedding
 from allennlp.modules.token_embedders.elmo_token_embedder import \
     ElmoTokenEmbedder
 from allennlp.nn.util import get_text_field_mask
@@ -75,6 +74,7 @@ class LstmClassifier(Model):
         self.encoder = PytorchSeq2VecWrapper(
             torch.nn.LSTM(EMBED_DIM[pretrain], 
                           hidden_size=300, 
+                          dropout=0.5,
                           num_layers=2, 
                           batch_first=True))
         self.linear = torch.nn.Linear(in_features=self.encoder.get_output_dim(),

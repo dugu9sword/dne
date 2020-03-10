@@ -1,13 +1,16 @@
+import os
 import pathlib
 from collections import defaultdict
 
-import numpy as np
 from allennlp.data import Vocabulary
 from allennlp.modules.token_embedders.embedding import \
     _read_pretrained_embeddings_file
 from tabulate import tabulate
 
-from luna import auto_create
+
+
+class set_environments():
+    os.environ["TORCH_HOME"] == '/disks/sdb/torch_home'
 
 
 class FreqUtil:

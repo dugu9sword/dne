@@ -2,32 +2,19 @@ import csv
 from collections import Counter
 from functools import partial
 
-import faiss
-import nlpaug.augmenter.word as naw
 import numpy as np
 import pandas
 import torch
-from allennlp.data import Instance
 from allennlp.data.dataloader import DataLoader, allennlp_collate
 from allennlp.data.samplers import BucketBatchSampler
-# from allennlp.data.iterators.basic_iterator import BasicIterator
-# from allennlp.data.iterators.bucket_iterator import BucketIterator
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.modules.text_field_embedders import TextFieldEmbedder
 from allennlp.training.learning_rate_schedulers.slanted_triangular import \
     SlantedTriangular
-from allennlp.training.optimizers import DenseSparseAdam
-# from allennlpx.training.callback_trainer import CallbackTrainer
-# from allennlpx.training.callbacks.evaluate_callback import (EvaluateCallback,
-#                                                             evaluate)
 from allennlp.training.trainer import Trainer
 from allennlp.training.util import evaluate
 from nltk.corpus import stopwords
-from pytorch_pretrained_bert.optimization import BertAdam
 from sentence_transformers import SentenceTransformer
-from tabulate import tabulate
-from torch.optim import AdamW
-from torch.optim.adam import Adam
 from tqdm import tqdm
 
 from allennlpx import allenutil
@@ -38,29 +25,29 @@ from allennlpx.interpret.attackers.bruteforce import BruteForce
 from allennlpx.interpret.attackers.genetic import Genetic
 from allennlpx.interpret.attackers.hotflip import HotFlip
 from allennlpx.interpret.attackers.pgd import PGD
-from allennlpx.interpret.attackers.policies import (CandidatePolicy,
-                                                    EmbeddingPolicy,
-                                                    SpecifiedPolicy,
-                                                    SynonymPolicy,
+from allennlpx.interpret.attackers.policies import (CandidatePolicy, EmbeddingPolicy,
+                                                    SpecifiedPolicy, SynonymPolicy,
                                                     UnconstrainedPolicy)
 from allennlpx.interpret.attackers.pwws import PWWS
 from allennlpx.modules.knn_utils import H5pyCollector, build_faiss_index
 from allennlpx.modules.token_embedders.embedding import \
     _read_pretrained_embeddings_file
-from allennlpx.predictors.predictor import Predictor
 from allennlpx.predictors.text_classifier import TextClassifierPredictor
 from awesome_glue.config import Config
 from awesome_glue.models.bert_classifier import BertClassifier
 from awesome_glue.models.lstm_classifier import LstmClassifier
 from awesome_glue.task_specs import TASK_SPECS
-from awesome_glue.transforms import (BertAug, Crop, EmbedAug, Identity,
-                                     RandDrop, SynAug, transform_collate)
-from awesome_glue.utils import (EMBED_DIM, WORD2VECS, AttackMetric, FreqUtil,
+from awesome_glue.transforms import (BackTrans, BertAug, Crop, EmbedAug, Identity, RandDrop, SynAug,
+                                     transform_collate)
+from awesome_glue.utils import (EMBED_DIM, WORD2VECS, AttackMetric, FreqUtil, set_environments,
                                 text_diff)
-from luna import flt2str, ram_append, ram_has, ram_read, ram_reset, ram_write
+from luna import flt2str, ram_write
 from luna.logging import log
 from luna.public import Aggregator, auto_create
-from luna.pytorch import load_model, save_model, set_seed
+from luna.pytorch import set_seed
+from allennlp.training.metrics.categorical_accuracy import CategoricalAccuracy
+
+set_environments()
 
 
 def load_data(task_id: str, tokenizer: str):
@@ -114,12 +101,26 @@ class Task:
 
         self.predictor = TextClassifierPredictor(
             self.model, self.reader, key='sent' if self.config.arch != 'bert' else 'berty_tokens')
+        
+        # the code is a bullshit.
+        _transform_fn = self.reader.transform_instances
+        transform_fn = {
+            "identity": lambda: lambda x: x,
+            "bt": lambda: partial(_transform_fn, BackTrans()),
+            "dae": NotImplemented,
+            "rand_drop": lambda: partial(_transform_fn, RandDrop(0.15)),
+            "embed_aug": lambda: partial(_transform_fn, EmbedAug(0.15)),
+            "syn_aug": lambda: partial(_transform_fn, SynAug(0.15)),
+            "bert_aug": lambda: partial(_transform_fn, BertAug(0.15)),
+            "crop": lambda: partial(_transform_fn, Crop(0.5)),
+        }[self.config.pred_transform]()
+        self.predictor.set_ensemble_num(self.config.pred_ensemble)
+        self.predictor.set_transform_fn(transform_fn)
 
     def train(self):
-        num_epochs = 5
+        num_epochs = 10
         pseudo_batch_size = 32
         accumulate_num = 1
-        pseudo_batch_size * accumulate_num
 
         optimizer = self.model.get_optimizer()
 
@@ -127,31 +128,31 @@ class Task:
             log(f'Augment data from {self.config.aug_data}')
             self.train_data.extend(self.reader.read(self.config.aug_data))
 
-#         collate_fn = partial(transform_collate, self.reader, self.vocab, RandDrop(0.3))
+
+#         collate_fn = partial(transform_collate, self.vocab, self.reader, Crop(0.3))
         collate_fn = allennlp_collate
-        trainer = Trainer(
-            model=self.model,
-            optimizer=optimizer,
-            data_loader=DataLoader(
-                self.train_data,
-                batch_sampler=BucketBatchSampler(
-                    data_source=self.train_data,
-                    batch_size=pseudo_batch_size,
-                ),
-                collate_fn=collate_fn,
-            ),
-            validation_data_loader=DataLoader(
-                self.dev_data,
-                batch_size=pseudo_batch_size,
-            ),
-            num_epochs=num_epochs,
-            patience=None,
-            grad_clipping=1.,
-            cuda_device=0,
-            num_gradient_accumulation_steps=accumulate_num,
-            serialization_dir=f'saved/models/{self.config.model_name}',
-            num_serialized_models_to_keep=3
-        )
+        trainer = Trainer(model=self.model,
+                          optimizer=optimizer,
+                          validation_metric='+accuracy',
+                          data_loader=DataLoader(
+                              self.train_data,
+                              batch_sampler=BucketBatchSampler(
+                                  data_source=self.train_data,
+                                  batch_size=pseudo_batch_size,
+                              ),
+                              collate_fn=collate_fn,
+                          ),
+                          validation_data_loader=DataLoader(
+                              self.dev_data,
+                              batch_size=pseudo_batch_size,
+                          ),
+                          num_epochs=num_epochs,
+                          patience=None,
+                          grad_clipping=1.,
+                          cuda_device=0,
+                          num_gradient_accumulation_steps=accumulate_num,
+                          serialization_dir=f'saved/models/{self.config.model_name}',
+                          num_serialized_models_to_keep=3)
         trainer.train()
 
     def from_pretrained(self):
@@ -235,37 +236,41 @@ class Task:
         print(sum(agg_ppls[:, 0] < agg_ppls[:, 1]), 'of', agg_ppls.shape[0])
 
     @torch.no_grad()
-    def evaluate(self):
+    def evaluate_model(self):
         self.from_pretrained()
+        self.model.eval()
         evaluate(self.model, DataLoader(self.dev_data, 32), 0, None)
+
+    @torch.no_grad()
+    def evaluate_predictor(self):
+        self.from_pretrained()
+        self.model.eval()
+        metric = CategoricalAccuracy()
+        batch_size = 32
+        total_size = len(self.dev_data)
+        for bid in tqdm(range(0, total_size, batch_size)):
+            instances = [self.dev_data[i] for i in range(bid, min(bid + batch_size, total_size))]
+            outputs = self.predictor.predict_batch_instance(instances)
+            preds, labels = [], []
+            for inst, outp in zip(instances, outputs):
+                preds.append([outp['probs']])
+                labels.append([inst.fields['label'].label])
+                metric(predictions=torch.tensor(preds), gold_labels=torch.tensor(labels))
+        print(metric.get_metric())
 
     @torch.no_grad()
     def transfer_attack(self):
         self.from_pretrained()
-        if self.config.randomness:
-            self.model.train()
-        else:
-            self.model.eval()
+        self.model.eval()
         set_seed(11221)
         df = pandas.read_csv(self.config.adv_data, sep='\t', quoting=csv.QUOTE_NONE)
         attack_metric = AttackMetric()
-
-        #         transform = identity
-        transform = {
-            "identity": identity,
-            "rand_drop": partial(rand_drop, 0.15),
-            "embed_aug": partial(embed_aug, 0.15),
-            "syn_aug": partial(syn_aug, 0.15),
-            "bert_aug": partial(bert_aug, 0.15),
-        }[self.config.transform]
-        ensemble_num = 5
 
         for rid in tqdm(range(df.shape[0])):
             raw = df.iloc[rid]['raw']
             adv = df.iloc[rid]['adv']
 
             #             print(text_diff(raw, adv))
-
             #             new_adv = []
             #             for wr, wa in zip(raw.split(" "), att.split(" ")):
             #                 if wr == wa:
@@ -275,18 +280,13 @@ class Task:
             # #                     new_att.append()
             #             adv = " ".join(new_att)
 
-            raw_instances, adv_instances = [], []
-            for i in range(ensemble_num):
-                raw_instances.append(self.reader.text_to_instance(transform(raw)))
-                adv_instances.append(self.reader.text_to_instance(transform(adv)))
-            results = self.model.forward_on_instances(raw_instances + adv_instances)
+            results = self.predictor.predict_batch_instance([
+                self.reader.text_to_instance(raw),
+                self.reader.text_to_instance(adv)
+            ])
 
-            raw_preds, adv_preds = [], []
-            for i in range(ensemble_num):
-                raw_preds.append(np.argmax(results[i]['probs']))
-                adv_preds.append(np.argmax(results[i + ensemble_num]['probs']))
-            raw_pred = Counter(raw_preds).most_common()[0][0]
-            adv_pred = Counter(adv_preds).most_common()[0][0]
+            raw_pred = np.argmax(results[0]['probs'])
+            adv_pred = np.argmax(results[1]['probs'])
 
             label = df.iloc[rid]['label']
 
@@ -344,8 +344,7 @@ class Task:
         #         for ele in STOP_WORDS:
         #             if "'" in ele:
         #                 STOP_WORDS.remove(ele)
-        STOP_WORDS = FreqUtil.topk_frequency(self.vocab, 100, 'least', forbidden_words)
-
+        FreqUtil.topk_frequency(self.vocab, 100, 'least', forbidden_words)
         # self.predictor._model.cpu()
         general_kwargs = {
             "ignore_tokens": forbidden_words,
@@ -373,8 +372,8 @@ class Task:
         elif self.config.attack_method == 'pwws':
             attacker = PWWS(
                 self.predictor,
-                policy=SpecifiedPolicy(words=STOP_WORDS),
-                #                             policy=EmbeddingPolicy(measure='euc', topk=10, rho=None),
+                #                 policy=SpecifiedPolicy(words=STOP_WORDS),
+                policy=EmbeddingPolicy(measure='euc', topk=10, rho=None),
                 #                             policy=SynonymPolicy(),
                 **general_kwargs,
                 **blackbox_kwargs)
@@ -420,7 +419,8 @@ class Task:
         for i in tqdm(range(adv_number)):
             raw_text = allenutil.as_sentence(data_to_attack[i])
             adv_text = None
-            raw_pred = np.argmax(self.predictor.predict(raw_text)['probs'])
+
+            raw_pred = np.argmax(self.predictor.predict_instance(data_to_attack[i])['probs'])
             raw_label = data_to_attack[i]['label'].label
             # Only attack correct instance
             if raw_pred == raw_label:

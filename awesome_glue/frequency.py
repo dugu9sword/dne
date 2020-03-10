@@ -1,6 +1,5 @@
 
 import numpy as np
-from allennlp.data import Vocabulary
 from tabulate import tabulate
 
 

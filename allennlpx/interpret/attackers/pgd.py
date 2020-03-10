@@ -2,7 +2,6 @@
 from copy import deepcopy
 from typing import List
 
-import numpy
 import torch
 from allennlp.common.util import JsonDict, sanitize
 from allennlp.data.fields import TextField
@@ -11,14 +10,11 @@ from allennlp.data.token_indexers import (ELMoTokenCharactersIndexer,
 from allennlp.data.tokenizers import Token
 from allennlp.modules.text_field_embedders.text_field_embedder import \
     TextFieldEmbedder
-from allennlp.modules.token_embedders import Embedding
 
 from allennlpx.interpret.attackers.attacker import (DEFAULT_IGNORE_TOKENS,
                                                     Attacker)
-from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
 from allennlpx.interpret.attackers.util import select
-from allennlpx.predictors.predictor import Predictor
-from luna import cast_list, lazy_property
+from luna import cast_list
 
 
 class PGD(Attacker):

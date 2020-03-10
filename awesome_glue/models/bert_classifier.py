@@ -10,7 +10,7 @@ from transformers import AdamW
 
 from allennlpx.modules.token_embedders.bert_token_embedder import (
     PretrainedBertEmbedder, PretrainedBertModel)
-from luna import LabelSmoothingLoss, ram_globalize
+from luna import ram_globalize
 
 
 class BertPooler(torch.nn.Module):

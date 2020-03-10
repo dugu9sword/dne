@@ -11,7 +11,6 @@ class UnconstrainedPolicy:
     """
     Generate word candidates without constraints.
     """
-    pass
 
 @dataclass
 class EmbeddingPolicy(CandidatePolicy):
@@ -30,7 +29,6 @@ class SynonymPolicy(CandidatePolicy):
     """
     Generate word candidates from the synonym dict.
     """
-    pass
 
 @dataclass
 class SpecifiedPolicy(CandidatePolicy):

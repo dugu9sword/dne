@@ -1,5 +1,5 @@
 import torch
-from allennlp.modules.seq2vec_encoders import PytorchSeq2VecWrapper, Seq2VecEncoder
+from allennlp.modules.seq2vec_encoders import Seq2VecEncoder
 from torch.nn.utils.rnn import pad_packed_sequence
 
 
@@ -91,7 +91,7 @@ class PytorchSeqMaxPooler(Seq2VecEncoder):
         # and return them as a single (batch_size, self.get_output_dim()) tensor.
 
         # now of shape: (batch_size, num_layers * num_directions, hidden_size).
-        unsorted_state = state.transpose(0, 1).index_select(0, restoration_indices)
+        state.transpose(0, 1).index_select(0, restoration_indices)
         unsorted_outputs = outputs.index_select(0, restoration_indices)
 
         # Extract the last hidden vector, including both forward and backward states
@@ -99,9 +99,9 @@ class PytorchSeqMaxPooler(Seq2VecEncoder):
         # we have bidirectional states) or just squash the 1st dimension in the non-
         # bidirectional case. Return tensor has shape (batch_size, hidden_size * num_directions).
         try:
-            last_state_index = 2 if self._module.bidirectional else 1
+            2 if self._module.bidirectional else 1
         except AttributeError:
-            last_state_index = 1
+            pass
 #         last_layer_state = unsorted_state[:, -last_state_index:, :]
 #         print(unsorted_outputs.size())
 #         return last_layer_state.contiguous().view([-1, self.get_output_dim()])

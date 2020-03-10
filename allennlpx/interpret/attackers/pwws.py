@@ -1,32 +1,22 @@
 # pylint: disable=protected-access
 import copy
 from collections import defaultdict
-from functools import lru_cache
-from itertools import product
-from typing import List
 
 import numpy as np
 import torch
 from allennlp.common.util import JsonDict, sanitize
-from allennlp.data.fields import TextField
 from allennlp.data.token_indexers import (ELMoTokenCharactersIndexer,
                                           TokenCharactersIndexer)
-from allennlp.data.tokenizers import SpacyTokenizer, Token
-from allennlp.data.vocabulary import DEFAULT_OOV_TOKEN, Vocabulary
+from allennlp.data.vocabulary import DEFAULT_OOV_TOKEN
 from allennlp.modules.text_field_embedders.text_field_embedder import \
     TextFieldEmbedder
-from allennlp.modules.token_embedders import Embedding
 
-from allennlpx import allenutil
 from allennlpx.interpret.attackers.attacker import (DEFAULT_IGNORE_TOKENS,
                                                     Attacker)
-from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
 from allennlpx.interpret.attackers.policies import (CandidatePolicy,
                                                     EmbeddingPolicy,
                                                     SpecifiedPolicy,
                                                     SynonymPolicy)
-from allennlpx.interpret.attackers.synonym_searcher import SynonymSearcher
-from luna import cast_list, lazy_property, time_record
 
 
 class PWWS(Attacker):
@@ -43,7 +33,6 @@ class PWWS(Attacker):
                          inputs: JsonDict = None,
                          field_to_change: str = 'tokens',
                          field_to_attack: str = 'label',
-                         grad_input_field: str = 'grad_input_1',
                          ) -> JsonDict:
         raw_instance = self.predictor.json_to_labeled_instances(inputs)[0]
         raw_tokens = list(map(lambda x: x.text, self.spacy.tokenize(inputs[field_to_change])))
@@ -68,11 +57,11 @@ class PWWS(Attacker):
                     sids_to_change.append(i)
                     nbr_dct[i] = nbrs
         
-        # Compute the word saliency
-        repl_dct = {}  # {idx: "the replaced word"}
-        drop_dct = {}  # {idx: prob_current - prob_replaced}
-        sali_dct = {}  # {idx: prob_current - prob_unk}
-        pwws_dct = {}
+        # 1. Replace each word with <UNK> and other candidate words
+        # 2. Generate all sentences, then concatenate them into a 
+        #    list for batch forwarding
+        _instances = [] # concatenate all instances  
+        _offsets = {}   # {sid: [start_offset, number_of_instances]}  
         
         for sid in sids_to_change:
             tmp_instances = []
@@ -87,8 +76,20 @@ class PWWS(Attacker):
                 tmp_tokens = copy.copy(raw_tokens)
                 tmp_tokens[sid] = nbr
                 tmp_instances.append(self._tokens_to_instance(tmp_tokens))
-            results = self.predictor._model.forward_on_instances(tmp_instances)
+                
+            _offsets[sid] = (len(_instances), len(tmp_instances))
+            _instances.extend(tmp_instances)
             
+        _results = self.predictor.predict_batch_instance(_instances)
+        
+        # Compute the word saliency
+        repl_dct = {}  # {idx: "the replaced word"}
+        drop_dct = {}  # {idx: prob_current - prob_replaced}
+        sali_dct = {}  # {idx: prob_current - prob_unk}
+        pwws_dct = {}
+        for sid in sids_to_change:
+            _start, _num = _offsets[sid]
+            results = _results[_start: _start + _num]
             probs = np.array([result['probs'] for result in results])
             true_probs = probs[:, np.argmax(probs[0])]
             raw_prob = true_probs[0]
@@ -100,17 +101,12 @@ class PWWS(Attacker):
             
             pwws_dct[sid] = drop_dct[sid] * np.exp(sali_dct[sid])
             
-#             print(sid, raw_tokens[sid], repl_dct[sid], drop_dct[sid], sali_dct[sid])
-#             print(true_probs)
-
-        # Seems that PWWS is ... not that efficient?
 #         total_exp = 0
 #         for sid in sids_to_change:
 #             sali_dct[sid] = np.exp(sali_dct[sid])
 #             total_exp += sali_dct[sid]
 #         for sid in sids_to_change:
 #             pwws_dct[sid] = drop_dct[sid] * sali_dct[sid] / total_exp
-        
         
         # max number of tokens that can be changed
         max_change_num = min(self.max_change_num(len(raw_tokens)), len(sids_to_change))
@@ -123,7 +119,7 @@ class PWWS(Attacker):
             sid = sorted_pwws[i][0]
             final_tokens[sid] = repl_dct[sid]
             final_instance = self.predictor._dataset_reader.text_to_instance(" ".join(final_tokens))
-            result = self.predictor._model.forward_on_instance(final_instance)
+            result = self.predictor.predict_instance(final_instance)
             final_instance = self.predictor.predictions_to_labeled_instances(final_instance, result)[0]
             if final_instance[field_to_attack].label != raw_instance[field_to_attack].label:
                 successful = True

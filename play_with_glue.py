@@ -30,8 +30,11 @@ task = Task(config)
 
 {
     'train': task.train,
-    'eval': task.evaluate,
+    'meval': task.evaluate_model,
+    'peval': task.evaluate_predictor,
     'attack': task.attack,
+
+    # BELOW COMMANDS ARE NOT STABLE
     'knn_build': task.knn_build_index,
     'knn_eval': task.knn_evaluate,
     'knn_attack': task.knn_attack,

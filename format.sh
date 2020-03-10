@@ -1,7 +1,7 @@
-echo 'isort'
-isort awesome_glue/*.py
-isort allennlpx/**/*.py
+echo 'Running autoflake...'
+autoflake --in-place --remove-all-unused-imports --recursive awesome_glue/
+autoflake --in-place --remove-all-unused-imports --recursive allennlpx/
 
-echo 'autoflake'
-autoflake --in-place --remove-unused-variables -r awesome_glue/**/*.py
-autoflake --in-place --remove-unused-variables -r allennlpx/**/*.py
+# echo 'isort'
+# isort awesome_glue/*.py
+# isort allennlpx/**/*.py

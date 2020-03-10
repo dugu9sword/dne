@@ -1,5 +1,4 @@
 import csv
-import itertools
 import logging
 from typing import Dict, Optional, List
 
@@ -7,11 +6,10 @@ from typing import Dict, Optional, List
 import pandas
 from allennlp.common.file_utils import cached_path
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
-from allennlp.data.fields import Field, LabelField, ListField, TextField
+from allennlp.data.fields import Field, LabelField, TextField
 from allennlp.data.instance import Instance
-from allennlp.data.token_indexers import SingleIdTokenIndexer, TokenIndexer
+from allennlp.data.token_indexers import SingleIdTokenIndexer
 from allennlp.data.tokenizers import SpacyTokenizer
-from allennlp.data.tokenizers.token import Token
 from overrides import overrides
 from typing import Callable
 from copy import deepcopy
@@ -35,7 +33,6 @@ class SpacyTSVReader(DatasetReader):
         self._tokenizer = SpacyTokenizer()
         self._max_sequence_length = max_sequence_length
         self._skip_label_indexing = skip_label_indexing
-        self._add_cls = None 
 
         self._token_indexers = {"tokens": SingleIdTokenIndexer()}
 
@@ -86,8 +83,8 @@ class SpacyTSVReader(DatasetReader):
         return Instance(fields)
     
     def transform_instances(self,
-                           transform: Callable[[List[str]], List[str]],
-                           instances: List[Instance],
+                            transform: Callable[[List[str]], List[str]],
+                            instances: List[Instance],
                           ) -> List[Instance]:
         # For simple transformation, a single for-loop is enough.
         # However for complex transformation such as back-translation/DAE/SpanBERT,

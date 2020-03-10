@@ -11,13 +11,10 @@ from allennlp.data.token_indexers import (ELMoTokenCharactersIndexer,
 from allennlp.data.tokenizers import Token
 from allennlp.modules.text_field_embedders.text_field_embedder import \
     TextFieldEmbedder
-from allennlp.modules.token_embedders import Embedding
 
-from allennlpx import allenutil
 from allennlpx.interpret.attackers.attacker import (DEFAULT_IGNORE_TOKENS,
                                                     Attacker)
 from luna import cast_list
-import pysnooper
 
 
 class HotFlipX(Attacker):

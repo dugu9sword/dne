@@ -414,8 +414,8 @@ def _read_embeddings_from_text_file(
         )
 
     all_embeddings = numpy.asarray(list(embeddings.values()))
-    embeddings_mean = float(numpy.mean(all_embeddings))
-    embeddings_std = float(numpy.std(all_embeddings))
+    float(numpy.mean(all_embeddings))
+    float(numpy.std(all_embeddings))
     # Now we initialize the weight matrix for an embedding layer, starting with random vectors,
     # then filling in the word vectors we just read.
     logger.info("Initializing pre-trained embedding layer")

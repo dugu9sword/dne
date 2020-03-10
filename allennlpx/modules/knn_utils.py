@@ -2,7 +2,6 @@ from pathlib import Path
 
 import faiss
 import h5py
-import numpy as np
 import torch
 
 
