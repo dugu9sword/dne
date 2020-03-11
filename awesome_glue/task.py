@@ -47,6 +47,8 @@ from luna.logging import log
 from luna.public import Aggregator, auto_create
 from luna.pytorch import set_seed
 from allennlp.training.metrics.categorical_accuracy import CategoricalAccuracy
+from allennlpx.training import adv_utils
+from allennlpx.interpret.attackers.cached_searcher import CachedIndexSearcher
 
 set_environments()
 
@@ -132,10 +134,19 @@ class Task:
 
 #         collate_fn = partial(transform_collate, self.vocab, self.reader, Crop(0.3))
         collate_fn = allennlp_collate
+        adv_policy = adv_utils.HotFlipPolicy(
+            normal_iteration=1,
+            adv_iteration=2,
+            replace_num=5,
+            searcher=CachedIndexSearcher(EmbeddingPolicy('euc', 10, None).cache_name(),
+                                         word2idx=self.vocab.get_token_index,
+                                         idx2word=self.vocab.get_token_from_index),
+        )
         trainer = AdvTrainer(
             model=self.model,
             optimizer=optimizer,
             validation_metric='+accuracy',
+            adv_policy=adv_policy,
             data_loader=DataLoader(
                 self.train_data,
                 batch_sampler=BucketBatchSampler(

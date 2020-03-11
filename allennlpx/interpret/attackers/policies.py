@@ -22,7 +22,13 @@ class EmbeddingPolicy(CandidatePolicy):
     """
     measure: str
     topk: int
-    rho: int
+    rho: float
+
+    def cache_name(self):
+        if self.topk is not None:
+            return f"{self.measure}-topk-{self.topk}.txt"
+        if self.rho is not None:
+            return f"{self.measure}-rho-{self.rho}.txt"
         
 @dataclass
 class SynonymPolicy(CandidatePolicy):

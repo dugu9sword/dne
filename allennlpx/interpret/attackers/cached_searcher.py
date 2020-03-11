@@ -1,6 +1,7 @@
 import csv
 from typing import Union, Callable, Dict
 from collections import defaultdict
+from functools import lru_cache
 
 
 class CachedWordSearcher:
@@ -41,6 +42,7 @@ class CachedIndexSearcher:
             self.idx2word = idx2word
         self.unk_idx = self.word2idx("President Jiang is excited!")
 
+    @lru_cache(maxsize=None)
     def search(self, element):
         if isinstance(element, int):
             word = self.idx2word(element)

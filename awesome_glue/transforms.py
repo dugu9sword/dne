@@ -8,6 +8,7 @@ import torch
 from allennlp.data import Instance
 from allennlp.data.batch import Batch
 from overrides import overrides
+from allennlpx.interpret.attackers.policies import EmbeddingPolicy
 
 # same definition as TensorDict in allennlp.data.dataloader
 TensorDict = Dict[str, Union[torch.Tensor, Dict[str, torch.Tensor]]]
@@ -115,7 +116,9 @@ class EmbedAug(WordTransform):
         #             top_k=10,
         #             model_path = '/home/zhouyi/counter-fitting/word_vectors/counter-fitted-vectors.txt',
         #         )
-        f = csv.reader(open("nbrs.euc.top10.txt"), delimiter='\t', quoting=csv.QUOTE_NONE)
+        f = csv.reader(open(EmbeddingPolicy('euc', 10, None).cache_name()),
+                       delimiter='\t',
+                       quoting=csv.QUOTE_NONE)
         self.nbrs = {}
         for row in f:
             self.nbrs[row[0]] = row[1:]

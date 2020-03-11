@@ -5,6 +5,9 @@ import re
 import time
 import traceback
 from typing import Any, Dict, List, Optional, Tuple, Union
+from functools import partial
+from itertools import chain
+
 
 import torch
 import torch.distributed as dist
@@ -28,6 +31,8 @@ from allennlp.training.trainer_base import TrainerBase
 from torch.nn.parallel import DistributedDataParallel
 from allennlp.nn import util
 from allennlpx.training import adv_utils
+from allennlpx.interpret.attackers.cached_searcher import CachedIndexSearcher
+
 
 try:
     from apex import amp
@@ -47,6 +52,7 @@ class AdvTrainer(TrainerBase):
         model: Model,
         optimizer: torch.optim.Optimizer,
         data_loader: torch.utils.data.DataLoader,
+        adv_policy: adv_utils.AdvTrainingPolicy,
         patience: Optional[int] = None,
         validation_metric: str = "-loss",
         validation_data_loader: torch.utils.data.DataLoader = None,
@@ -201,6 +207,7 @@ class AdvTrainer(TrainerBase):
         self.data_loader = data_loader
         self._validation_data_loader = validation_data_loader
         self.optimizer = optimizer
+        self.adv_policy = adv_policy
 
         if patience is None:  # no early stopping
             if validation_data_loader:
@@ -338,14 +345,22 @@ class AdvTrainer(TrainerBase):
 
         return loss
 
-    def _register_embedding_gradient_hooks(self, embedding_gradients):
-        def hook_layers(module, grad_in, grad_out):
-            embedding_gradients.append(grad_out[0])
-
-        backward_hooks = []
+    def _register_embedding_hooks(self, captured_tensors):
         embedding_layer = util.find_embedding_layer(self.model)
-        backward_hooks.append(embedding_layer.register_backward_hook(hook_layers))
-        return backward_hooks
+
+        def bw_hook_layers(module, grad_in, grad_out):
+            captured_tensors['bw'] = grad_out[0]
+
+        def fw_hook_layers(module, inputs, outputs):
+            captured_tensors['fw'] = outputs
+
+        bw_hooks = []
+        bw_hooks.append(embedding_layer.register_backward_hook(bw_hook_layers))
+
+        fw_hooks = []
+        fw_hooks.append(embedding_layer.register_forward_hook(fw_hook_layers))
+
+        return fw_hooks, bw_hooks
 
     def _train_epoch(self, epoch: int) -> Dict[str, float]:
         """
@@ -416,8 +431,8 @@ class AdvTrainer(TrainerBase):
 
             self.optimizer.zero_grad()
 
-            embedding_gradients = []
-            hooks = self._register_embedding_gradient_hooks(embedding_gradients)
+            captured_tensors = {}
+            fw_hooks, bw_hooks = self._register_embedding_hooks(captured_tensors)
 
             # normal samples
             loss = self.batch_loss(batch, for_training=True)
@@ -431,12 +446,36 @@ class AdvTrainer(TrainerBase):
             train_loss += loss.item()
 
             # adversarial samples
+            raw_tokens = batch['sent']['tokens']['tokens'].cuda()
+            if isinstance(self.adv_policy, adv_utils.HotFlipPolicy):
+                for adv_idx in range(self.adv_policy.adv_iteration):
+                    constrain_fn = partial(adv_utils.apply_constraint, self.adv_policy.searcher)
+                    embedding_matrix = util.find_embedding_layer(self.model).weight
+                    adv_tokens = adv_utils.hotflip(
+                        src_tokens=raw_tokens,
+                        embeds=captured_tensors['fw'],
+                        grads=captured_tensors['bw'],
+                        embedding_matrix=embedding_matrix,
+                        constrain_fn_=constrain_fn,
+                        replace_num=self.adv_policy.replace_num,
+                    )
+                    batch['sent']['tokens']['tokens'] = adv_tokens
+                    loss = self.batch_loss(batch, for_training=True)
+                    if torch.isnan(loss):
+                        raise ValueError("nan loss encountered")
+                    if self._opt_level is not None:
+                        with amp.scale_loss(loss, self.optimizer) as scaled_loss:
+                            scaled_loss.backward()
+                    else:
+                        loss.backward()
+                    train_loss += loss.item()
 
-
-            for hook in hooks:
+            for hook in chain(fw_hooks, bw_hooks):
                 hook.remove()
 
             batch_grad_norm = self.rescale_gradients()
+
+            torch.cuda.empty_cache()
 
             # This does nothing if batch_num_total is None or you are using a
             # scheduler which doesn't update per batch.
