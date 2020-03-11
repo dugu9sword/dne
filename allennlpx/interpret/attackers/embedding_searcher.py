@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import Union
+from typing import Union, Callable, Dict
 
 import numpy as np
 import torch
@@ -12,12 +12,18 @@ class EmbeddingSearcher:
     def __init__(
         self,
         embed: torch.Tensor,
-        word2idx: callable,
-        idx2word: callable,
+        word2idx: Union[Callable, Dict],
+        idx2word: Union[Callable, Dict],
     ):
         self.embed = embed
-        self.word2idx = word2idx
-        self.idx2word = idx2word
+        if isinstance(word2idx, dict):
+            self.word2idx = word2idx.__getitem__
+        else:
+            self.word2idx = word2idx
+        if isinstance(idx2word, dict):
+            self.idx2word = idx2word.__getitem__
+        else:
+            self.idx2word = idx2word
         self.faiss_index = None
         
     def is_pretrained(self, element: Union[int, str]):

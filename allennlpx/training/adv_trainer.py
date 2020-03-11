@@ -26,6 +26,8 @@ from allennlp.training.optimizers import Optimizer
 from allennlp.training.tensorboard_writer import TensorboardWriter
 from allennlp.training.trainer_base import TrainerBase
 from torch.nn.parallel import DistributedDataParallel
+from allennlp.nn import util
+from allennlpx.training import adv_utils
 
 try:
     from apex import amp
@@ -336,6 +338,15 @@ class AdvTrainer(TrainerBase):
 
         return loss
 
+    def _register_embedding_gradient_hooks(self, embedding_gradients):
+        def hook_layers(module, grad_in, grad_out):
+            embedding_gradients.append(grad_out[0])
+
+        backward_hooks = []
+        embedding_layer = util.find_embedding_layer(self.model)
+        backward_hooks.append(embedding_layer.register_backward_hook(hook_layers))
+        return backward_hooks
+
     def _train_epoch(self, epoch: int) -> Dict[str, float]:
         """
         Trains one epoch and returns metrics.
@@ -405,11 +416,13 @@ class AdvTrainer(TrainerBase):
 
             self.optimizer.zero_grad()
 
+            embedding_gradients = []
+            hooks = self._register_embedding_gradient_hooks(embedding_gradients)
+
             # normal samples
             loss = self.batch_loss(batch, for_training=True)
             if torch.isnan(loss):
                 raise ValueError("nan loss encountered")
-            loss = loss / len(batch_group)
             if self._opt_level is not None:
                 with amp.scale_loss(loss, self.optimizer) as scaled_loss:
                     scaled_loss.backward()
@@ -418,7 +431,10 @@ class AdvTrainer(TrainerBase):
             train_loss += loss.item()
 
             # adversarial samples
-#                 loss = self
+
+
+            for hook in hooks:
+                hook.remove()
 
             batch_grad_norm = self.rescale_gradients()
 
@@ -464,7 +480,7 @@ class AdvTrainer(TrainerBase):
             # Updating tqdm only for the master as the trainers wouldn't have one
             if self._master:
                 description = training_util.description_from_metrics(metrics)
-                batch_group_generator_tqdm.set_description(description, refresh=False)
+                batch_generator_tqdm.set_description(description, refresh=False)
 
             # Log parameter values to Tensorboard (only from the master)
             if self._tensorboard.should_log_this_batch() and self._master:

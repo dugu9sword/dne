@@ -12,6 +12,7 @@ from allennlp.modules.text_field_embedders import TextFieldEmbedder
 from allennlp.training.learning_rate_schedulers.slanted_triangular import \
     SlantedTriangular
 from allennlp.training.trainer import Trainer
+from allennlpx.training.adv_trainer import AdvTrainer
 from allennlp.training.util import evaluate
 from nltk.corpus import stopwords
 from sentence_transformers import SentenceTransformer
@@ -101,7 +102,7 @@ class Task:
 
         self.predictor = TextClassifierPredictor(
             self.model, self.reader, key='sent' if self.config.arch != 'bert' else 'berty_tokens')
-        
+
         # the code is a bullshit.
         _transform_fn = self.reader.transform_instances
         transform_fn = {
@@ -131,28 +132,29 @@ class Task:
 
 #         collate_fn = partial(transform_collate, self.vocab, self.reader, Crop(0.3))
         collate_fn = allennlp_collate
-        trainer = Trainer(model=self.model,
-                          optimizer=optimizer,
-                          validation_metric='+accuracy',
-                          data_loader=DataLoader(
-                              self.train_data,
-                              batch_sampler=BucketBatchSampler(
-                                  data_source=self.train_data,
-                                  batch_size=pseudo_batch_size,
-                              ),
-                              collate_fn=collate_fn,
-                          ),
-                          validation_data_loader=DataLoader(
-                              self.dev_data,
-                              batch_size=pseudo_batch_size,
-                          ),
-                          num_epochs=num_epochs,
-                          patience=None,
-                          grad_clipping=1.,
-                          cuda_device=0,
-                          num_gradient_accumulation_steps=accumulate_num,
-                          serialization_dir=f'saved/models/{self.config.model_name}',
-                          num_serialized_models_to_keep=3)
+        trainer = AdvTrainer(
+            model=self.model,
+            optimizer=optimizer,
+            validation_metric='+accuracy',
+            data_loader=DataLoader(
+                self.train_data,
+                batch_sampler=BucketBatchSampler(
+                    data_source=self.train_data,
+                    batch_size=pseudo_batch_size,
+                ),
+                collate_fn=collate_fn,
+            ),
+            validation_data_loader=DataLoader(
+                self.dev_data,
+                batch_size=pseudo_batch_size,
+            ),
+            num_epochs=num_epochs,
+            patience=None,
+            grad_clipping=1.,
+            cuda_device=0,
+            #   num_gradient_accumulation_steps=accumulate_num,
+            serialization_dir=f'saved/models/{self.config.model_name}',
+            num_serialized_models_to_keep=3)
         trainer.train()
 
     def from_pretrained(self):
@@ -280,10 +282,9 @@ class Task:
             # #                     new_att.append()
             #             adv = " ".join(new_att)
 
-            results = self.predictor.predict_batch_instance([
-                self.reader.text_to_instance(raw),
-                self.reader.text_to_instance(adv)
-            ])
+            results = self.predictor.predict_batch_instance(
+                [self.reader.text_to_instance(raw),
+                 self.reader.text_to_instance(adv)])
 
             raw_pred = np.argmax(results[0]['probs'])
             adv_pred = np.argmax(results[1]['probs'])

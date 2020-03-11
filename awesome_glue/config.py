@@ -6,13 +6,13 @@ class Config(ProgramArgs):
         super().__init__()
         
         # basic settings
-        self.task_id = "AGNEWS"
+        self.task_id = "TOY"
         self.finetunable = True
         self.arch = 'lstm'
         self.pretrain = 'glove'      
 #         self._model_name = "SST-lstm-glove"
         self._model_name = ""
-        self.mode = 'meval'
+        self.mode = 'train'
         
         # transfer settings
         self.adv_data = 'nogit/AGNEWS-lstm.hotflip.adv.tsv' 
