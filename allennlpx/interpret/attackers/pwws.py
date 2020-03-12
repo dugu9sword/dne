@@ -5,35 +5,28 @@ from collections import defaultdict
 import numpy as np
 import torch
 from allennlp.common.util import JsonDict, sanitize
-from allennlp.data.token_indexers import (ELMoTokenCharactersIndexer,
-                                          TokenCharactersIndexer)
+from allennlp.data.token_indexers import (ELMoTokenCharactersIndexer, TokenCharactersIndexer)
 from allennlp.data.vocabulary import DEFAULT_OOV_TOKEN
 from allennlp.modules.text_field_embedders.text_field_embedder import \
     TextFieldEmbedder
 
-from allennlpx.interpret.attackers.attacker import (DEFAULT_IGNORE_TOKENS,
-                                                    Attacker)
-from allennlpx.interpret.attackers.policies import (CandidatePolicy,
-                                                    EmbeddingPolicy,
-                                                    SpecifiedPolicy,
-                                                    SynonymPolicy)
+from allennlpx.interpret.attackers.attacker import (DEFAULT_IGNORE_TOKENS, Attacker)
+from allennlpx.interpret.attackers.policies import (CandidatePolicy, EmbeddingPolicy,
+                                                    SpecifiedPolicy, SynonymPolicy)
 
 
 class PWWS(Attacker):
-    def __init__(self, 
-                 predictor, 
-                 *, 
-                 policy: CandidatePolicy = None,
-                 **kwargs):
+    def __init__(self, predictor, *, policy: CandidatePolicy = None, **kwargs):
         super().__init__(predictor, **kwargs)
         self.policy = policy
 
     @torch.no_grad()
-    def attack_from_json(self,
-                         inputs: JsonDict = None,
-                         field_to_change: str = 'tokens',
-                         field_to_attack: str = 'label',
-                         ) -> JsonDict:
+    def attack_from_json(
+            self,
+            inputs: JsonDict = None,
+            field_to_change: str = 'tokens',
+            field_to_attack: str = 'label',
+    ) -> JsonDict:
         raw_instance = self.predictor.json_to_labeled_instances(inputs)[0]
         raw_tokens = list(map(lambda x: x.text, self.spacy.tokenize(inputs[field_to_change])))
 
@@ -44,9 +37,7 @@ class PWWS(Attacker):
             if raw_tokens[i] not in self.ignore_tokens:
                 word = raw_tokens[i]
                 if isinstance(self.policy, EmbeddingPolicy):
-                    nbrs = self.neariest_neighbours(word, 
-                                                    self.policy.measure, 
-                                                    self.policy.topk, 
+                    nbrs = self.neariest_neighbours(word, self.policy.measure, self.policy.topk,
                                                     self.policy.rho)
                 elif isinstance(self.policy, SynonymPolicy):
                     nbrs = self.synom_searcher.search(word)
@@ -56,13 +47,13 @@ class PWWS(Attacker):
                 if len(nbrs) > 0:
                     sids_to_change.append(i)
                     nbr_dct[i] = nbrs
-        
+
         # 1. Replace each word with <UNK> and other candidate words
-        # 2. Generate all sentences, then concatenate them into a 
+        # 2. Generate all sentences, then concatenate them into a
         #    list for batch forwarding
-        _instances = [] # concatenate all instances  
-        _offsets = {}   # {sid: [start_offset, number_of_instances]}  
-        
+        _instances = []  # concatenate all instances
+        _offsets = {}  # {sid: [start_offset, number_of_instances]}
+
         for sid in sids_to_change:
             tmp_instances = []
             # first element is the raw sentence
@@ -76,12 +67,21 @@ class PWWS(Attacker):
                 tmp_tokens = copy.copy(raw_tokens)
                 tmp_tokens[sid] = nbr
                 tmp_instances.append(self._tokens_to_instance(tmp_tokens))
-                
+
             _offsets[sid] = (len(_instances), len(tmp_instances))
             _instances.extend(tmp_instances)
-            
+
+        # ugly
+        if len(_instances) == 0:
+            return sanitize({
+                "adv": raw_tokens,
+                "raw": raw_tokens,
+                "outputs": self.predictor.predict_instance(raw_instance),
+                "changed": 0,
+                "success": 0
+            })
         _results = self.predictor.predict_batch_instance(_instances)
-        
+
         # Compute the word saliency
         repl_dct = {}  # {idx: "the replaced word"}
         drop_dct = {}  # {idx: prob_current - prob_replaced}
@@ -89,7 +89,7 @@ class PWWS(Attacker):
         pwws_dct = {}
         for sid in sids_to_change:
             _start, _num = _offsets[sid]
-            results = _results[_start: _start + _num]
+            results = _results[_start:_start + _num]
             probs = np.array([result['probs'] for result in results])
             true_probs = probs[:, np.argmax(probs[0])]
             raw_prob = true_probs[0]
@@ -98,21 +98,22 @@ class PWWS(Attacker):
             repl_dct[sid] = nbr_dct[sid][np.argmin(other_probs)]
             drop_dct[sid] = np.max(raw_prob - other_probs)
             sali_dct[sid] = raw_prob - oov_prob
-            
+
             pwws_dct[sid] = drop_dct[sid] * np.exp(sali_dct[sid])
-            
+
+
 #         total_exp = 0
 #         for sid in sids_to_change:
 #             sali_dct[sid] = np.exp(sali_dct[sid])
 #             total_exp += sali_dct[sid]
 #         for sid in sids_to_change:
 #             pwws_dct[sid] = drop_dct[sid] * sali_dct[sid] / total_exp
-        
-        # max number of tokens that can be changed
+
+# max number of tokens that can be changed
         max_change_num = min(self.max_change_num(len(raw_tokens)), len(sids_to_change))
-        
+
         final_tokens = [ele for ele in raw_tokens]
-        sorted_pwws = sorted(pwws_dct.items(), key=lambda x:x[1], reverse=True)
+        sorted_pwws = sorted(pwws_dct.items(), key=lambda x: x[1], reverse=True)
         successful = False
         result = None
         for i in range(max_change_num):
@@ -120,11 +121,12 @@ class PWWS(Attacker):
             final_tokens[sid] = repl_dct[sid]
             final_instance = self.predictor._dataset_reader.text_to_instance(" ".join(final_tokens))
             result = self.predictor.predict_instance(final_instance)
-            final_instance = self.predictor.predictions_to_labeled_instances(final_instance, result)[0]
+            final_instance = self.predictor.predictions_to_labeled_instances(
+                final_instance, result)[0]
             if final_instance[field_to_attack].label != raw_instance[field_to_attack].label:
                 successful = True
                 break
-        
+
         return sanitize({
             "adv": final_tokens,
             "raw": raw_tokens,

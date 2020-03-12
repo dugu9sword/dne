@@ -103,7 +103,7 @@ class HotFlip(Attacker):
             ignored_positions.append(token_sid)
 
             # Get new token using taylor approximation
-            input_token_ids = adv_text_field._indexed_tokens["tokens"]
+            input_token_ids = adv_text_field._indexed_tokens["tokens"]["tokens"]
             token_vid = input_token_ids[token_sid]
             
             cur_word = self.vocab._index_to_token['tokens'][token_vid]
@@ -116,7 +116,7 @@ class HotFlip(Attacker):
                 mask = self.general_mask()
             else:
                 mask = self.special_mask(cur_word)
-            direction.masked_fill_(mask, -10000.)
+            direction.masked_fill_(mask, -19260817.)
             new_token_vid = torch.argmax(direction).item()
             
             # flip token

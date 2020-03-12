@@ -49,6 +49,7 @@ from luna.pytorch import set_seed
 from allennlp.training.metrics.categorical_accuracy import CategoricalAccuracy
 from allennlpx.training import adv_utils
 from allennlpx.interpret.attackers.cached_searcher import CachedIndexSearcher
+from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
 
 set_environments()
 
@@ -107,15 +108,17 @@ class Task:
 
         # the code is a bullshit.
         _transform_fn = self.reader.transform_instances
+        targ = self.config.pred_transform_args
         transform_fn = {
+            "": lambda: lambda x: x,
             "identity": lambda: lambda x: x,
             "bt": lambda: partial(_transform_fn, BackTrans()),
             "dae": NotImplemented,
-            "rand_drop": lambda: partial(_transform_fn, RandDrop(0.15)),
-            "embed_aug": lambda: partial(_transform_fn, EmbedAug(0.15)),
-            "syn_aug": lambda: partial(_transform_fn, SynAug(0.15)),
-            "bert_aug": lambda: partial(_transform_fn, BertAug(0.15)),
-            "crop": lambda: partial(_transform_fn, Crop(0.5)),
+            "rand_drop": lambda: partial(_transform_fn, RandDrop(targ)),
+            "embed_aug": lambda: partial(_transform_fn, EmbedAug(targ)),
+            "syn_aug": lambda: partial(_transform_fn, SynAug(targ)),
+            "bert_aug": lambda: partial(_transform_fn, BertAug(targ)),
+            "crop": lambda: partial(_transform_fn, Crop(targ)),
         }[self.config.pred_transform]()
         self.predictor.set_ensemble_num(self.config.pred_ensemble)
         self.predictor.set_transform_fn(transform_fn)
@@ -134,13 +137,24 @@ class Task:
 
 #         collate_fn = partial(transform_collate, self.vocab, self.reader, Crop(0.3))
         collate_fn = allennlp_collate
+        if self.config.adv_constraint:
+            # VERY IMPORTANT!
+            # we use the spacy_weight here since during attacks we use an external weight.
+            # but it is also possible to use the model's internal weight.
+            # one thing is important: the weight must be corresponding to the vocab!
+            _, spacy_weight = self.get_spacy_vocab_and_vec()
+            searcher = EmbeddingSearcher(
+                embed=spacy_weight,
+                idx2word=self.vocab.get_token_from_index,
+                word2idx=self.vocab.get_token_index
+            )
+        else:
+            searcher = None
         adv_policy = adv_utils.HotFlipPolicy(
             normal_iteration=1,
-            adv_iteration=2,
-            replace_num=5,
-            searcher=CachedIndexSearcher(EmbeddingPolicy('euc', 10, None).cache_name(),
-                                         word2idx=self.vocab.get_token_index,
-                                         idx2word=self.vocab.get_token_from_index),
+            adv_iteration=self.config.adv_iter,
+            replace_num=15,
+            searcher=searcher,
         )
         trainer = AdvTrainer(
             model=self.model,
@@ -312,11 +326,8 @@ class Task:
             print('Agg metric', attack_metric)
         print(Counter(df["label"].tolist()))
         print(attack_metric)
-
-    def attack(self):
-        self.from_pretrained()
-        self.model.eval()
-
+                                         
+    def get_spacy_vocab_and_vec(self):
         if self.config.tokenizer != 'spacy':
             spacy_data = load_data(self.config.task_id, "spacy")
             spacy_vocab: Vocabulary = spacy_data['vocab']
@@ -328,6 +339,13 @@ class Task:
                                              embedding_dim=EMBED_DIM[self.config.attack_vectors],
                                              vocab=spacy_vocab,
                                              namespace="tokens"), True)
+        return spacy_vocab, spacy_weight
+
+    def attack(self):
+        self.from_pretrained()
+        self.model.eval()
+
+        spacy_vocab, spacy_weight = self.get_spacy_vocab_and_vec()
 
         if self.config.attack_gen_adv:
             f_adv = open(f"nogit/{self.config.model_name}.{self.config.attack_method}.adv.tsv", 'w')

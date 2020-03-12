@@ -134,6 +134,9 @@ class EmbeddingSearcher:
                          'D-100', 'I-100'
                      ],
                      floatfmt='.2f'))
+        
+    def search(self, *args, **kwargs):
+        return self.find_neighbours(*args, **kwargs)
 
     @lru_cache(maxsize=None)
     @torch.no_grad()

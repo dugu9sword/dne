@@ -17,39 +17,40 @@ from allennlpx.predictors.predictor import Predictor
 from luna import cast_list, lazy_property
 from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
 from allennlpx.interpret.attackers.synonym_searcher import SynonymSearcher
+from allennlp.nn.util import find_embedding_layer
 
 DEFAULT_IGNORE_TOKENS = [
-    "@@NULL@@", "@@PADDING@@", "@@UNKNOWN@@", ".", ",", ";", "!", "?", "[MASK]", "[SEP]", "[CLS]", "-LRB-", "-RRB-", "(", ")", "[", "]", "-", "$", "&", "*", "...", "'", '"'
-] # + stopwords.words("english")
+    "@@NULL@@", "@@PADDING@@", "@@UNKNOWN@@", ".", ",", ";", "!", "?", "[MASK]", "[SEP]", "[CLS]",
+    "-LRB-", "-RRB-", "(", ")", "[", "]", "-", "$", "&", "*", "...", "'", '"'
+]  # + stopwords.words("english")
 
 
 class Attacker(Registrable):
-    def __init__(self, 
-                 predictor: Predictor,
-                 *, # only accept keyword arguments
-                 ignore_tokens: List[str] = DEFAULT_IGNORE_TOKENS,
-                 forbidden_tokens: List[str] = DEFAULT_IGNORE_TOKENS,
-                 max_change_num_or_ratio = None,
-                 vocab = None,
-                 token_embedding = None
-                ):
+    def __init__(
+        self,
+        predictor: Predictor,
+        *,  # only accept keyword arguments
+        ignore_tokens: List[str] = DEFAULT_IGNORE_TOKENS,
+        forbidden_tokens: List[str] = DEFAULT_IGNORE_TOKENS,
+        max_change_num_or_ratio=None,
+        vocab=None,
+        token_embedding=None):
         self.predictor = predictor
-        
+
         self.ignore_tokens = ignore_tokens
         self.forbidden_tokens = forbidden_tokens
         self.max_change_num_or_ratio = max_change_num_or_ratio
-        
+
         self.spacy = SpacyTokenizer()
         if vocab:
             self.vocab = vocab
             self.token_embedding = token_embedding.to(self.model_device)
         else:
             self.vocab = self.predictor._model.vocab
-            self.token_embedding = self._construct_embedding_matrix().to(self.model_device)
-        
-    def attack_from_json(self,
-                         inputs: JsonDict,
-                         field_to_change: str,
+            # self.token_embedding = self._construct_embedding_matrix().to(self.model_device)
+            self.token_embedding = find_embedding_layer(self.predictor._model).weight
+
+    def attack_from_json(self, inputs: JsonDict, field_to_change: str,
                          field_to_attack: str) -> JsonDict:
         """
         This function finds a modification to the input text that would change the model's
@@ -73,7 +74,7 @@ class Attacker(Registrable):
             Contains the final, sanitized input after adversarial modification.
         """
         raise NotImplementedError()
-    
+
     @lru_cache(maxsize=None)
     def max_change_num(self, len_tokens):
         if self.max_change_num_or_ratio is None:
@@ -84,14 +85,14 @@ class Attacker(Registrable):
             else:
                 max_change_num = self.max_change_num_or_ratio
             return max_change_num
-    
+
     def _tokens_to_instance(self, tokens):
         return self.predictor._dataset_reader.text_to_instance(" ".join(tokens))
 
     @property
     def model_device(self):
         return next(self.predictor._model.parameters()).device
-        
+
     def _construct_embedding_matrix(self):
         """
         For HotFlip, we need a word embedding matrix to search over. The below is necessary for
@@ -126,7 +127,8 @@ class Attacker(Registrable):
                                                                          self.vocab,
                                                                          "sentence")["sentence"]
                     elmo_tokens.append(elmo_indexed_token[0])
-                all_inputs["elmo"] = torch.LongTensor(elmo_tokens).to(self.model_device).unsqueeze(0)
+                all_inputs["elmo"] = torch.LongTensor(elmo_tokens).to(
+                    self.model_device).unsqueeze(0)
 
         # find the TextFieldEmbedder
         for module in self.predictor._model.modules():
@@ -135,12 +137,12 @@ class Attacker(Registrable):
         # pass all tokens through the fake matrix and create an embedding out of it.
         embedding_matrix = embedder(all_inputs).squeeze()
         return embedding_matrix
-    
+
     @lazy_property
     def embed_searcher(self) -> EmbeddingSearcher:
         return EmbeddingSearcher(embed=self.token_embedding,
-                                 idx2word=lambda x: self.vocab.get_token_from_index(x),
-                                 word2idx=lambda x: self.vocab.get_token_index(x))
+                                 idx2word=self.vocab.get_token_from_index,
+                                 word2idx=self.vocab.get_token_index)
 
     @lazy_property
     def synom_searcher(self) -> SynonymSearcher:
