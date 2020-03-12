@@ -38,7 +38,7 @@ from awesome_glue.config import Config
 from awesome_glue.models.bert_classifier import BertClassifier
 from awesome_glue.models.lstm_classifier import LstmClassifier
 from awesome_glue.task_specs import TASK_SPECS
-from awesome_glue.transforms import (BackTrans, BertAug, Crop, EmbedAug, Identity, RandDrop, SynAug,
+from awesome_glue.transforms import (BackTrans, DAE, BertAug, Crop, EmbedAug, Identity, RandDrop, SynAug,
                                      transform_collate)
 from awesome_glue.utils import (EMBED_DIM, WORD2VECS, AttackMetric, FreqUtil, set_environments,
                                 text_diff)
@@ -113,7 +113,7 @@ class Task:
             "": lambda: lambda x: x,
             "identity": lambda: lambda x: x,
             "bt": lambda: partial(_transform_fn, BackTrans()),
-            "dae": NotImplemented,
+            "dae": lambda: partial(_transform_fn, DAE()),
             "rand_drop": lambda: partial(_transform_fn, RandDrop(targ)),
             "embed_aug": lambda: partial(_transform_fn, EmbedAug(targ)),
             "syn_aug": lambda: partial(_transform_fn, SynAug(targ)),

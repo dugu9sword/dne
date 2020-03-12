@@ -20,17 +20,17 @@ class Config(ProgramArgs):
         # training settings
         #         self.aug_data = 'nogit/SST-lstm-glove.advaug.tsv'
         self.aug_data = ''
-        self.adv_iter = 3
+        self.adv_iter = 0
         self.adv_replace_num = 3
         self.adv_constraint = True
 
         # predictor settings
-        self.pred_ensemble = 3
-        self.pred_transform = 'embed_aug'
+        self.pred_ensemble = 1
+        self.pred_transform = 'dae'
         self.pred_transform_args = 0.7
 
         # attack settings
-        self.attack_method = 'hotflip'
+        self.attack_method = 'pwws'
         self.attack_vectors = 'counter'
         self.attack_data_split = 'dev'
         self.attack_size = 200

@@ -45,6 +45,8 @@ class WordTransform(Transform):
 
 class BackTrans(Transform):
     def __init__(self):
+        import hack_fairseq
+        hack_fairseq.use_fairseq_9()
         self.en2z = torch.hub.load('pytorch/fairseq',
                                    'transformer.wmt19.en-de',
                                    checkpoint_file='model1.pt',
@@ -65,7 +67,19 @@ class BackTrans(Transform):
             ys = self.en2z.translate(xs, beam=5)
             ys = self.z2en.translate(ys, beam=5)
         return ys
+    
 
+class DAE(Transform):
+    def __init__(self):
+        import hack_fairseq
+        hack_fairseq.use_fairseq_6()
+        from fsgec.dae_hub import load_model
+        self.translate = load_model()
+        
+    @overrides
+    def __call__(self, xs):
+        return self.translate(xs)
+    
 
 class Crop(Transform):
     def __init__(self, crop_ratio=0.3):
