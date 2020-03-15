@@ -37,6 +37,7 @@ from allennlpx.predictors.text_classifier import TextClassifierPredictor
 from awesome_glue.config import Config
 from awesome_glue.models.bert_classifier import BertClassifier
 from awesome_glue.models.lstm_classifier import LstmClassifier
+from awesome_glue.models.graph_lstm_classifier import GraphLstmClassifier
 from awesome_glue.task_specs import TASK_SPECS
 from awesome_glue.transforms import (BackTrans, DAE, BertAug, Crop, EmbedAug, Identity, RandDrop, SynAug,
                                      transform_collate)
@@ -50,6 +51,8 @@ from allennlp.training.metrics.categorical_accuracy import CategoricalAccuracy
 from allennlpx.training import adv_utils
 from allennlpx.interpret.attackers.cached_searcher import CachedIndexSearcher
 from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
+import faiss
+
 
 set_environments()
 
@@ -100,6 +103,21 @@ class Task:
                                         0.0 if config.task_id in ['SST', 'TOY'] else 0.3,
                                         config.finetunable,
                                         f"{config.task_id}-{config.pretrain}.vec").cuda()
+        elif config.arch == 'glstm':
+            _, spacy_vec = self.get_spacy_vocab_and_vec()
+            index = faiss.IndexFlatL2(spacy_vec.shape[1])
+            res = faiss.StandardGpuResources()  # use a single GPU
+            index = faiss.index_cpu_to_gpu(res, 0, index)
+            embed =  spacy_vec.cpu().numpy()
+            index.add(embed)
+            _, I = index.search(embed, k=10)
+            self.model = GraphLstmClassifier(vocab=self.vocab, 
+                                             num_labels=TASK_SPECS[config.task_id]['num_labels'],
+                                             pretrain=config.pretrain, 
+                                             neighbours=torch.tensor(I).cuda(),
+                                             word_drop_rate=0.0 if config.task_id in ['SST', 'TOY'] else 0.3,
+                                             finetunable=config.finetunable,
+                                             cache_embed_path=f"{config.task_id}-{config.pretrain}.vec").cuda()
         else:
             raise Exception
 
@@ -456,7 +474,7 @@ class Task:
             if raw_pred == raw_label:
                 if self.config.arch == 'bert':
                     field_to_change = 'berty_tokens'
-                elif self.config.arch == 'lstm':
+                elif self.config.arch in ['lstm', 'glstm' ]:
                     field_to_change = 'sent'
 
                 result = attacker.attack_from_json({field_to_change: raw_text},

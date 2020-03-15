@@ -1,4 +1,5 @@
-fairseq
+advdae/
+fairseq*
 fsgec/
 datasets/*
 *.h5py

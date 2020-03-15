@@ -9,6 +9,8 @@ from allennlp.data import Instance
 from allennlp.data.batch import Batch
 from overrides import overrides
 from allennlpx.interpret.attackers.policies import EmbeddingPolicy
+from fairseq.hub_utils import from_pretrained, GeneratorHubInterface
+
 
 # same definition as TensorDict in allennlp.data.dataloader
 TensorDict = Dict[str, Union[torch.Tensor, Dict[str, torch.Tensor]]]
@@ -71,15 +73,22 @@ class BackTrans(Transform):
 
 class DAE(Transform):
     def __init__(self):
-        import hack_fairseq
-        hack_fairseq.use_fairseq_6()
-        from fsgec.dae_hub import load_model
-        self.translate = load_model()
+#         import hack_fairseq
+#         hack_fairseq.use_fairseq_6()
+#         from fsgec.dae_hub import load_model
+#         self.translate = load_model()
+        self.dae = GeneratorHubInterface(**from_pretrained("advdae/checkpoints/", 
+                checkpoint_file='checkpoint_best.pt',
+                data_name_or_path = 'advdae/wikitext-bin/'))
+        self.dae.cuda()
+        self.dae.eval()
         
     @overrides
     def __call__(self, xs):
-        return self.translate(xs)
-    
+#         return self.translate(xs)
+        with torch.no_grad():
+            return self.dae.translate(xs)
+
 
 class Crop(Transform):
     def __init__(self, crop_ratio=0.3):

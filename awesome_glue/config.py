@@ -6,9 +6,9 @@ class Config(ProgramArgs):
         super().__init__()
 
         # basic settings
-        self.task_id = "SST"
+        self.task_id = "AGNEWS"
         self.finetunable = True
-        self.arch = 'lstm'
+        self.arch = 'glstm'
         self.pretrain = 'glove'
         # self._model_name = "SST-lstm-adv"
         self._model_name = ""
@@ -26,8 +26,8 @@ class Config(ProgramArgs):
 
         # predictor settings
         self.pred_ensemble = 1
-        self.pred_transform = 'dae'
-        self.pred_transform_args = 0.7
+        self.pred_transform = ''
+        self.pred_transform_args = 0.3
 
         # attack settings
         self.attack_method = 'pwws'
@@ -43,7 +43,7 @@ class Config(ProgramArgs):
 
     @property
     def tokenizer(self):
-        if self.arch == 'lstm':
+        if self.arch in ['lstm', 'glstm']:
             return 'spacy'
         if self.arch == 'bert':
             return 'bert'
@@ -70,7 +70,7 @@ class Config(ProgramArgs):
             return self._model_name
 
     def _check_args(self):
-        assert self.arch in ['lstm', 'bert']
+        assert self.arch in ['glstm', 'lstm', 'bert']
         assert self.tokenizer in ['spacy', 'bert']
         assert self.pretrain in ['glove', 'fasttext', 'random']
         # assert self.mode in ['train', 'evaluate']
