@@ -1,20 +1,28 @@
 import datetime
 import logging
+import math
 import os
 import re
 import time
 import traceback
-from typing import Any, Dict, List, Optional, Tuple, Union
-from functools import partial
-from itertools import chain
+from typing import Dict, List, Optional, Tuple, Union, Any
 
+try:
+    from apex import amp
+except ImportError:
+    amp = None
 import torch
 import torch.distributed as dist
 import torch.optim.lr_scheduler
+from torch.nn.parallel import DistributedDataParallel
+
+
 from allennlp.common import Lazy, Tqdm
-from allennlp.common import util as common_util
 from allennlp.common.checks import ConfigurationError, check_for_gpu
+from allennlp.common import util as common_util
+
 from allennlp.data import DataLoader
+
 from allennlp.data.dataloader import TensorDict
 from allennlp.models.model import Model
 from allennlp.nn import util as nn_util
@@ -27,55 +35,41 @@ from allennlp.training.moving_average import MovingAverage
 from allennlp.training.optimizers import Optimizer
 from allennlp.training.tensorboard_writer import TensorboardWriter
 from allennlp.training.trainer_base import TrainerBase
-from torch.nn.parallel import DistributedDataParallel
-from allennlp.nn import util
-from allennlpx.training import adv_utils
-from allennlpx.interpret.attackers.cached_searcher import CachedIndexSearcher
-from luna import ram_write, ram_pop
-
-try:
-    from apex import amp
-except ImportError:
-    amp = None
 
 logger = logging.getLogger(__name__)
 
 
-"""
-    https://github.com/pmichel31415/translate/blob/paul/pytorch_translate/
-    research/adversarial/adversaries/brute_force_adversary.py
-"""
-class AdvTrainer(TrainerBase):
+class VanTrainer(TrainerBase):
     def __init__(
-            self,
-            model: Model,
-            optimizer: torch.optim.Optimizer,
-            data_loader: torch.utils.data.DataLoader,
-            adv_policy: adv_utils.AdvTrainingPolicy,
-            patience: Optional[int] = None,
-            validation_metric: str = "-loss",
-            validation_data_loader: torch.utils.data.DataLoader = None,
-            num_epochs: int = 20,
-            serialization_dir: Optional[str] = None,
-            num_serialized_models_to_keep: int = 20,
-            keep_serialized_model_every_num_seconds: int = None,
-            checkpointer: Checkpointer = None,
-            model_save_interval: float = None,
-            cuda_device: int = -1,
-            grad_norm: Optional[float] = None,
-            grad_clipping: Optional[float] = None,
-            learning_rate_scheduler: Optional[LearningRateScheduler] = None,
-            momentum_scheduler: Optional[MomentumScheduler] = None,
-            summary_interval: int = 100,
-            histogram_interval: int = None,
-            should_log_parameter_statistics: bool = True,
-            should_log_learning_rate: bool = False,
-            log_batch_size_period: Optional[int] = None,
-            moving_average: Optional[MovingAverage] = None,
-            distributed: bool = False,
-            local_rank: int = 0,
-            world_size: int = 1,
-            opt_level: Optional[str] = None,
+        self,
+        model: Model,
+        optimizer: torch.optim.Optimizer,
+        data_loader: torch.utils.data.DataLoader,
+        patience: Optional[int] = None,
+        validation_metric: str = "-loss",
+        validation_data_loader: torch.utils.data.DataLoader = None,
+        num_epochs: int = 20,
+        serialization_dir: Optional[str] = None,
+        num_serialized_models_to_keep: int = 20,
+        keep_serialized_model_every_num_seconds: int = None,
+        checkpointer: Checkpointer = None,
+        model_save_interval: float = None,
+        cuda_device: int = -1,
+        grad_norm: Optional[float] = None,
+        grad_clipping: Optional[float] = None,
+        learning_rate_scheduler: Optional[LearningRateScheduler] = None,
+        momentum_scheduler: Optional[MomentumScheduler] = None,
+        summary_interval: int = 100,
+        histogram_interval: int = None,
+        should_log_parameter_statistics: bool = True,
+        should_log_learning_rate: bool = False,
+        log_batch_size_period: Optional[int] = None,
+        moving_average: Optional[MovingAverage] = None,
+        distributed: bool = False,
+        local_rank: int = 0,
+        world_size: int = 1,
+        num_gradient_accumulation_steps: int = 1,
+        opt_level: Optional[str] = None,
     ) -> None:
         """
         A trainer for doing supervised learning. It just takes a labeled dataset
@@ -191,6 +185,10 @@ class AdvTrainer(TrainerBase):
             used as the rank.
         world_size : `int`, (default = 1)
             The number of `Trainer` workers participating in the distributed training.
+        num_gradient_accumulation_steps : `int`, optional, (default = 1)
+            Gradients are accumulated for the given number of steps before doing an optimizer step. This can
+            be useful to accommodate batches that are larger than the RAM size. Refer Thomas Wolf's
+            [post](https://tinyurl.com/y5mv44fw) for details on Gradient Accumulation.
         opt_level : `str`, optional, (default = `None`)
             Each opt_level establishes a set of properties that govern Amp’s implementation of pure or mixed
             precision training. Must be a choice of `"O0"`, `"O1"`, `"O2"`, or `"O3"`.
@@ -206,16 +204,18 @@ class AdvTrainer(TrainerBase):
         self.data_loader = data_loader
         self._validation_data_loader = validation_data_loader
         self.optimizer = optimizer
-        self.adv_policy = adv_policy
 
         if patience is None:  # no early stopping
             if validation_data_loader:
-                logger.warning("You provided a validation dataset but patience was set to None, "
-                               "meaning that early stopping is disabled")
+                logger.warning(
+                    "You provided a validation dataset but patience was set to None, "
+                    "meaning that early stopping is disabled"
+                )
         elif (not isinstance(patience, int)) or patience <= 0:
             raise ConfigurationError(
                 '{} is an invalid value for "patience": it must be a positive integer '
-                "or None (if you want to disable early stopping)".format(patience))
+                "or None (if you want to disable early stopping)".format(patience)
+            )
 
         # For tracking is_best_so_far and should_stop_early
         self._metric_tracker = MetricTracker(patience, validation_metric)
@@ -227,8 +227,10 @@ class AdvTrainer(TrainerBase):
         if checkpointer is not None:
             # We can't easily check if these parameters were passed in, so check against their default values.
             # We don't check against serialization_dir since it is also used by the parent class.
-            if (num_serialized_models_to_keep != 20
-                    or keep_serialized_model_every_num_seconds is not None):
+            if (
+                num_serialized_models_to_keep != 20
+                or keep_serialized_model_every_num_seconds is not None
+            ):
                 raise ConfigurationError(
                     "When passing a custom Checkpointer, you may not also pass in separate checkpointer "
                     "args 'num_serialized_models_to_keep' or 'keep_serialized_model_every_num_seconds'."
@@ -268,6 +270,8 @@ class AdvTrainer(TrainerBase):
 
         self._last_log = 0.0  # time of last logging
 
+        self._num_gradient_accumulation_steps = num_gradient_accumulation_steps
+
         # Enable activation logging.
         if histogram_interval is not None:
             self._tensorboard.enable_activation_logging(self.model)
@@ -276,14 +280,16 @@ class AdvTrainer(TrainerBase):
         self._opt_level = opt_level
         if self._opt_level is not None:
             if amp is None:
-                raise ConfigurationError((
-                    "Apex not installed but opt_level was provided. Please install NVIDIA's Apex to enable"
-                    " automatic mixed precision (AMP) training. See: https://github.com/NVIDIA/apex."
-                ))
+                raise ConfigurationError(
+                    (
+                        "Apex not installed but opt_level was provided. Please install NVIDIA's Apex to enable"
+                        " automatic mixed precision (AMP) training. See: https://github.com/NVIDIA/apex."
+                    )
+                )
 
-            self.model, self.optimizer = amp.initialize(self.model,
-                                                        self.optimizer,
-                                                        opt_level=self._opt_level)
+            self.model, self.optimizer = amp.initialize(
+                self.model, self.optimizer, opt_level=self._opt_level
+            )
 
         # Using `DistributedDataParallel`(ddp) brings in a quirk wrt AllenNLP's `Model` interface and its
         # usage. A `Model` object is wrapped by `ddp`, but assigning the wrapped model to `self.model`
@@ -293,9 +299,9 @@ class AdvTrainer(TrainerBase):
         # normal case, reference to `Model` is retained. This reference is only used in
         # these places: `model.__call__`, `model.train` and `model.eval`.
         if self._distributed:
-            self._pytorch_model = DistributedDataParallel(self.model,
-                                                          device_ids=[self.cuda_device],
-                                                          find_unused_parameters=True)
+            self._pytorch_model = DistributedDataParallel(
+                self.model, device_ids=[self.cuda_device], find_unused_parameters=True
+            )
         else:
             self._pytorch_model = self.model
 
@@ -329,25 +335,13 @@ class AdvTrainer(TrainerBase):
                 loss += self.model.get_regularization_penalty()
         except KeyError:
             if for_training:
-                raise RuntimeError("The model you are trying to optimize does not contain a"
-                                   " 'loss' key in the output of model.forward(inputs).")
+                raise RuntimeError(
+                    "The model you are trying to optimize does not contain a"
+                    " 'loss' key in the output of model.forward(inputs)."
+                )
             loss = None
 
         return loss
-
-    def _register_embedding_hooks(self):
-        embedding_layer = util.find_embedding_layer(self.model)
-
-        # grad_in/grad_out/inputs are tuples, outputs is a tensor
-        def fw_hook_layers(module, inputs, outputs):
-            ram_write('fw', outputs)
-
-        def bw_hook_layers(module, grad_in, grad_out):
-            ram_write('bw', grad_out[0])
-
-        fw_hook = embedding_layer.register_forward_hook(fw_hook_layers)
-        bw_hook = embedding_layer.register_backward_hook(bw_hook_layers)
-        return [fw_hook, bw_hook]
 
     def _train_epoch(self, epoch: int) -> Dict[str, float]:
         """
@@ -365,22 +359,26 @@ class AdvTrainer(TrainerBase):
         # Set the model to "train" mode.
         self._pytorch_model.train()
 
-        hooks = self._register_embedding_hooks()
-        embedding_matrix = util.find_embedding_layer(self.model).weight
-
         # Get tqdm for the training batches
         batch_generator = iter(self.data_loader)
+        batch_group_generator = common_util.lazy_groups_of(
+            batch_generator, self._num_gradient_accumulation_steps
+        )
+#         batch_group_generator = batch_generator
 
         logger.info("Training")
 
-        num_training_batches = len(self.data_loader)
-
+        num_training_batches = math.ceil(
+            len(self.data_loader) / self._num_gradient_accumulation_steps
+        )
         # Having multiple tqdm bars in case of distributed training will be a mess. Hence only the master's
         # progress is shown
         if self._master:
-            batch_generator_tqdm = Tqdm.tqdm(batch_generator, total=num_training_batches)
+            batch_group_generator_tqdm = Tqdm.tqdm(
+                batch_group_generator, total=num_training_batches
+            )
         else:
-            batch_generator_tqdm = batch_generator
+            batch_group_generator_tqdm = batch_group_generator
 
         self._last_log = time.time()
         last_save_time = time.time()
@@ -393,7 +391,7 @@ class AdvTrainer(TrainerBase):
 
         cumulative_batch_group_size = 0
         done_early = False
-        for batch in batch_generator_tqdm:
+        for batch_group in batch_group_generator_tqdm:
             if self._distributed:
                 # Check whether the other workers have stopped already (due to differing amounts of
                 # data in each). If so, we can't proceed because we would hang when we hit the
@@ -409,7 +407,8 @@ class AdvTrainer(TrainerBase):
                         "data across the workers and that some amount of it will be "
                         "ignored. A small amount of this is fine, but a major imbalance "
                         "should be avoided. Note: This warning will appear unless your "
-                        "data is perfectly balanced.")
+                        "data is perfectly balanced."
+                    )
                     break
 
             batches_this_epoch += 1
@@ -418,59 +417,20 @@ class AdvTrainer(TrainerBase):
 
             self.optimizer.zero_grad()
 
-            # normal samples
-            loss = self.batch_loss(batch, for_training=True)
-            if torch.isnan(loss):
-                raise ValueError("nan loss encountered")
-            if self._opt_level is not None:
-                with amp.scale_loss(loss, self.optimizer) as scaled_loss:
-                    scaled_loss.backward()
-            else:
-                loss.backward()
-            train_loss += loss.item()
-
-            # adversarial samples
-            raw_tokens = batch['sent']['tokens']['tokens'].cuda()
-            dbg_adv_tokens_lst = [raw_tokens.tolist()]
-            if isinstance(self.adv_policy, adv_utils.HotFlipPolicy):
-                if self.adv_policy.searcher is not None:
-                    constrain_fn_ = partial(adv_utils.apply_constraint, self.adv_policy.searcher)
+            for batch in batch_group:
+#             batch = batch_group
+                loss = self.batch_loss(batch, for_training=True)
+                if torch.isnan(loss):
+                    raise ValueError("nan loss encountered")
+                loss = loss / len(batch_group)
+                if self._opt_level is not None:
+                    with amp.scale_loss(loss, self.optimizer) as scaled_loss:
+                        scaled_loss.backward()
                 else:
-                    # Maybe we shall mask some special tokens.
-                    constrain_fn_ = None
-                for adv_idx in range(self.adv_policy.adv_iteration):
-                    # import ipdb; ipdb.set_trace()
-                    adv_tokens = adv_utils.hotflip(
-                        src_tokens=raw_tokens,
-                        embeds=ram_pop('fw'),
-                        grads=ram_pop('bw'),
-                        embedding_matrix=embedding_matrix,
-                        constrain_fn_=constrain_fn_,
-                        replace_num=self.adv_policy.replace_num,
-                    )
-                    batch['sent']['tokens']['tokens'] = adv_tokens
-                    loss = self.batch_loss(batch, for_training=True)
-                    if torch.isnan(loss):
-                        raise ValueError("nan loss encountered")
-                    if self._opt_level is not None:
-                        with amp.scale_loss(loss, self.optimizer) as scaled_loss:
-                            scaled_loss.backward()
-                    else:
-                        loss.backward()
-                    train_loss += loss.item()
-                    dbg_adv_tokens_lst.append(adv_tokens.tolist())
-            
-#             print(' ==== ')
-#             for tokens in dbg_adv_tokens_lst:
-#                 print(tokens[:1])
-#                 for sent in tokens[:1]:
-#                     print(' '.join(list(map(self.adv_policy.searcher.idx2word, sent))))
-                    
-
+                    loss.backward()
+                train_loss += loss.item()
 
             batch_grad_norm = self.rescale_gradients()
-
-            torch.cuda.empty_cache()
 
             # This does nothing if batch_num_total is None or you are using a
             # scheduler which doesn't update per batch.
@@ -492,8 +452,9 @@ class AdvTrainer(TrainerBase):
                     param_updates[name].sub_(param.detach().cpu())
                     update_norm = torch.norm(param_updates[name].view(-1))
                     param_norm = torch.norm(param.view(-1)).cpu()
-                    self._tensorboard.add_train_scalar("gradient_update/" + name,
-                                                       update_norm / (param_norm + 1e-7))
+                    self._tensorboard.add_train_scalar(
+                        "gradient_update/" + name, update_norm / (param_norm + 1e-7)
+                    )
             else:
                 self.optimizer.step()
 
@@ -513,7 +474,7 @@ class AdvTrainer(TrainerBase):
             # Updating tqdm only for the master as the trainers wouldn't have one
             if self._master:
                 description = training_util.description_from_metrics(metrics)
-                batch_generator_tqdm.set_description(description, refresh=False)
+                batch_group_generator_tqdm.set_description(description, refresh=False)
 
             # Log parameter values to Tensorboard (only from the master)
             if self._tensorboard.should_log_this_batch() and self._master:
@@ -532,20 +493,25 @@ class AdvTrainer(TrainerBase):
                 if (batches_this_epoch - 1) % self._log_batch_size_period == 0:
                     average = cumulative_batch_group_size / batches_this_epoch
                     logger.info(
-                        f"current batch size: {batch_group_size} mean batch size: {average}")
+                        f"current batch size: {batch_group_size} mean batch size: {average}"
+                    )
                     self._tensorboard.add_train_scalar("current_batch_size", batch_group_size)
                     self._tensorboard.add_train_scalar("mean_batch_size", average)
 
             # Save model if needed.
-            if (self._model_save_interval is not None
-                    and (time.time() - last_save_time > self._model_save_interval)
-                    and self._master):
+            if (
+                self._model_save_interval is not None
+                and (time.time() - last_save_time > self._model_save_interval)
+                and self._master
+            ):
                 last_save_time = time.time()
-                self._save_checkpoint("{0}.{1}".format(
-                    epoch, training_util.time_to_str(int(last_save_time))))
+                self._save_checkpoint(
+                    "{0}.{1}".format(epoch, training_util.time_to_str(int(last_save_time)))
+                )
         if self._distributed and not done_early:
             logger.warning(
-                f"Worker {torch.distributed.get_rank()} completed its entire epoch (training).")
+                f"Worker {torch.distributed.get_rank()} completed its entire epoch (training)."
+            )
             # Indicate that we're done so that any workers that have remaining data stop the epoch early.
             done = torch.tensor(1, device=self.cuda_device)
             torch.distributed.all_reduce(done, torch.distributed.ReduceOp.SUM)
@@ -555,9 +521,6 @@ class AdvTrainer(TrainerBase):
         # the final statistics for the epoch.
         if self._distributed:
             dist.barrier()
-
-        for hook in hooks:
-            hook.remove()
 
         metrics = training_util.get_metrics(
             self.model,
@@ -588,7 +551,8 @@ class AdvTrainer(TrainerBase):
             validation_data_loader = self._validation_data_loader
         else:
             raise ConfigurationError(
-                "Validation results cannot be calculated without a validation_data_loader")
+                "Validation results cannot be calculated without a validation_data_loader"
+            )
 
         val_generator_tqdm = Tqdm.tqdm(validation_data_loader)
         batches_this_epoch = 0
@@ -610,7 +574,8 @@ class AdvTrainer(TrainerBase):
                         "data across the workers and that some amount of it will be "
                         "ignored. A small amount of this is fine, but a major imbalance "
                         "should be avoided. Note: This warning will appear unless your "
-                        "data is perfectly balanced.")
+                        "data is perfectly balanced."
+                    )
                     break
 
             loss = self.batch_loss(batch, for_training=False)
@@ -636,7 +601,8 @@ class AdvTrainer(TrainerBase):
 
         if self._distributed and not done_early:
             logger.warning(
-                f"Worker {torch.distributed.get_rank()} completed its entire epoch (validation).")
+                f"Worker {torch.distributed.get_rank()} completed its entire epoch (validation)."
+            )
             # Indicate that we're done so that any workers that have remaining data stop validation early.
             done = torch.tensor(1, device=self.cuda_device)
             torch.distributed.all_reduce(done, torch.distributed.ReduceOp.SUM)
@@ -659,7 +625,8 @@ class AdvTrainer(TrainerBase):
             raise ConfigurationError(
                 "Could not recover training from the checkpoint.  Did you mean to output to "
                 "a different serialization directory or delete the existing serialization "
-                "directory?")
+                "directory?"
+            )
 
         training_util.enable_gradient_clipping(self.model, self._grad_clipping)
 
@@ -681,8 +648,9 @@ class AdvTrainer(TrainerBase):
 
             # get peak of memory usage
             if "cpu_memory_MB" in train_metrics:
-                metrics["peak_cpu_memory_MB"] = max(metrics.get("peak_cpu_memory_MB", 0),
-                                                    train_metrics["cpu_memory_MB"])
+                metrics["peak_cpu_memory_MB"] = max(
+                    metrics.get("peak_cpu_memory_MB", 0), train_metrics["cpu_memory_MB"]
+                )
             for key, value in train_metrics.items():
                 if key.startswith("gpu_"):
                     metrics["peak_" + key] = max(metrics.get("peak_" + key, 0), value)
@@ -715,11 +683,9 @@ class AdvTrainer(TrainerBase):
                         break
 
             if self._master:
-                self._tensorboard.log_metrics(train_metrics,
-                                              val_metrics=val_metrics,
-                                              log_to_console=True,
-                                              epoch=epoch +
-                                              1)  # +1 because tensorboard doesn't like 0
+                self._tensorboard.log_metrics(
+                    train_metrics, val_metrics=val_metrics, log_to_console=True, epoch=epoch + 1
+                )  # +1 because tensorboard doesn't like 0
 
             # Create overall metrics dict
             training_elapsed_time = time.time() - training_start_time
@@ -744,7 +710,8 @@ class AdvTrainer(TrainerBase):
 
             if self._serialization_dir and self._master:
                 common_util.dump_metrics(
-                    os.path.join(self._serialization_dir, f"metrics_epoch_{epoch}.json"), metrics)
+                    os.path.join(self._serialization_dir, f"metrics_epoch_{epoch}.json"), metrics
+                )
 
             # The Scheduler API is agnostic to whether your schedule requires a validation metric -
             # if it doesn't, the validation metric passed here is ignored.
@@ -766,7 +733,8 @@ class AdvTrainer(TrainerBase):
             if epoch < self._num_epochs - 1:
                 training_elapsed_time = time.time() - training_start_time
                 estimated_time_remaining = training_elapsed_time * (
-                    (self._num_epochs - epoch_counter) / float(epoch - epoch_counter + 1) - 1)
+                    (self._num_epochs - epoch_counter) / float(epoch - epoch_counter + 1) - 1
+                )
                 formatted_time = str(datetime.timedelta(seconds=int(estimated_time_remaining)))
                 logger.info("Estimated training time remaining: %s", formatted_time)
 
@@ -848,8 +816,10 @@ class AdvTrainer(TrainerBase):
 
         self.model.load_state_dict(model_state)
         self.optimizer.load_state_dict(training_state["optimizer"])
-        if (self._learning_rate_scheduler is not None
-                and "learning_rate_scheduler" in training_state):
+        if (
+            self._learning_rate_scheduler is not None
+            and "learning_rate_scheduler" in training_state
+        ):
             self._learning_rate_scheduler.load_state_dict(training_state["learning_rate_scheduler"])
         if self._momentum_scheduler is not None and "momentum_scheduler" in training_state:
             self._momentum_scheduler.load_state_dict(training_state["momentum_scheduler"])
@@ -881,33 +851,34 @@ class AdvTrainer(TrainerBase):
 
     @classmethod
     def from_partial_objects(
-            cls,
-            model: Model,
-            serialization_dir: str,
-            data_loader: DataLoader,
-            validation_data_loader: DataLoader = None,
-            local_rank: int = 0,
-            patience: int = None,
-            validation_metric: str = "-loss",
-            num_epochs: int = 20,
-            cuda_device: int = -1,
-            grad_norm: float = None,
-            grad_clipping: float = None,
-            model_save_interval: float = None,
-            summary_interval: int = 100,
-            histogram_interval: int = None,
-            should_log_parameter_statistics: bool = True,
-            should_log_learning_rate: bool = False,
-            log_batch_size_period: int = None,
-            distributed: bool = None,
-            world_size: int = 1,
-            opt_level: Optional[str] = None,
-            no_grad: List[str] = None,
-            optimizer: Lazy[Optimizer] = None,
-            learning_rate_scheduler: Lazy[LearningRateScheduler] = None,
-            momentum_scheduler: Lazy[MomentumScheduler] = None,
-            moving_average: Lazy[MovingAverage] = None,
-            checkpointer: Lazy[Checkpointer] = None,
+        cls,
+        model: Model,
+        serialization_dir: str,
+        data_loader: DataLoader,
+        validation_data_loader: DataLoader = None,
+        local_rank: int = 0,
+        patience: int = None,
+        validation_metric: str = "-loss",
+        num_epochs: int = 20,
+        cuda_device: int = -1,
+        grad_norm: float = None,
+        grad_clipping: float = None,
+        model_save_interval: float = None,
+        summary_interval: int = 100,
+        histogram_interval: int = None,
+        should_log_parameter_statistics: bool = True,
+        should_log_learning_rate: bool = False,
+        log_batch_size_period: int = None,
+        distributed: bool = None,
+        world_size: int = 1,
+        num_gradient_accumulation_steps: int = 1,
+        opt_level: Optional[str] = None,
+        no_grad: List[str] = None,
+        optimizer: Lazy[Optimizer] = None,
+        learning_rate_scheduler: Lazy[LearningRateScheduler] = None,
+        momentum_scheduler: Lazy[MomentumScheduler] = None,
+        moving_average: Lazy[MovingAverage] = None,
+        checkpointer: Lazy[Checkpointer] = None,
     ) -> "Trainer":
         """
         This method exists so that we can have a documented method to construct this class using
@@ -951,7 +922,8 @@ class AdvTrainer(TrainerBase):
 
         moving_average_ = moving_average.construct(parameters=parameters)
         learning_rate_scheduler_ = learning_rate_scheduler.construct(
-            optimizer=optimizer_, num_epochs=num_epochs, num_steps_per_epoch=batches_per_epoch)
+            optimizer=optimizer_, num_epochs=num_epochs, num_steps_per_epoch=batches_per_epoch
+        )
         momentum_scheduler_ = momentum_scheduler.construct(optimizer=optimizer_)
 
         checkpointer_ = checkpointer.construct() or Checkpointer(serialization_dir)
@@ -981,5 +953,6 @@ class AdvTrainer(TrainerBase):
             distributed=distributed,
             local_rank=local_rank,
             world_size=world_size,
+            num_gradient_accumulation_steps=num_gradient_accumulation_steps,
             opt_level=opt_level,
         )
