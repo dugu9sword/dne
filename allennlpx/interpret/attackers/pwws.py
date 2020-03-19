@@ -16,6 +16,10 @@ from allennlpx.interpret.attackers.policies import (CandidatePolicy, EmbeddingPo
 
 
 class PWWS(Attacker):
+    """
+    ACL 2019 - Generating Natural Language Adversarial Examples through
+    Probability Weighted Word Saliency
+    """
     def __init__(self, predictor, *, policy: CandidatePolicy = None, **kwargs):
         super().__init__(predictor, **kwargs)
         self.policy = policy
