@@ -61,7 +61,8 @@ class GraphEmbedding(Embedding):
         # Now (if necessary) add back in the extra dimensions.
         embedded = util.uncombine_initial_dims(embedded, original_size)
         
-        embedded = embedded[..., 0, :] * 1.0 + embedded[..., 1:4, :].mean(-2) * 0.0
+#         embedded = embedded[..., 0, :] * 1.0 + embedded[..., 1:4, :].mean(-2) * 0.0
+        embedded = embedded[..., 0, :]
 
         if self._projection:
             projection = self._projection

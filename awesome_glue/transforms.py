@@ -9,7 +9,7 @@ from allennlp.data import Instance
 from allennlp.data.batch import Batch
 from overrides import overrides
 from allennlpx.interpret.attackers.policies import EmbeddingPolicy
-from fairseq.hub_utils import from_pretrained, GeneratorHubInterface
+from allennlp.data.tokenizers import SpacyTokenizer
 
 
 # same definition as TensorDict in allennlp.data.dataloader
@@ -73,21 +73,27 @@ class BackTrans(Transform):
 
 class DAE(Transform):
     def __init__(self):
-#         import hack_fairseq
-#         hack_fairseq.use_fairseq_6()
-#         from fsgec.dae_hub import load_model
-#         self.translate = load_model()
-        self.dae = GeneratorHubInterface(**from_pretrained("advdae/checkpoints/", 
-                checkpoint_file='checkpoint_best.pt',
-                data_name_or_path = 'advdae/wikitext-bin/'))
-        self.dae.cuda()
-        self.dae.eval()
+        import hack_fairseq
+        hack_fairseq.use_fairseq_6()
+        from fsgec.dae_hub import load_model
+        self.translate = load_model()
+#         hack_fairseq.use_fairseq_9()
+#         from fairseq.hub_utils import from_pretrained, GeneratorHubInterface
+#         self.tokenizer = SpacyTokenizer()
+#         self.dae = GeneratorHubInterface(**from_pretrained("advdae/checkpoints/", 
+#                 checkpoint_file='checkpoint_best.pt',
+#                 data_name_or_path = 'advdae/wikitext-bin/'))
+#         self.dae.cuda()
+#         self.dae.eval()
         
     @overrides
     def __call__(self, xs):
-#         return self.translate(xs)
         with torch.no_grad():
-            return self.dae.translate(xs)
+#             import ipdb; ipdb.set_trace()
+            return self.translate(xs)
+#         with torch.no_grad():
+#             xs = [" ".join([x.text for x in self.tokenizer.tokenize(x)]) for x in xs]
+#             return self.dae.translate(xs)
 
 
 class Crop(Transform):

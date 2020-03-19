@@ -1,5 +1,5 @@
 import csv
-from collections import Counter
+from collections import Counter, defaultdict
 from functools import partial
 
 import numpy as np
@@ -13,6 +13,7 @@ from allennlp.training.learning_rate_schedulers.slanted_triangular import \
     SlantedTriangular
 from allennlp.training.trainer import Trainer
 from allennlpx.training.adv_trainer import AdvTrainer
+from allennlpx.training.vanilla_trainer import VanTrainer
 from allennlp.training.util import evaluate
 from nltk.corpus import stopwords
 from sentence_transformers import SentenceTransformer
@@ -72,7 +73,12 @@ def load_data(task_id: str, tokenizer: str):
         train_data = reader.read(f'{spec["path"]}/train.tsv')
         dev_data = reader.read(f'{spec["path"]}/dev.tsv')
         test_data = reader.read(f'{spec["path"]}/test.tsv')
-        vocab = Vocabulary.from_instances(train_data + dev_data + test_data)
+        _MIN_COUNT = 3
+        vocab = Vocabulary.from_instances(
+            train_data,
+            min_count = {"tokens": _MIN_COUNT, "sent": _MIN_COUNT,
+                        "sent1": _MIN_COUNT, "sent2": _MIN_COUNT},
+        )
         train_data.index_with(vocab)
         dev_data.index_with(vocab)
         test_data.index_with(vocab)
@@ -111,6 +117,8 @@ class Task:
             embed =  spacy_vec.cpu().numpy()
             index.add(embed)
             _, I = index.search(embed, k=10)
+#             import ipdb; ipdb.set_trace()
+            
             self.model = GraphLstmClassifier(vocab=self.vocab, 
                                              num_labels=TASK_SPECS[config.task_id]['num_labels'],
                                              pretrain=config.pretrain, 
@@ -179,6 +187,7 @@ class Task:
             optimizer=optimizer,
             validation_metric='+accuracy',
             adv_policy=adv_policy,
+            # adv_policy = None,
             data_loader=DataLoader(
                 self.train_data,
                 batch_sampler=BucketBatchSampler(

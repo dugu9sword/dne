@@ -6,13 +6,13 @@ class Config(ProgramArgs):
         super().__init__()
 
         # basic settings
-        self.task_id = "AGNEWS"
+        self.task_id = "SST"
         self.finetunable = True
-        self.arch = 'glstm'
+        self.arch = 'lstm'
         self.pretrain = 'glove'
         # self._model_name = "SST-lstm-adv"
         self._model_name = ""
-        self.mode = 'attack'
+        self.mode = 'train'
 
         # transfer settings
         self.adv_data = 'nogit/AGNEWS-lstm.hotflip.adv.tsv'
@@ -20,8 +20,8 @@ class Config(ProgramArgs):
         # training settings
         #         self.aug_data = 'nogit/SST-lstm-glove.advaug.tsv'
         self.aug_data = ''
-        self.adv_iter = 0
-        self.adv_replace_num = 3
+        self.adv_iter = 2
+        self.adv_replace_num = 5
         self.adv_constraint = True
 
         # predictor settings
