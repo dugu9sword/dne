@@ -10,7 +10,9 @@ from allennlp.data.batch import Batch
 from overrides import overrides
 from allennlpx.interpret.attackers.policies import EmbeddingPolicy
 from allennlp.data.tokenizers import SpacyTokenizer
+from luna.registry import setup_registry
 
+register, R = setup_registry('transforms')
 
 # same definition as TensorDict in allennlp.data.dataloader
 TensorDict = Dict[str, Union[torch.Tensor, Dict[str, torch.Tensor]]]
@@ -45,6 +47,7 @@ class WordTransform(Transform):
         return change_num
 
 
+@register('bt')
 class BackTrans(Transform):
     def __init__(self):
         import hack_fairseq
@@ -71,31 +74,33 @@ class BackTrans(Transform):
         return ys
     
 
+@register('dae')
 class DAE(Transform):
     def __init__(self):
         import hack_fairseq
         hack_fairseq.use_fairseq_6()
         from fsgec.dae_hub import load_model
         self.translate = load_model()
+#         import hack_fairseq
 #         hack_fairseq.use_fairseq_9()
-#         from fairseq.hub_utils import from_pretrained, GeneratorHubInterface
+#         from fshub import from_pretrained, GeneratorHubInterface
 #         self.tokenizer = SpacyTokenizer()
 #         self.dae = GeneratorHubInterface(**from_pretrained("advdae/checkpoints/", 
-#                 checkpoint_file='checkpoint_best.pt',
-#                 data_name_or_path = 'advdae/wikitext-bin/'))
+#                                 checkpoint_file='checkpoint_best.pt',
+#                                 data_name_or_path = 'advdae/wikitext-bin/'))
 #         self.dae.cuda()
 #         self.dae.eval()
         
     @overrides
     def __call__(self, xs):
         with torch.no_grad():
-#             import ipdb; ipdb.set_trace()
             return self.translate(xs)
 #         with torch.no_grad():
 #             xs = [" ".join([x.text for x in self.tokenizer.tokenize(x)]) for x in xs]
-#             return self.dae.translate(xs)
+#             return self.dae.translate(xs, no_unk=False)
 
-
+        
+@register('crop')
 class Crop(Transform):
     def __init__(self, crop_ratio=0.3):
         self.crop_ratio = crop_ratio
@@ -117,12 +122,14 @@ class Crop(Transform):
         return ys
 
 
+@register('identity')
 class Identity(Transform):
     @overrides
     def __call__(self, xs):
         return xs
 
 
+@register('rand_drop')
 class RandDrop(WordTransform):
     @overrides
     def __call__(self, xs):
@@ -137,6 +144,7 @@ class RandDrop(WordTransform):
         return ys
 
 
+@register('embed_aug')
 class EmbedAug(WordTransform):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -167,6 +175,7 @@ class EmbedAug(WordTransform):
         return ys
 
 
+@register('syn_aug')
 class SynAug(WordTransform):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -184,6 +193,7 @@ class SynAug(WordTransform):
         return ys
 
 
+@register('bert_aug')
 class BertAug(WordTransform):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -199,3 +209,11 @@ class BertAug(WordTransform):
             self.aug.aug_min = self.aug.aug_max = self.change_num(len(x_split))
             ys.append(self.aug.substitute(x))
         return ys
+
+
+def chaining(objs: List[Transform]):
+    def chained(xs):
+        for obj in objs:
+            xs = obj[xs]
+        return xs
+    return chained

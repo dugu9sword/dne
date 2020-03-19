@@ -4,6 +4,8 @@ from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
 from allennlpx.interpret.attackers.policies import EmbeddingPolicy
 import torch
 from luna import batch_pad
+from copy import deepcopy
+import random
 
 
 @dataclass
@@ -19,7 +21,14 @@ class HotFlipPolicy(AdvTrainingPolicy):
     replace_num: int = None
 
 
-def apply_constraint(searcher, src_tokens, scores):
+@dataclass
+class RandomNeighbourPolicy(AdvTrainingPolicy):
+    searcher: EmbeddingSearcher = None
+    replace_num: int = None
+
+
+def apply_constraint_(searcher, src_tokens, scores):
+    from luna import time_record
     mask = scores.new_zeros(scores.size(), dtype=torch.bool)
     src_tokens_lst = src_tokens.tolist()
     
@@ -37,13 +46,13 @@ def apply_constraint(searcher, src_tokens, scores):
                 idxes_to_mask.append(idxs.cpu().numpy().tolist())
     idxes_to_mask = src_tokens.new_tensor(batch_pad(idxes_to_mask, 0))
     idxes_to_mask = idxes_to_mask.view(*src_tokens.size(), -1)
-    
+        
     # mask is a bool tensor that stores all *allowed* word indicies
     # but 0th word(<pad>) is also True, so we set 0th value to False
     mask = scores.new_zeros(scores.size(), dtype=torch.bool)
     mask.scatter_(dim=2,
-                  index=idxes_to_mask,
-                  src=idxes_to_mask.new_ones(idxes_to_mask.size(), dtype=torch.bool))
+                index=idxes_to_mask,
+                src=idxes_to_mask.new_ones(idxes_to_mask.size(), dtype=torch.bool))
     mask[:, :, 0] = False
     
     # fill all the unallowed values to -inf
@@ -51,7 +60,7 @@ def apply_constraint(searcher, src_tokens, scores):
     scores.masked_fill_(mask, -19260817.)
 
 
-def hotflip(*, src_tokens, embeds, grads, embedding_matrix, replace_num=3, constrain_fn_=None):
+def hotflip(*, src_tokens, embeds, grads, embedding_matrix, replace_num=3, searcher=None):
     replace_num = min(replace_num, src_tokens.size(1))
 
     # compute the direction vector dot the gradient
@@ -60,8 +69,8 @@ def hotflip(*, src_tokens, embeds, grads, embedding_matrix, replace_num=3, const
     dir_dot_grad = new_embed_dot_grad - prev_embed_dot_grad.unsqueeze(-1)
 
     # maybe some constraints
-    if constrain_fn_ is not None:
-        constrain_fn_(src_tokens, dir_dot_grad)
+    if searcher is not None:
+        apply_constraint_(searcher, src_tokens, dir_dot_grad)
     
     # supposing that vocab[0]=<pad>, vocab[1]=<unk>. 
     # we set value of <pad> to be smaller than the <unk>.
@@ -82,3 +91,15 @@ def hotflip(*, src_tokens, embeds, grads, embedding_matrix, replace_num=3, const
     adv_tokens.scatter_(dim=1, index=best_positions, src=src)
     adv_tokens[src_tokens == 0] = 0
     return adv_tokens
+
+
+def random_swap(*, src_tokens, replace_num, searcher):
+    adv_tokens_lst = src_tokens.tolist()
+    for bid in range(src_tokens.size(0)):
+        sids = [sid for sid in range(src_tokens.size(1)) if adv_tokens_lst[bid][sid] != 0]
+        sids = random.sample(sids, k=min(replace_num, len(sids)))
+        for sid in sids:
+            _, idxs = searcher.search(adv_tokens_lst[bid][sid], 'euc', 10, None)
+            if idxs is not None:
+                adv_tokens_lst[bid][sid] = random.choice(idxs.cpu().numpy().tolist())
+    return torch.tensor(adv_tokens_lst, device=src_tokens.device)

@@ -25,7 +25,8 @@ class EmbeddingSearcher:
         else:
             self.idx2word = idx2word
         self.faiss_index = None
-        
+        self._cache = {}
+
     def is_pretrained(self, element: Union[int, str]):
         return not all(self.as_vector(element) == 0.0)
 
@@ -41,6 +42,15 @@ class EmbeddingSearcher:
         else:
             raise TypeError('You passed a {}, int/str/torch.Tensor required'.format(type(element)))
         return query_vector
+
+    def as_index(self, element: Union[int, str]):
+        if isinstance(element, int):
+            idx = element
+        elif isinstance(element, str):
+            idx = self.word2idx(element)
+        else:
+            raise TypeError('You passed a {}, int/str required'.format(type(element)))
+        return idx
 
     def use_faiss_backend(
         self,
@@ -91,7 +101,7 @@ class EmbeddingSearcher:
         for ele in cast_list(torch.randint(self.embed.size(0), (50, ))):
             if self.embed[ele].sum() == 0.:
                 continue
-            vals, idxs = self.find_neighbours(ele, measure,  None)
+            vals, idxs = self.find_neighbours(ele, measure, None)
             for nbr in nbr_num:
                 dists[nbr].append(vals[1:nbr + 1])
         table = []
@@ -134,9 +144,22 @@ class EmbeddingSearcher:
                          'D-100', 'I-100'
                      ],
                      floatfmt='.2f'))
-        
+
     def search(self, *args, **kwargs):
         return self.find_neighbours(*args, **kwargs)
+
+    def pre_search(self, measure='euc', topk=None, rho=None, gpu=True):
+        import faiss
+        data = self.embed.cpu().numpy()
+        dim = self.embed.size(1)
+        index = faiss.IndexFlatL2(dim)
+        index.add(data)
+        if gpu:
+            res = faiss.StandardGpuResources()  # use a single GPU
+            index = faiss.index_cpu_to_gpu(res, 0, index)
+        D, I = index.search(data, topk)
+        self._cache[f'D-{measure}-{topk}-{rho}'] = D
+        self._cache[f'I-{measure}-{topk}-{rho}'] = I
 
     @lru_cache(maxsize=None)
     @torch.no_grad()
@@ -150,7 +173,8 @@ class EmbeddingSearcher:
         assert measure in ['euc', 'cos']
         if rho is not None:
             assert (measure == 'euc' and rho > 0) or (
-                measure == 'cos' and 0 < rho < 1), "threshold for euc distance must be larger than 0, for cos distance must be between 0 and 1"
+                measure == 'cos' and 0 < rho < 1
+            ), "threshold for euc distance must be larger than 0, for cos distance must be between 0 and 1"
 
         measure_fn = cos_dist if measure == 'cos' else euc_dist
         query_vector = self.as_vector(element)
@@ -158,12 +182,20 @@ class EmbeddingSearcher:
         # Assume that a vector equals to 0 has no neighbours
         if not self.is_pretrained(query_vector):
             return None, None
-        
+
+        if f'D-{measure}-{topk}-{rho}' in self._cache:
+            _idx = self.as_index(element)
+            D = self._cache[f'D-{measure}-{topk}-{rho}'][_idx]
+            I = self._cache[f'I-{measure}-{topk}-{rho}'][_idx]
+            tk_vals = torch.tensor(D, device=self.embed.device)
+            tk_idxs = torch.tensor(I, device=self.embed.device)
+            return tk_vals, tk_idxs
+
         if topk is None:
             _topk = self.embed.size(0)
         else:
             _topk = topk
-            
+
         if self.faiss_index is None:
             dists = measure_fn(query_vector, self.embed)
             tk_vals, tk_idxs = torch.topk(dists, _topk, largest=False)
@@ -177,7 +209,7 @@ class EmbeddingSearcher:
             mask_idx = tk_vals < rho
             tk_vals = tk_vals[mask_idx]
             tk_idxs = tk_idxs[mask_idx]
-            
+
         if verbose:
             table = []
             print('Neariest neighbours measured by {}, topk={}, rho={}'.format(measure, topk, rho))

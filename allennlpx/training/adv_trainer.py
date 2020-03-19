@@ -430,42 +430,36 @@ class AdvTrainer(TrainerBase):
             train_loss += loss.item()
 
             # adversarial samples
-            raw_tokens = batch['sent']['tokens']['tokens'].cuda()
-            dbg_adv_tokens_lst = [raw_tokens.tolist()]
-            if isinstance(self.adv_policy, adv_utils.HotFlipPolicy):
-                if self.adv_policy.searcher is not None:
-                    constrain_fn_ = partial(adv_utils.apply_constraint, self.adv_policy.searcher)
-                else:
-                    # Maybe we shall mask some special tokens.
-                    constrain_fn_ = None
-                for adv_idx in range(self.adv_policy.adv_iteration):
-                    # import ipdb; ipdb.set_trace()
+            for adv_idx in range(self.adv_policy.adv_iteration):
+                raw_tokens = batch['sent']['tokens']['tokens'].cuda()
+                if isinstance(self.adv_policy, adv_utils.HotFlipPolicy):
                     adv_tokens = adv_utils.hotflip(
                         src_tokens=raw_tokens,
                         embeds=ram_pop('fw'),
                         grads=ram_pop('bw'),
                         embedding_matrix=embedding_matrix,
-                        constrain_fn_=constrain_fn_,
+                        searcher=self.adv_policy.searcher,
                         replace_num=self.adv_policy.replace_num,
                     )
-                    batch['sent']['tokens']['tokens'] = adv_tokens
-                    loss = self.batch_loss(batch, for_training=True)
-                    if torch.isnan(loss):
-                        raise ValueError("nan loss encountered")
-                    if self._opt_level is not None:
-                        with amp.scale_loss(loss, self.optimizer) as scaled_loss:
-                            scaled_loss.backward()
-                    else:
-                        loss.backward()
-                    train_loss += loss.item()
-                    dbg_adv_tokens_lst.append(adv_tokens.tolist())
-            
-#             print(' ==== ')
-#             for tokens in dbg_adv_tokens_lst:
-#                 print(tokens[:1])
-#                 for sent in tokens[:1]:
-#                     print(' '.join(list(map(self.adv_policy.searcher.idx2word, sent))))
-                    
+                elif isinstance(self.adv_policy, adv_utils.RandomNeighbourPolicy):
+                    adv_tokens = adv_utils.random_swap(
+                        src_tokens=raw_tokens,
+                        searcher=self.adv_policy.searcher,
+                        replace_num=self.adv_policy.replace_num,
+                    )
+                else:
+                    raise Exception('You must specify a policy')
+                batch['sent']['tokens']['tokens'] = adv_tokens
+                loss = self.batch_loss(batch, for_training=True)
+                if torch.isnan(loss):
+                    raise ValueError("nan loss encountered")
+                if self._opt_level is not None:
+                    with amp.scale_loss(loss, self.optimizer) as scaled_loss:
+                        scaled_loss.backward()
+                else:
+                    loss.backward()
+                train_loss += loss.item()
+
 
 
             batch_grad_norm = self.rescale_gradients()

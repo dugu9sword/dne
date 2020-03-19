@@ -41,7 +41,7 @@ from awesome_glue.models.lstm_classifier import LstmClassifier
 from awesome_glue.models.graph_lstm_classifier import GraphLstmClassifier
 from awesome_glue.task_specs import TASK_SPECS
 from awesome_glue.transforms import (BackTrans, DAE, BertAug, Crop, EmbedAug, Identity, RandDrop, SynAug,
-                                     transform_collate)
+                                     transform_collate, chaining)
 from awesome_glue.utils import (EMBED_DIM, WORD2VECS, AttackMetric, FreqUtil, set_environments,
                                 text_diff)
 from luna import flt2str, ram_write
@@ -53,6 +53,9 @@ from allennlpx.training import adv_utils
 from allennlpx.interpret.attackers.cached_searcher import CachedIndexSearcher
 from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
 import faiss
+from luna.registry import get_registry
+import inspect
+from fastnumbers import fast_real
 
 
 set_environments()
@@ -117,7 +120,6 @@ class Task:
             embed =  spacy_vec.cpu().numpy()
             index.add(embed)
             _, I = index.search(embed, k=10)
-#             import ipdb; ipdb.set_trace()
             
             self.model = GraphLstmClassifier(vocab=self.vocab, 
                                              num_labels=TASK_SPECS[config.task_id]['num_labels'],
@@ -132,20 +134,27 @@ class Task:
         self.predictor = TextClassifierPredictor(
             self.model, self.reader, key='sent' if self.config.arch != 'bert' else 'berty_tokens')
 
-        # the code is a bullshit.
-        _transform_fn = self.reader.transform_instances
-        targ = self.config.pred_transform_args
-        transform_fn = {
-            "": lambda: lambda x: x,
-            "identity": lambda: lambda x: x,
-            "bt": lambda: partial(_transform_fn, BackTrans()),
-            "dae": lambda: partial(_transform_fn, DAE()),
-            "rand_drop": lambda: partial(_transform_fn, RandDrop(targ)),
-            "embed_aug": lambda: partial(_transform_fn, EmbedAug(targ)),
-            "syn_aug": lambda: partial(_transform_fn, SynAug(targ)),
-            "bert_aug": lambda: partial(_transform_fn, BertAug(targ)),
-            "crop": lambda: partial(_transform_fn, Crop(targ)),
-        }[self.config.pred_transform]()
+        R = get_registry('transforms')
+        if "|" in self.config.pred_transform:
+            tf_names = self.config.pred_transform.split("|")
+            tf_args = self.config.pred_transform_args.split("|")
+            assert len(tf_names) == len(tf_args)
+        else:
+            if self.config.pred_transform == '':
+                self.config.pred_transform = 'identity'
+            tf_names = [self.config.pred_transform]
+            tf_args = [self.config.pred_transform_args]
+        tf_args = list(map(fast_real, tf_args))
+        tf_objs = []
+        for tf_name, tf_arg in zip(tf_names, tf_args):
+            tf_cls = R[tf_name]
+            if len(inspect.signature(tf_cls.__init__).parameters) == 1:
+                tf_obj = tf_cls()
+            else:
+                tf_obj = tf_cls(tf_arg)
+        chained = chaining(tf_objs)
+        transform_fn = partial(self.reader.transform_instances, chained)
+
         self.predictor.set_ensemble_num(self.config.pred_ensemble)
         self.predictor.set_transform_fn(transform_fn)
 
@@ -174,14 +183,21 @@ class Task:
                 idx2word=self.vocab.get_token_from_index,
                 word2idx=self.vocab.get_token_index
             )
+            searcher.pre_search('euc', 10)
         else:
             searcher = None
-        adv_policy = adv_utils.HotFlipPolicy(
-            normal_iteration=1,
-            adv_iteration=self.config.adv_iter,
-            replace_num=15,
-            searcher=searcher,
-        )
+        if self.config.adv_policy == 'hot':
+            adv_policy = adv_utils.HotFlipPolicy(
+                adv_iteration=self.config.adv_iter,
+                replace_num=self.config.adv_replace_num,
+                searcher=searcher,
+            )
+        elif self.config.adv_policy == 'rad':
+            adv_policy = adv_utils.RandomNeighbourPolicy(
+                adv_iteration=self.config.adv_iter,
+                replace_num=self.config.adv_replace_num,
+                searcher=searcher,
+            )
         trainer = AdvTrainer(
             model=self.model,
             optimizer=optimizer,
@@ -293,7 +309,7 @@ class Task:
     def evaluate_model(self):
         self.from_pretrained()
         self.model.eval()
-        evaluate(self.model, DataLoader(self.dev_data, 32), 0, None)
+        print(evaluate(self.model, DataLoader(self.dev_data, 32), 0, None))
 
     @torch.no_grad()
     def evaluate_predictor(self):

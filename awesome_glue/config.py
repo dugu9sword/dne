@@ -12,7 +12,7 @@ class Config(ProgramArgs):
         self.pretrain = 'glove'
         # self._model_name = "SST-lstm-adv"
         self._model_name = ""
-        self.mode = 'train'
+        self.mode = 'attack'
 
         # transfer settings
         self.adv_data = 'nogit/AGNEWS-lstm.hotflip.adv.tsv'
@@ -20,26 +20,31 @@ class Config(ProgramArgs):
         # training settings
         #         self.aug_data = 'nogit/SST-lstm-glove.advaug.tsv'
         self.aug_data = ''
-        self.adv_iter = 2
-        self.adv_replace_num = 5
+        self.adv_iter = 0
+        # hot -> hotflip, rdm -> random
+        self.adv_policy = 'rdm'
+        self.adv_replace_num = 20
         self.adv_constraint = True
 
         # predictor settings
-        self.pred_ensemble = 1
-        self.pred_transform = ''
-        self.pred_transform_args = 0.3
+        self.pred_ensemble = 5
+        self.pred_transform = 'rand_drop|embed_aug'
+        self.pred_transform_args = '0.3|0.3'
 
         # attack settings
         self.attack_method = 'pwws'
         self.attack_vectors = 'counter'
         self.attack_data_split = 'dev'
         self.attack_size = 200
+        # self.attack_data_split = 'train'
+        # self.attack_size = -1
         self.attack_gen_aug = False
         self.attack_gen_adv = False
 
         # other settings
         self.alchemist = False
         self.seed = 2
+        self.cuda = 0
 
     @property
     def tokenizer(self):
@@ -60,7 +65,7 @@ class Config(ProgramArgs):
             #             return model_name
             model_name = f"{self.task_id}-{self.arch}"
             if self.adv_iter != 0:
-                model_name += f'-adv.{self.adv_iter}.{self.adv_replace_num}'
+                model_name += f'-{self.adv_policy}.{self.adv_iter}.{self.adv_replace_num}'
                 if self.adv_constraint:
                     model_name += '.con'
                 else:

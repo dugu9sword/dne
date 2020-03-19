@@ -38,7 +38,9 @@ class GraphEmbedding(Embedding):
 
     @overrides
     def forward(self, tokens: torch.Tensor) -> torch.Tensor:
+        neighbour_num = self.neighbours.size(1)
         neighbour_tokens = self.neighbours[tokens]
+        neighbour_tokens = torch.cat([tokens.unsqueeze(-1), neighbour_tokens], dim=-1)
             
         # tokens may have extra dimensions (batch_size, d1, ..., dn, sequence_length),
         # but embedding expects (batch_size, sequence_length), so pass tokens to
@@ -60,9 +62,16 @@ class GraphEmbedding(Embedding):
 
         # Now (if necessary) add back in the extra dimensions.
         embedded = util.uncombine_initial_dims(embedded, original_size)
+        neighbour_tokens = neighbour_tokens.view(original_size)
         
 #         embedded = embedded[..., 0, :] * 1.0 + embedded[..., 1:4, :].mean(-2) * 0.0
-        embedded = embedded[..., 0, :]
+#         import pdb; pdb.set_trace()
+        no_nbr_mask = neighbour_tokens[:, :, 1] == 0
+        embedded_1 = embedded[..., 0, :] * 0.0 + embedded[..., 2:, :].mean(-2) * 1.0
+        embedded_2 = embedded[..., 0, :]
+        embedded_1 = embedded_1.masked_fill_(no_nbr_mask.unsqueeze(-1), 0.)
+        embedded_2 = embedded_2.masked_fill_(~no_nbr_mask.unsqueeze(-1), 0.)
+        embedded = embedded_1 + embedded_2
 
         if self._projection:
             projection = self._projection
