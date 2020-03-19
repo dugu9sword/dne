@@ -41,7 +41,7 @@ from awesome_glue.models.lstm_classifier import LstmClassifier
 from awesome_glue.models.graph_lstm_classifier import GraphLstmClassifier
 from awesome_glue.task_specs import TASK_SPECS
 from awesome_glue.transforms import (BackTrans, DAE, BertAug, Crop, EmbedAug, Identity, RandDrop, SynAug,
-                                     transform_collate, chaining)
+                                     transform_collate, parse_transform_fn_from_args)
 from awesome_glue.utils import (EMBED_DIM, WORD2VECS, AttackMetric, FreqUtil, set_environments,
                                 text_diff)
 from luna import flt2str, ram_write
@@ -134,26 +134,11 @@ class Task:
         self.predictor = TextClassifierPredictor(
             self.model, self.reader, key='sent' if self.config.arch != 'bert' else 'berty_tokens')
 
-        R = get_registry('transforms')
-        if "|" in self.config.pred_transform:
-            tf_names = self.config.pred_transform.split("|")
-            tf_args = self.config.pred_transform_args.split("|")
-            assert len(tf_names) == len(tf_args)
-        else:
-            if self.config.pred_transform == '':
-                self.config.pred_transform = 'identity'
-            tf_names = [self.config.pred_transform]
-            tf_args = [self.config.pred_transform_args]
-        tf_args = list(map(fast_real, tf_args))
-        tf_objs = []
-        for tf_name, tf_arg in zip(tf_names, tf_args):
-            tf_cls = R[tf_name]
-            if len(inspect.signature(tf_cls.__init__).parameters) == 1:
-                tf_obj = tf_cls()
-            else:
-                tf_obj = tf_cls(tf_arg)
-        chained = chaining(tf_objs)
-        transform_fn = partial(self.reader.transform_instances, chained)
+        # list[str] -> list[str]
+        transform_fn = parse_transform_fn_from_args(self.config.pred_transform, 
+                                                    self.config.pred_transform_args)
+        # list[instance] -> list[instance]
+        transform_fn = partial(self.reader.transform_instances, transform_fn)
 
         self.predictor.set_ensemble_num(self.config.pred_ensemble)
         self.predictor.set_transform_fn(transform_fn)

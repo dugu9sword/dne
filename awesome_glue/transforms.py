@@ -11,6 +11,8 @@ from overrides import overrides
 from allennlpx.interpret.attackers.policies import EmbeddingPolicy
 from allennlp.data.tokenizers import SpacyTokenizer
 from luna.registry import setup_registry
+from fastnumbers import fast_real
+import inspect
 
 register, R = setup_registry('transforms')
 
@@ -216,4 +218,36 @@ def chaining(objs: List[Transform]):
         for obj in objs:
             xs = obj[xs]
         return xs
+    return chained
+
+
+def parse_transform_fn_from_args(tf_names, tf_args):
+    """
+    This function is used to combine a group of transform functions.
+    Case 1:
+        tf_names = crop
+        tf_args = 0.2
+    Case 2:
+        tf_names = crop|embed_aug
+        tf_args = 0.4|0.2
+        In this case, the data will be passed through them one-by-one.
+    """
+    if "|" in tf_names:
+        tf_names = tf_names.split("|")
+        tf_args = tf_args.split("|")
+        assert len(tf_names) == len(tf_args)
+    else:
+        if tf_names == '':
+            tf_names = 'identity'
+        tf_names = [tf_names]
+        tf_args = [tf_args]
+    tf_args = list(map(fast_real, tf_args))
+    tf_objs = []
+    for tf_name, tf_arg in zip(tf_names, tf_args):
+        tf_cls = R[tf_name]
+        if len(inspect.signature(tf_cls.__init__).parameters) == 1:
+            tf_obj = tf_cls()
+        else:
+            tf_obj = tf_cls(tf_arg)
+    chained = chaining(tf_objs)
     return chained
