@@ -1,23 +1,9 @@
-import io
-import itertools
-import logging
-import re
-import tarfile
-import warnings
-import zipfile
-from typing import Any, cast, IO, Iterator, NamedTuple, Optional, Sequence, Tuple
 
-import numpy
 import torch
 from overrides import overrides
 from torch.nn.functional import embedding
 
-from allennlp.common import Tqdm
-from allennlp.common.checks import ConfigurationError
-from allennlp.common.file_utils import cached_path, get_file_extension, is_url_or_existing_file
-from allennlp.data import Vocabulary
 from allennlp.modules.time_distributed import TimeDistributed
-from allennlp.modules.token_embedders.token_embedder import TokenEmbedder
 from allennlp.modules.token_embedders.embedding import Embedding
 from allennlp.nn import util
 

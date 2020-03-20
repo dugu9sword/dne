@@ -5,8 +5,6 @@ import re
 import time
 import traceback
 from typing import Any, Dict, List, Optional, Tuple, Union
-from functools import partial
-from itertools import chain
 
 import torch
 import torch.distributed as dist
@@ -30,7 +28,6 @@ from allennlp.training.trainer_base import TrainerBase
 from torch.nn.parallel import DistributedDataParallel
 from allennlp.nn import util
 from allennlpx.training import adv_utils
-from allennlpx.interpret.attackers.cached_searcher import CachedIndexSearcher
 from luna import ram_write, ram_pop
 
 try:
@@ -430,35 +427,36 @@ class AdvTrainer(TrainerBase):
             train_loss += loss.item()
 
             # adversarial samples
-            for adv_idx in range(self.adv_policy.adv_iteration):
-                raw_tokens = batch['sent']['tokens']['tokens'].cuda()
-                if isinstance(self.adv_policy, adv_utils.HotFlipPolicy):
-                    adv_tokens = adv_utils.hotflip(
-                        src_tokens=raw_tokens,
-                        embeds=ram_pop('fw'),
-                        grads=ram_pop('bw'),
-                        embedding_matrix=embedding_matrix,
-                        searcher=self.adv_policy.searcher,
-                        replace_num=self.adv_policy.replace_num,
-                    )
-                elif isinstance(self.adv_policy, adv_utils.RandomNeighbourPolicy):
-                    adv_tokens = adv_utils.random_swap(
-                        src_tokens=raw_tokens,
-                        searcher=self.adv_policy.searcher,
-                        replace_num=self.adv_policy.replace_num,
-                    )
-                else:
-                    raise Exception('You must specify a policy')
-                batch['sent']['tokens']['tokens'] = adv_tokens
-                loss = self.batch_loss(batch, for_training=True)
-                if torch.isnan(loss):
-                    raise ValueError("nan loss encountered")
-                if self._opt_level is not None:
-                    with amp.scale_loss(loss, self.optimizer) as scaled_loss:
-                        scaled_loss.backward()
-                else:
-                    loss.backward()
-                train_loss += loss.item()
+            if self.adv_policy:
+                for adv_idx in range(self.adv_policy.adv_iteration):
+                    raw_tokens = batch['sent']['tokens']['tokens'].cuda()
+                    if isinstance(self.adv_policy, adv_utils.HotFlipPolicy):
+                        adv_tokens = adv_utils.hotflip(
+                            src_tokens=raw_tokens,
+                            embeds=ram_pop('fw'),
+                            grads=ram_pop('bw'),
+                            embedding_matrix=embedding_matrix,
+                            searcher=self.adv_policy.searcher,
+                            replace_num=self.adv_policy.replace_num,
+                        )
+                    elif isinstance(self.adv_policy, adv_utils.RandomNeighbourPolicy):
+                        adv_tokens = adv_utils.random_swap(
+                            src_tokens=raw_tokens,
+                            searcher=self.adv_policy.searcher,
+                            replace_num=self.adv_policy.replace_num,
+                        )
+                    else:
+                        raise Exception('You must specify a policy')
+                    batch['sent']['tokens']['tokens'] = adv_tokens
+                    loss = self.batch_loss(batch, for_training=True)
+                    if torch.isnan(loss):
+                        raise ValueError("nan loss encountered")
+                    if self._opt_level is not None:
+                        with amp.scale_loss(loss, self.optimizer) as scaled_loss:
+                            scaled_loss.backward()
+                    else:
+                        loss.backward()
+                    train_loss += loss.item()
 
 
 

@@ -4,7 +4,6 @@ import torch.nn.functional as F
 from allennlp.models import Model
 from allennlp.modules.text_field_embedders import (BasicTextFieldEmbedder,
                                                    TextFieldEmbedder)
-from allennlp.modules.token_embedders import Embedding
 from allennlpx.modules.graph_embedding import GraphEmbedding
 from allennlp.modules.token_embedders.elmo_token_embedder import \
     ElmoTokenEmbedder

@@ -1,5 +1,5 @@
 import csv
-from collections import Counter, defaultdict
+from collections import Counter
 from functools import partial
 
 import numpy as np
@@ -11,9 +11,7 @@ from allennlp.data.vocabulary import Vocabulary
 from allennlp.modules.text_field_embedders import TextFieldEmbedder
 from allennlp.training.learning_rate_schedulers.slanted_triangular import \
     SlantedTriangular
-from allennlp.training.trainer import Trainer
 from allennlpx.training.adv_trainer import AdvTrainer
-from allennlpx.training.vanilla_trainer import VanTrainer
 from allennlp.training.util import evaluate
 from nltk.corpus import stopwords
 from sentence_transformers import SentenceTransformer
@@ -50,18 +48,18 @@ from luna.public import Aggregator, auto_create
 from luna.pytorch import set_seed
 from allennlp.training.metrics.categorical_accuracy import CategoricalAccuracy
 from allennlpx.training import adv_utils
-from allennlpx.interpret.attackers.cached_searcher import CachedIndexSearcher
 from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
 import faiss
-from luna.registry import get_registry
-import inspect
-from fastnumbers import fast_real
 
 
 set_environments()
 
 
 def load_data(task_id: str, tokenizer: str):
+    """
+        Load data by the task_id and the tokenizer. 
+        (BERT will not use the spacy tokenizer.)
+    """
     spec = TASK_SPECS[task_id]
 
     reader = {
@@ -131,6 +129,14 @@ class Task:
         else:
             raise Exception
 
+        # The predictor is a wrapper of the model. 
+        # It is slightly different from the predictor provided by AllenNLP.
+        # With the predictor, we can do some tricky things before/after feeding
+        # instances into a model, such as:
+        # - do some input transformation (random drop, word augmentation, etc.)
+        # - ensemble several models
+        # Note that the attacker receives a predictor as the proxy of the model,
+        # which allows for test-time attacks.
         self.predictor = TextClassifierPredictor(
             self.model, self.reader, key='sent' if self.config.arch != 'bert' else 'berty_tokens')
 
@@ -147,16 +153,16 @@ class Task:
         num_epochs = 10
         pseudo_batch_size = 32
         accumulate_num = 1
-
-        optimizer = self.model.get_optimizer()
-
+        
+        # Maybe we will do some data augmentation here.
         if self.config.aug_data != '':
             log(f'Augment data from {self.config.aug_data}')
-            self.train_data.extend(self.reader.read(self.config.aug_data))
+            aug_data = auto_create(f"{self.config.task_id}.{self.config.arch}.aug", 
+                            lambda: self.reader.read(self.config.aug_data),
+                            cache=True)
+            self.train_data.instances.extend(aug_data.instances)
 
-
-#         collate_fn = partial(transform_collate, self.vocab, self.reader, Crop(0.3))
-        collate_fn = allennlp_collate
+        # Set up the adversarial training policy
         if self.config.adv_constraint:
             # VERY IMPORTANT!
             # we use the spacy_weight here since during attacks we use an external weight.
@@ -171,24 +177,28 @@ class Task:
             searcher.pre_search('euc', 10)
         else:
             searcher = None
+        policy_args = {
+            "adv_iteration": self.config.adv_iter,
+            "replace_num": self.config.adv_replace_num,
+            "searcher": searcher,
+        }
         if self.config.adv_policy == 'hot':
-            adv_policy = adv_utils.HotFlipPolicy(
-                adv_iteration=self.config.adv_iter,
-                replace_num=self.config.adv_replace_num,
-                searcher=searcher,
-            )
+            adv_policy = adv_utils.HotFlipPolicy(**policy_args)
         elif self.config.adv_policy == 'rad':
-            adv_policy = adv_utils.RandomNeighbourPolicy(
-                adv_iteration=self.config.adv_iter,
-                replace_num=self.config.adv_replace_num,
-                searcher=searcher,
-            )
+            adv_policy = adv_utils.RandomNeighbourPolicy(**policy_args)
+        else:
+            adv_policy = None
+            
+        # A collate_fn will do some transformation an instance before
+        # fed into a model. If we want to train a model with some transformations
+        # such as cropping/DAE, we can modify code here. e.g., 
+        # collate_fn = partial(transform_collate, self.vocab, self.reader, Crop(0.3))
+        collate_fn = allennlp_collate
         trainer = AdvTrainer(
             model=self.model,
-            optimizer=optimizer,
+            optimizer=self.model.get_optimizer(),
             validation_metric='+accuracy',
             adv_policy=adv_policy,
-            # adv_policy = None,
             data_loader=DataLoader(
                 self.train_data,
                 batch_sampler=BucketBatchSampler(
@@ -205,101 +215,24 @@ class Task:
             patience=None,
             grad_clipping=1.,
             cuda_device=0,
-            #   num_gradient_accumulation_steps=accumulate_num,
             serialization_dir=f'saved/models/{self.config.model_name}',
             num_serialized_models_to_keep=3)
         trainer.train()
 
     def from_pretrained(self):
-        self.model.load_state_dict(torch.load(f'saved/models/{self.config.model_name}/best.th'))
-
-    def knn_build_index(self):
-        self.from_pretrained()
-        iterator = BasicIterator(batch_size=32)
-        iterator.index_with(self.vocab)
-
-        ram_write("knn_flag", "collect")
-        filtered = list(filter(lambda x: len(x.fields['berty_tokens'].tokens) > 10,
-                               self.train_data))
-        evaluate(self.model, filtered, iterator, 0, None)
-
-    def knn_evaluate(self):
-        ram_write("knn_flag", "infer")
-        self.evaluate()
-
-    def knn_attack(self):
-        ram_write("knn_flag", "infer")
-        self.attack()
-
-    def build_manifold(self):
-        spacy_data = load_data(self.config.task_id, "spacy")
-        train_data, dev_data, _ = spacy_data['data']
-        if self.config.task_id == 'SST':
-            train_data = list(filter(lambda x: len(x["sent"].tokens) > 15, train_data))
-        spacy_vocab: Vocabulary = spacy_data['vocab']
-
-        embedder = SentenceTransformer('bert-base-nli-stsb-mean-tokens')
-
-        collector = H5pyCollector(f'{self.config.task_id}.train.h5py', 768)
-
-        batch_size = 32
-        total_size = len(train_data)
-        for i in range(0, total_size, batch_size):
-            sents = []
-            for j in range(i, min(i + batch_size, total_size)):
-                sents.append(allenutil.as_sentence(train_data[j]))
-            collector.collect(np.array(embedder.encode(sents)))
-        collector.close()
-
-    def test_distance(self):
-        embedder = SentenceTransformer('bert-base-nli-stsb-mean-tokens')
-        index = build_faiss_index(f'{self.config.task_id}.train.h5py')
-
-        df = pandas.read_csv(self.config.adv_data, sep='\t', quoting=csv.QUOTE_NONE)
-        agg_D = []
-        for rid in tqdm(range(df.shape[0])):
-            raw = df.iloc[rid]['raw']
-            adv = df.iloc[rid]['adv']
-            if raw != adv:
-                sent_embed = embedder.encode([raw, adv])
-                D, _ = index.search(np.array(sent_embed), 3)
-                agg_D.append(D.mean(axis=1))
-        agg_D = np.array(agg_D)
-        print(agg_D.mean(axis=0), agg_D.std(axis=0))
-        print(sum(agg_D[:, 0] < agg_D[:, 1]), 'of', agg_D.shape[0])
-
-    def test_ppl(self):
-        en_lm = torch.hub.load('pytorch/fairseq',
-                               'transformer_lm.wmt19.en',
-                               tokenizer='moses',
-                               bpe='fastbpe')
-        en_lm.eval()
-        en_lm.cuda()
-
-        df = pandas.read_csv(self.config.adv_data, sep='\t', quoting=csv.QUOTE_NONE)
-        agg_ppls = []
-        for rid in tqdm(range(df.shape[0])):
-            raw = df.iloc[rid]['raw']
-            adv = df.iloc[rid]['adv']
-            if raw != adv:
-                scores = en_lm.score([raw, adv])
-                ppls = np.array(
-                    [ele['positional_scores'].mean().neg().exp().item() for ele in scores])
-                agg_ppls.append(ppls)
-        agg_ppls = np.array(agg_ppls)
-        print(agg_ppls.mean(axis=0), agg_ppls.std(axis=0))
-        print(sum(agg_ppls[:, 0] < agg_ppls[:, 1]), 'of', agg_ppls.shape[0])
+        model_path = f'saved/models/{self.config.model_name}/best.th'
+        print(f'Load model from {model_path}')
+        self.model.load_state_dict(torch.load(model_path))
+        self.model.eval()
 
     @torch.no_grad()
     def evaluate_model(self):
         self.from_pretrained()
-        self.model.eval()
         print(evaluate(self.model, DataLoader(self.dev_data, 32), 0, None))
 
     @torch.no_grad()
     def evaluate_predictor(self):
         self.from_pretrained()
-        self.model.eval()
         metric = CategoricalAccuracy()
         batch_size = 32
         total_size = len(self.dev_data)
@@ -355,20 +288,6 @@ class Task:
         print(Counter(df["label"].tolist()))
         print(attack_metric)
                                          
-    def get_spacy_vocab_and_vec(self):
-        if self.config.tokenizer != 'spacy':
-            spacy_data = load_data(self.config.task_id, "spacy")
-            spacy_vocab: Vocabulary = spacy_data['vocab']
-        else:
-            spacy_vocab = self.vocab
-        spacy_weight = auto_create(
-            f"{self.config.task_id}-{self.config.attack_vectors}.vec", lambda:
-            _read_pretrained_embeddings_file(WORD2VECS[self.config.attack_vectors],
-                                             embedding_dim=EMBED_DIM[self.config.attack_vectors],
-                                             vocab=spacy_vocab,
-                                             namespace="tokens"), True)
-        return spacy_vocab, spacy_weight
-
     def attack(self):
         self.from_pretrained()
         self.model.eval()
@@ -378,10 +297,6 @@ class Task:
         if self.config.attack_gen_adv:
             f_adv = open(f"nogit/{self.config.model_name}.{self.config.attack_method}.adv.tsv", 'w')
             f_adv.write("raw\tadv\tlabel\n")
-
-        if self.config.attack_gen_aug:
-            f_aug = open(f"nogit/{self.config.model_name}.{self.config.attack_method}.aug.tsv", 'w')
-            f_aug.write("sentence\tlabel\n")
 
         for module in self.model.modules():
             if isinstance(module, TextFieldEmbedder):
@@ -523,16 +438,103 @@ class Task:
 
             if self.config.attack_gen_adv:
                 f_adv.write(f"{raw_text}\t{adv_text}\t{raw_label}\n")
-            if self.config.attack_gen_aug:
-                f_aug.write(f"{adv_text}\t{raw_label}\n")
 
         if self.config.attack_gen_adv:
             f_adv.close()
-        if self.config.attack_gen_aug:
-            f_aug.close()
 
         print("raw\t", raw_counter.most_common())
         print("adv\t", adv_counter.most_common())
         print("Avg.change#", round(agg.mean("change_num"), 2), "Avg.change%",
               round(100 * agg.mean("change_ratio"), 2))
         print(attack_metric)
+
+    def get_spacy_vocab_and_vec(self):
+        if self.config.tokenizer != 'spacy':
+            spacy_data = load_data(self.config.task_id, "spacy")
+            spacy_vocab: Vocabulary = spacy_data['vocab']
+        else:
+            spacy_vocab = self.vocab
+        spacy_weight = auto_create(
+            f"{self.config.task_id}-{self.config.attack_vectors}.vec", lambda:
+            _read_pretrained_embeddings_file(WORD2VECS[self.config.attack_vectors],
+                                             embedding_dim=EMBED_DIM[self.config.attack_vectors],
+                                             vocab=spacy_vocab,
+                                             namespace="tokens"), True)
+        return spacy_vocab, spacy_weight
+
+#     def knn_build_index(self):
+#         self.from_pretrained()
+#         iterator = BasicIterator(batch_size=32)
+#         iterator.index_with(self.vocab)
+
+#         ram_write("knn_flag", "collect")
+#         filtered = list(filter(lambda x: len(x.fields['berty_tokens'].tokens) > 10,
+#                                self.train_data))
+#         evaluate(self.model, filtered, iterator, 0, None)
+
+#     def knn_evaluate(self):
+#         ram_write("knn_flag", "infer")
+#         self.evaluate()
+
+#     def knn_attack(self):
+#         ram_write("knn_flag", "infer")
+#         self.attack()
+
+#     def build_manifold(self):
+#         spacy_data = load_data(self.config.task_id, "spacy")
+#         train_data, dev_data, _ = spacy_data['data']
+#         if self.config.task_id == 'SST':
+#             train_data = list(filter(lambda x: len(x["sent"].tokens) > 15, train_data))
+#         spacy_vocab: Vocabulary = spacy_data['vocab']
+
+#         embedder = SentenceTransformer('bert-base-nli-stsb-mean-tokens')
+
+#         collector = H5pyCollector(f'{self.config.task_id}.train.h5py', 768)
+
+#         batch_size = 32
+#         total_size = len(train_data)
+#         for i in range(0, total_size, batch_size):
+#             sents = []
+#             for j in range(i, min(i + batch_size, total_size)):
+#                 sents.append(allenutil.as_sentence(train_data[j]))
+#             collector.collect(np.array(embedder.encode(sents)))
+#         collector.close()
+
+#     def test_distance(self):
+#         embedder = SentenceTransformer('bert-base-nli-stsb-mean-tokens')
+#         index = build_faiss_index(f'{self.config.task_id}.train.h5py')
+
+#         df = pandas.read_csv(self.config.adv_data, sep='\t', quoting=csv.QUOTE_NONE)
+#         agg_D = []
+#         for rid in tqdm(range(df.shape[0])):
+#             raw = df.iloc[rid]['raw']
+#             adv = df.iloc[rid]['adv']
+#             if raw != adv:
+#                 sent_embed = embedder.encode([raw, adv])
+#                 D, _ = index.search(np.array(sent_embed), 3)
+#                 agg_D.append(D.mean(axis=1))
+#         agg_D = np.array(agg_D)
+#         print(agg_D.mean(axis=0), agg_D.std(axis=0))
+#         print(sum(agg_D[:, 0] < agg_D[:, 1]), 'of', agg_D.shape[0])
+
+#     def test_ppl(self):
+#         en_lm = torch.hub.load('pytorch/fairseq',
+#                                'transformer_lm.wmt19.en',
+#                                tokenizer='moses',
+#                                bpe='fastbpe')
+#         en_lm.eval()
+#         en_lm.cuda()
+
+#         df = pandas.read_csv(self.config.adv_data, sep='\t', quoting=csv.QUOTE_NONE)
+#         agg_ppls = []
+#         for rid in tqdm(range(df.shape[0])):
+#             raw = df.iloc[rid]['raw']
+#             adv = df.iloc[rid]['adv']
+#             if raw != adv:
+#                 scores = en_lm.score([raw, adv])
+#                 ppls = np.array(
+#                     [ele['positional_scores'].mean().neg().exp().item() for ele in scores])
+#                 agg_ppls.append(ppls)
+#         agg_ppls = np.array(agg_ppls)
+#         print(agg_ppls.mean(axis=0), agg_ppls.std(axis=0))
+#         print(sum(agg_ppls[:, 0] < agg_ppls[:, 1]), 'of', agg_ppls.shape[0])

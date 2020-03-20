@@ -9,10 +9,8 @@ from allennlp.data import Instance
 from allennlp.data.batch import Batch
 from overrides import overrides
 from allennlpx.interpret.attackers.policies import EmbeddingPolicy
-from allennlp.data.tokenizers import SpacyTokenizer
 from luna.registry import setup_registry
 from fastnumbers import fast_real
-import inspect
 
 register, R = setup_registry('transforms')
 
@@ -213,14 +211,6 @@ class BertAug(WordTransform):
         return ys
 
 
-def chaining(objs: List[Transform]):
-    def chained(xs):
-        for obj in objs:
-            xs = obj[xs]
-        return xs
-    return chained
-
-
 def parse_transform_fn_from_args(tf_names, tf_args):
     """
     This function is used to combine a group of transform functions.
@@ -245,9 +235,13 @@ def parse_transform_fn_from_args(tf_names, tf_args):
     tf_objs = []
     for tf_name, tf_arg in zip(tf_names, tf_args):
         tf_cls = R[tf_name]
-        if len(inspect.signature(tf_cls.__init__).parameters) == 1:
+        if tf_arg == '':
             tf_obj = tf_cls()
         else:
             tf_obj = tf_cls(tf_arg)
-    chained = chaining(tf_objs)
+        tf_objs.append(tf_obj)
+    def chained(xs):
+        for obj in tf_objs:
+            xs = obj(xs)
+        return xs
     return chained

@@ -6,7 +6,7 @@ class Config(ProgramArgs):
         super().__init__()
 
         # basic settings
-        self.task_id = "SST"
+        self.task_id = "AGNEWS"
         self.finetunable = True
         self.arch = 'lstm'
         self.pretrain = 'glove'
@@ -14,11 +14,8 @@ class Config(ProgramArgs):
         self._model_name = ""
         self.mode = 'attack'
 
-        # transfer settings
-        self.adv_data = 'nogit/AGNEWS-lstm.hotflip.adv.tsv'
-
         # training settings
-        #         self.aug_data = 'nogit/SST-lstm-glove.advaug.tsv'
+        # self.aug_data = 'nogit/AGNEWS-lstm.pwws.aug.tsv'
         self.aug_data = ''
         self.adv_iter = 0
         # hot -> hotflip, rdm -> random
@@ -27,9 +24,9 @@ class Config(ProgramArgs):
         self.adv_constraint = True
 
         # predictor settings
-        self.pred_ensemble = 5
-        self.pred_transform = 'rand_drop|embed_aug'
-        self.pred_transform_args = '0.3|0.3'
+        self.pred_ensemble = 1
+        self.pred_transform = ''
+        self.pred_transform_args = ''
 
         # attack settings
         self.attack_method = 'pwws'
@@ -38,8 +35,10 @@ class Config(ProgramArgs):
         self.attack_size = 200
         # self.attack_data_split = 'train'
         # self.attack_size = -1
-        self.attack_gen_aug = False
         self.attack_gen_adv = False
+
+        # transfer settings
+        self.adv_data = 'nogit/AGNEWS-lstm.hotflip.adv.tsv'
 
         # other settings
         self.alchemist = False
@@ -56,14 +55,10 @@ class Config(ProgramArgs):
     @property
     def model_name(self):
         if not self._model_name:
-            #             if self.arch in ['bert', 'elmo']:
-            #                 model_name = f"{self.task_id}-{self.arch}"
-            #             else:
-            #                 model_name =  f"{self.task_id}-{self.arch}-{self.pretrain}"
-            #             if not self.finetunable:
-            #                 model_name += '-fix'
-            #             return model_name
             model_name = f"{self.task_id}-{self.arch}"
+            assert not (self.aug_data != '' and self.adv_iter != 0)
+            if self.aug_data != '':
+                model_name += '-aug'
             if self.adv_iter != 0:
                 model_name += f'-{self.adv_policy}.{self.adv_iter}.{self.adv_replace_num}'
                 if self.adv_constraint:

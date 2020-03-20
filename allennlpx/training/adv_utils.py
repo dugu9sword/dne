@@ -1,10 +1,7 @@
 from dataclasses import dataclass
-from allennlpx.interpret.attackers.cached_searcher import CachedIndexSearcher
 from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
-from allennlpx.interpret.attackers.policies import EmbeddingPolicy
 import torch
 from luna import batch_pad
-from copy import deepcopy
 import random
 
 
@@ -28,7 +25,6 @@ class RandomNeighbourPolicy(AdvTrainingPolicy):
 
 
 def apply_constraint_(searcher, src_tokens, scores):
-    from luna import time_record
     mask = scores.new_zeros(scores.size(), dtype=torch.bool)
     src_tokens_lst = src_tokens.tolist()
     
