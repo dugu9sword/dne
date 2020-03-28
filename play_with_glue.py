@@ -12,6 +12,7 @@ from luna.logging import log, log_config
 import numpy as np
 
 import torch
+import sys
 
 config = Config()._parse_args()
 
@@ -25,6 +26,11 @@ ram_write("config", config)
 
 log_config("log", "c")
 log(config)
+sys.stdout.flush()
+
+if not config.alchemist:
+    os.environ['CUDA_VISIBLE_DEVICES'] = str(config.cuda)
+    
 
 task = Task(config)
 

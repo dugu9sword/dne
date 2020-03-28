@@ -12,6 +12,12 @@ class AdvTrainingPolicy:
 
 
 @dataclass
+class NoPolicy(AdvTrainingPolicy):
+    normal_iteration: int = 1
+    adv_iteration: int = 0
+
+
+@dataclass
 class HotFlipPolicy(AdvTrainingPolicy):
     # searcher: CachedIndexSearcher = None
     searcher: EmbeddingSearcher = None

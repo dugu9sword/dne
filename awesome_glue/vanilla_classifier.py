@@ -1,0 +1,90 @@
+import torch
+import torch.nn.functional as F
+from allennlp.models import Model
+from allennlp.modules.text_field_embedders import BasicTextFieldEmbedder
+from allennlp.data.vocabulary import Vocabulary
+from allennlp.nn.util import get_text_field_mask
+from allennlp.training.metrics import CategoricalAccuracy
+from allennlp.training.optimizers import DenseSparseAdam
+
+from allennlpx.modules.seq2vec_encoders.pytorch_seq2vec_wrapper import \
+    PytorchSeq2VecWrapper
+
+from allennlp.modules.seq2vec_encoders import BagOfEmbeddingsEncoder
+from allennlp.modules.seq2vec_encoders import CnnEncoder
+from allennlp.modules.token_embedders import TokenEmbedder
+
+
+class EmbeddingDropout(torch.nn.Module):
+    def __init__(self, p=0.5):
+        super(EmbeddingDropout, self).__init__()
+        self.p = p
+
+    def forward(self, x):
+        if self.training:
+            x_mask = torch.bernoulli(x.new_full(x.shape[:2], 1 - self.p))
+            x *= x_mask.unsqueeze(dim=-1)
+        return x
+
+
+class Classifier(Model):
+    def __init__(
+        self,
+        vocab: Vocabulary,
+        token_embedder: TokenEmbedder,
+        arch: str,
+        num_labels: int,
+    ):
+        super().__init__(vocab)
+        self.word_embedders = BasicTextFieldEmbedder(
+            {"tokens": token_embedder})
+
+        self.word_drop = EmbeddingDropout(0.3)
+
+        if 'lstm' in arch:
+            self.encoder = PytorchSeq2VecWrapper(
+                torch.nn.LSTM(token_embedder.get_output_dim(),
+                              hidden_size=300,
+                              dropout=0.5,
+                              num_layers=2,
+                              batch_first=True))
+        elif 'cnn' in arch:
+            self.encoder = CnnEncoder(
+                embedding_dim=token_embedder.get_output_dim(),
+                num_filters=100,
+                ngram_filter_sizes=(3, 4, 5),
+            )
+        elif 'boe' in arch:
+            self.encoder = BagOfEmbeddingsEncoder(
+                embedding_dim=token_embedder.get_output_dim(), averaged=True)
+        else:
+            raise Exception()
+
+        self.linear = torch.nn.Linear(
+            in_features=self.encoder.get_output_dim(), out_features=num_labels)
+
+        self.accuracy = CategoricalAccuracy()
+        self.loss_function = torch.nn.CrossEntropyLoss()
+
+
+#         self.loss_function = LabelSmoothingLoss(0.1)
+
+    def get_optimizer(self):
+        return DenseSparseAdam(self.named_parameters(), lr=1e-3)
+
+    def forward(self, sent, label=None):
+        mask = get_text_field_mask(sent)
+        embeddings = self.word_embedders(sent)
+        embeddings = self.word_drop(embeddings)
+
+        encoder_out = self.encoder(embeddings, mask)
+
+        logits = self.linear(encoder_out)
+        output = {"logits": logits, "probs": F.softmax(logits, dim=1)}
+        if label is not None:
+            self.accuracy(logits, label)
+            output["loss"] = self.loss_function(logits, label)
+        return output
+
+    def get_metrics(self, reset=False):
+        return {'accuracy': self.accuracy.get_metric(reset)}

@@ -19,7 +19,7 @@ class BertPooler(torch.nn.Module):
 
 
 class BertClassifier(Model):
-    def __init__(self, vocab, finetunable):
+    def __init__(self, vocab, finetunable=True):
         super().__init__(vocab)
         """
             A note for the pipline:
@@ -84,9 +84,9 @@ class BertClassifier(Model):
         # embeddings = self.word_embedders(berty_tokens)
         # encoder_out = self.pooler(embeddings)
 
-        _, encoder_out = self.bert_model(input_ids=berty_tokens['berty_tokens'],
-                                         token_type_ids=berty_tokens['berty_tokens-type-ids'],
-                                         attention_mask=(berty_tokens['berty_tokens'] != 0).long(),
+        _, encoder_out = self.bert_model(input_ids=berty_tokens['berty_tokens']['token_ids'],
+                                         token_type_ids=berty_tokens['berty_tokens']['type_ids'],
+                                         attention_mask=berty_tokens['berty_tokens']['mask'],
                                          output_all_encoded_layers=False)
 
         logits = self.linear(encoder_out)

@@ -7,11 +7,11 @@ from allennlp.common.file_utils import cached_path
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
 from allennlp.data.fields import Field, LabelField, TextField
 from allennlp.data.instance import Instance
-# from allennlp.data.token_indexers.wordpiece_indexer import \
-#     PretrainedBertIndexer
+from allennlp.data.token_indexers.pretrained_transformer_indexer import \
+    PretrainedTransformerIndexer
 from allennlp.data.tokenizers.token import Token
 from overrides import overrides
-from pytorch_pretrained_bert import BertTokenizer
+from allennlp.data.tokenizers import PretrainedTransformerTokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +31,15 @@ class BertyTSVReader(DatasetReader):
         self._sent1_col = sent1_col
         self._sent2_col = sent2_col
         self._label_col = label_col
-        self._tokenizer = BertTokenizer.from_pretrained(bert_model)
+        self._tokenizer = PretrainedTransformerTokenizer(
+            bert_model,
+            add_special_tokens=True, 
+            max_length=max_sequence_length
+        )
         self._max_sequence_length = max_sequence_length
         self._skip_label_indexing = skip_label_indexing
         self._token_indexers = {
-            "berty_tokens": PretrainedBertIndexer(pretrained_model=bert_model, do_lowercase=True)
+            "berty_tokens": PretrainedTransformerIndexer(model_name=bert_model)
         }
 
     @overrides
@@ -70,15 +74,16 @@ class BertyTSVReader(DatasetReader):
                          label: Optional[str] = None) -> Instance:  # type: ignore
         fields: Dict[str, Field] = {}
 
-        tokens = self._tokenizer.tokenize(sent1)
         if sent2:
-            tokens +=  ['[SEP]'] + self._tokenizer.tokenize(sent2) 
-        # tokens = tokens[:self._max_sequence_length]
-        tokens = [Token(x) for x in tokens]
-        # tokens = tokens[:512]
+            tokens = self._tokenizer.tokenize_sentence_pair(sent1, sent2)
+        else:
+            tokens = self._tokenizer.tokenize(sent1)
 
         fields['berty_tokens'] = TextField(tokens, self._token_indexers)
         
         if label is not None:
             fields['label'] = LabelField(label, skip_indexing=self._skip_label_indexing)
         return Instance(fields)
+
+    def transform_instances(self, instances):
+        pass
