@@ -19,8 +19,8 @@ class BertPooler(torch.nn.Module):
 
 
 class BertClassifier(Model):
-    def __init__(self, vocab, finetunable=True):
-        super().__init__(vocab)
+    def __init__(self, vocab):
+        super().__init__(vocab, num_labels)
         """
             A note for the pipline:
             - BertyTSVReader will use BertTokenizer to tokenize the sentence and
@@ -56,24 +56,24 @@ class BertClassifier(Model):
 
         self.bert_model = PretrainedBertModel.load('bert-base-uncased')
 
-        if finetunable:
-            for name, param in self.bert_model.named_parameters():
-                param.requires_grad = True
-            else:
-                param.requires_grad = False
-        else:
-            found_unfrozen_layer = False
-            for name, param in self.bert_model.named_parameters():
-                if "layer.10" in name:
-                    found_unfrozen_layer = True
-                if found_unfrozen_layer:
-                    param.requires_grad = True
-                else:
-                    param.requires_grad = False
+#         if finetunable:
+#             for name, param in self.bert_model.named_parameters():
+#                 param.requires_grad = True
+#             else:
+#                 param.requires_grad = False
+#         else:
+#             found_unfrozen_layer = False
+#             for name, param in self.bert_model.named_parameters():
+#                 if "layer.10" in name:
+#                     found_unfrozen_layer = True
+#                 if found_unfrozen_layer:
+#                     param.requires_grad = True
+#                 else:
+#                     param.requires_grad = False
 
         self.linear = torch.nn.Sequential(
             torch.nn.Dropout(0.1),
-            torch.nn.Linear(in_features=768, out_features=vocab.get_vocab_size('label')),
+            torch.nn.Linear(in_features=768, out_features=num_labels)
         )
 
         self.accuracy = CategoricalAccuracy()

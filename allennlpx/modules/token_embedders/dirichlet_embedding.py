@@ -58,6 +58,8 @@ class DirichletEmbedding(Embedding):
             # sanity checks, this degrades to "mean"
             coeff = torch.from_numpy(alphas.astype(np.float32)).to(self.weight.device)
         embedded = (embedded * coeff.unsqueeze(-1)).sum(-2, keepdim=True)
+        # embedded = embedded[:, 0, :] + embedded[:, 1:, :].sum(-2).detach()
+
         embedded = embedded.view(*tokens.size(), embedded.size(-1))
 
         if self._projection:

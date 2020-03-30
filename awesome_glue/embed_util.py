@@ -1,11 +1,12 @@
 from allennlpx.modules.token_embedders.embedding import \
     _read_pretrained_embeddings_file
-from awesome_glue.utils import EMBED_DIM, WORD2VECS
 from luna import (LabelSmoothingLoss, auto_create)
 from allennlp.data.vocabulary import Vocabulary
 from allennlp.modules.token_embedders import Embedding
 from allennlpx.modules.token_embedders.graph_embedding import GraphEmbedding
 from allennlpx.modules.token_embedders.dirichlet_embedding import DirichletEmbedding
+from collections import defaultdict
+import pathlib
 
 
 def read_weight(vocab: Vocabulary, pretrain: str, cache_embed_path: str):
@@ -52,3 +53,30 @@ def build_dirichlet_embedding(vocab: Vocabulary, pretrain: str,
                               nbr_mask=nbr_mask,
                               sparse=False,
                               trainable=True)
+
+
+def maybe_path(*args):
+    for arg in args:
+        if pathlib.Path(arg).exists():
+            break
+    return arg
+
+
+WORD2VECS = {
+    "fasttext":
+    maybe_path(
+        "/disks/sdb/zjiehang/embeddings/fasttext/crawl-300d-2M.vec",
+        "https://dl.fbaipublicfiles.com/fasttext/vectors-english/crawl-300d-2M.vec.zip"
+    ),
+    "glove":
+    maybe_path("/disks/sdb/zjiehang/embeddings/glove/glove.42B.300d.txt",
+               "/root/glove/glove.42B.300d.txt",
+               "http://nlp.stanford.edu/data/glove.42B.300d.zip"),
+    "counter":
+    maybe_path(
+        "/disks/sdb/zjiehang/embeddings/counter/counter.txt",
+        "https://raw.githubusercontent.com/nmrksic/counter-fitting/master/word_vectors/counter-fitted-vectors.txt.zip"
+    )
+}
+
+EMBED_DIM = defaultdict(lambda: 300, {"elmo": 256})

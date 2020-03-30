@@ -6,15 +6,16 @@ class Config(ProgramArgs):
         super().__init__()
 
         # basic settings
-        self.task_id = "SST"
-        self.arch = 'bert'
+        self.task_id = "AGNEWS"
+        self.embed = 'd'   # d/g/_
+        self.arch = 'cnn'
         self.pretrain = 'glove'
 #         self._model_name = "AGNEWS-lstm-hot.1.5.con"
-        self._model_name = "off"   # if set to off, no model will be saved.
-        self.mode = 'train'
+        self._model_name = "tmp"   # if set to tmp, existing models will be overrided
+        self.mode = 'attack'
         
         # dirichlet settings
-        self.dir_temp = 20.0
+        self.dir_temp = 5.0
         
         # graph settings
         self.gnn_type = 'mean'
@@ -23,7 +24,7 @@ class Config(ProgramArgs):
         # training settings
         # self.aug_data = 'nogit/AGNEWS-lstm.pwws.aug.tsv'
         self.aug_data = ''
-        self.adv_iter = 0
+        self.adv_iter = 1
         self.adv_policy = 'hot'    # hot -> hotflip, rdm -> random
         self.adv_replace_num = 20
         self.adv_constraint = True
@@ -60,13 +61,13 @@ class Config(ProgramArgs):
     @property
     def model_name(self):
         if not self._model_name:
-            model_name = f"{self.task_id}-{self.arch}"
+            model_name = f"{self.task_id}-{self.embed + self.arch}"
             assert not (self.aug_data != '' and self.adv_iter != 0)
             if self.aug_data != '':
                 model_name += '-aug'
-            if self.arch in ['dlstm', 'dcnn', 'dboe']:
+            if self.embed == 'd':
                 model_name += f'-{self.dir_temp}'
-            if self.arch in ['glstm', 'gcnn', 'gboe']:
+            if self.embed == 'g':
                 model_name += f'-{self.gnn_type}-{self.gnn_hop}'
             if self.adv_iter != 0:
                 model_name += f'-{self.adv_policy}.{self.adv_iter}.{self.adv_replace_num}'

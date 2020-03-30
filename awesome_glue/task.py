@@ -15,6 +15,8 @@ from allennlpx.training.adv_trainer import AdvTrainer, EpochCallback, BatchCallb
 from allennlp.training.util import evaluate
 from nltk.corpus import stopwords
 from tqdm import tqdm
+import pathlib
+import shutil
 
 from allennlpx import allenutil
 from allennlpx.data.dataset_readers.berty_tsv import BertyTSVReader
@@ -37,14 +39,16 @@ from allennlpx.modules.token_embedders.graph_funcs import MeanAggregator, Poolin
 from allennlpx.predictors.text_classifier import TextClassifierPredictor
 from awesome_glue.config import Config
 from awesome_glue.vanilla_classifier import Classifier
+from awesome_glue.esim import ESIM
 from awesome_glue import embed_util
+from awesome_glue.embed_util import EMBED_DIM, WORD2VECS
 from awesome_glue.bert_classifier import BertClassifier
 from awesome_glue.task_specs import TASK_SPECS
 from awesome_glue.transforms import (BackTrans, DAE, BertAug, Crop, EmbedAug,
                                      Identity, RandDrop, SynAug,
                                      transform_collate,
                                      parse_transform_fn_from_args)
-from awesome_glue.utils import (EMBED_DIM, WORD2VECS, AttackMetric, FreqUtil,
+from awesome_glue.utils import (AttackMetric, FreqUtil,
                                 set_environments, text_diff, get_neighbours,
                                 AnnealingTemperature)
 from luna import flt2str, ram_write, ram_read
@@ -73,41 +77,51 @@ class Task:
         self.vocab: Vocabulary = loaded_data['vocab']
 
         # Build the model
-        # embed_args = {
-        #     "vocab": self.vocab,
-        #     "pretrain": config.pretrain,
-        #     "cache_embed_path": f"{config.task_id}-{config.pretrain}.vec"
-        # }
-        # if config.arch in ['lstm', 'cnn', 'boe']:
-        #     token_embedder = embed_util.build_embedding(**embed_args)
-        # elif config.arch in ['dlstm', 'dcnn', 'dboe']:
-        #     _, spacy_vec = self.get_spacy_vocab_and_vec()
-        #     neighbours, nbr_mask = get_neighbours(spacy_vec,
-        #                                           return_edges=False)
-        #     token_embedder = embed_util.build_dirichlet_embedding(
-        #         **embed_args,
-        #         temperature=config.dir_temp,
-        #         neighbours=neighbours.cuda(),
-        #         nbr_mask=nbr_mask.cuda())
-        # elif config.arch in ['glstm', 'gcnn', 'gboe']:
-        #     _, spacy_vec = self.get_spacy_vocab_and_vec()
-        #     edges = get_neighbours(spacy_vec, return_edges=True)
-        #     token_embedder = embed_util.build_graph_embedding(
-        #         **embed_args,
-        #         gnn={
-        #             "mean": MeanAggregator(300),
-        #             "pool": PoolingAggregator(300)
-        #         }[config.gnn_type],
-        #         edges=edges.cuda(),
-        #         hop=config.gnn_hop)
-        # self.model = Classifier(
-        #     vocab=self.vocab,
-        #     token_embedder=token_embedder,
-        #     arch=config.arch,
-        #     num_labels=TASK_SPECS[config.task_id]['num_labels'])
-        self.model = BertClassifier(
-            self.vocab
-        )
+        embed_args = {
+            "vocab": self.vocab,
+            "pretrain": config.pretrain,
+            "cache_embed_path": f"{config.task_id}-{config.pretrain}.vec"
+        }
+        if config.embed == "":
+            token_embedder = embed_util.build_embedding(**embed_args)
+        elif config.embed == "d":
+            _, spacy_vec = self.get_spacy_vocab_and_vec()
+            neighbours, nbr_mask = get_neighbours(spacy_vec,
+                                                  return_edges=False)
+            token_embedder = embed_util.build_dirichlet_embedding(
+                **embed_args,
+                temperature=config.dir_temp,
+                neighbours=neighbours.cuda(),
+                nbr_mask=nbr_mask.cuda())
+        elif config.embed == "g":
+            _, spacy_vec = self.get_spacy_vocab_and_vec()
+            edges = get_neighbours(spacy_vec, return_edges=True)
+            token_embedder = embed_util.build_graph_embedding(
+                **embed_args,
+                gnn={
+                    "mean": MeanAggregator(300),
+                    "pool": PoolingAggregator(300)
+                }[config.gnn_type],
+                edges=edges.cuda(),
+                hop=config.gnn_hop)
+        else:
+            raise Exception()
+        if config.arch in ['boe', 'cnn', 'lstm']:
+            self.model = Classifier(
+                vocab=self.vocab,
+                token_embedder=token_embedder,
+                arch=config.arch,
+                num_labels=TASK_SPECS[config.task_id]['num_labels'])
+        elif config.arch == 'esim':
+            self.model = ESIM(
+                vocab=self.vocab,
+                token_embedder=token_embedder,
+                num_labels=TASK_SPECS[config.task_id]['num_labels'])
+        elif config.arch == 'bert':
+            self.model = BertClassifier(
+                self.vocab,
+                num_labels=TASK_SPECS[config.task_id]['num_labels']
+            )
         self.model.cuda()
 
         # The predictor is a wrapper of the model.
@@ -133,9 +147,20 @@ class Task:
         self.predictor.set_transform_fn(transform_fn)
 
     def train(self):
-        num_epochs = 16
-        pseudo_batch_size = 32
-
+        if self.config.arch == 'bert':
+            num_epochs = 3
+        else:
+            num_epochs = 15
+        if self.config.task_id == 'SNLI' and self.config.arch != 'bert':
+            batch_size = 128
+        else:
+            batch_size = 32
+            
+        if self.config.model_name == 'tmp':
+            p = pathlib.Path('saved/models/tmp')
+            if p.exists():
+                shutil.rmtree(p)
+            
         # Maybe we will do some data augmentation here.
         if self.config.aug_data != '':
             log(f'Augment data from {self.config.aug_data}')
@@ -173,7 +198,7 @@ class Task:
 
         # Set callbacks
         epoch_callbacks = []
-        if self.config.arch in ['dlstm', 'dcnn', 'dboe']:
+        if self.config.embed == 'd':
             epoch_callbacks.append(AnnealingTemperature())
 
         # A collate_fn will do some transformation an instance before
@@ -190,22 +215,21 @@ class Task:
                 self.train_data,
                 batch_sampler=BucketBatchSampler(
                     data_source=self.train_data,
-                    batch_size=pseudo_batch_size,
+                    batch_size=batch_size,
                 ),
                 collate_fn=collate_fn,
             ),
             validation_data_loader=DataLoader(
                 self.dev_data,
-                batch_size=pseudo_batch_size,
+                batch_size=batch_size,
             ),
             num_epochs=num_epochs,
-            patience=None,
+            patience=3,
             grad_clipping=1.,
             cuda_device=0,
             epoch_callbacks=epoch_callbacks,
             batch_callbacks=[],
-            serialization_dir=f'saved/models/{self.config.model_name}'
-            if self.config.model_name != 'off' else None,
+            serialization_dir=f'saved/models/{self.config.model_name}',
             num_serialized_models_to_keep=3)
         trainer.train()
 

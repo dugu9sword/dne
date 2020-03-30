@@ -49,7 +49,7 @@ def load_data(task_id: str, tokenizer: str):
 
 
 def load_banned_words(task_id: str):
-    banned_words = copy.copy(DEFAULT_IGNORE_TOKENS)
+    banned_words = copy(DEFAULT_IGNORE_TOKENS)
     if 'banned_words' in TASK_SPECS[task_id]:
         banned_words.extend([
             line.rstrip('\n') for line in open(TASK_SPECS[task_id]['banned_words'])

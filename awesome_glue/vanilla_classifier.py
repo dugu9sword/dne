@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from allennlp.models import Model
 from allennlp.modules.text_field_embedders import BasicTextFieldEmbedder
-from allennlp.data.vocabulary import Vocabulary
+from allennlp.data import TextFieldTensors, Vocabulary
 from allennlp.nn.util import get_text_field_mask
 from allennlp.training.metrics import CategoricalAccuracy
 from allennlp.training.optimizers import DenseSparseAdam
@@ -36,25 +36,24 @@ class Classifier(Model):
         num_labels: int,
     ):
         super().__init__(vocab)
-        self.word_embedders = BasicTextFieldEmbedder(
-            {"tokens": token_embedder})
+        self.word_embedders = BasicTextFieldEmbedder({"tokens": token_embedder})
 
         self.word_drop = EmbeddingDropout(0.3)
 
-        if 'lstm' in arch:
+        if arch == 'lstm':
             self.encoder = PytorchSeq2VecWrapper(
                 torch.nn.LSTM(token_embedder.get_output_dim(),
                               hidden_size=300,
                               dropout=0.5,
                               num_layers=2,
                               batch_first=True))
-        elif 'cnn' in arch:
+        elif arch == 'cnn':
             self.encoder = CnnEncoder(
                 embedding_dim=token_embedder.get_output_dim(),
                 num_filters=100,
                 ngram_filter_sizes=(3, 4, 5),
             )
-        elif 'boe' in arch:
+        elif arch == 'boe':
             self.encoder = BagOfEmbeddingsEncoder(
                 embedding_dim=token_embedder.get_output_dim(), averaged=True)
         else:
@@ -72,7 +71,7 @@ class Classifier(Model):
     def get_optimizer(self):
         return DenseSparseAdam(self.named_parameters(), lr=1e-3)
 
-    def forward(self, sent, label=None):
+    def forward(self, sent: TextFieldTensors, label=None):
         mask = get_text_field_mask(sent)
         embeddings = self.word_embedders(sent)
         embeddings = self.word_drop(embeddings)

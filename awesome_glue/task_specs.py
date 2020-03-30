@@ -26,6 +26,14 @@ TASK_SPECS = {
         "banned_words": "banned_words/sentiment.txt",
         "num_labels": 2,
     },
+    "SNLI": {
+        "path": "datasets/snli/",
+        "sent1_col": "sentence1",
+        "sent2_col": "sentence2",
+        "label_col": "gold_label",
+        "skip_label_indexing": False,
+        "num_labels": 3,
+    },
     "RTE": {
         "path": "datasets/glue_data/RTE/",
         "sent1_col": "sentence1",

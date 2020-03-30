@@ -455,7 +455,7 @@ class Aggregator:
     def has_key(self, key):
         if self.__keys is None:
             return False
-        if self.__kv_mode:
+        if not self.__kv_mode:
             return False
         return key in self.__keys
 

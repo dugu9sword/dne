@@ -161,12 +161,6 @@ class AttackMetric:
             self.flip_ratio)
 
 
-def maybe_path(*args):
-    for arg in args:
-        if pathlib.Path(arg).exists():
-            break
-    return arg
-
 
 def text_diff(a_text, b_text):
     if isinstance(a_text, list):
@@ -189,21 +183,3 @@ def text_diff(a_text, b_text):
     }
 
 
-WORD2VECS = {
-    "fasttext":
-    maybe_path(
-        "/disks/sdb/zjiehang/embeddings/fasttext/crawl-300d-2M.vec",
-        "https://dl.fbaipublicfiles.com/fasttext/vectors-english/crawl-300d-2M.vec.zip"
-    ),
-    "glove":
-    maybe_path("/disks/sdb/zjiehang/embeddings/glove/glove.42B.300d.txt",
-               "/root/glove/glove.42B.300d.txt",
-               "http://nlp.stanford.edu/data/glove.42B.300d.zip"),
-    "counter":
-    maybe_path(
-        "/disks/sdb/zjiehang/embeddings/counter/counter.txt",
-        "https://raw.githubusercontent.com/nmrksic/counter-fitting/master/word_vectors/counter-fitted-vectors.txt.zip"
-    )
-}
-
-EMBED_DIM = defaultdict(lambda: 300, {"elmo": 256})
