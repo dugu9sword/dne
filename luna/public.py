@@ -444,7 +444,7 @@ class Aggregator:
     """
 
     def __init__(self):
-        self.__has_key = False
+        self.__kv_mode = False
         self.__keys = None
         self.__saved = None
 
@@ -452,20 +452,27 @@ class Aggregator:
     def size(self):
         return len(self.__saved[0])
 
+    def has_key(self, key):
+        if self.__keys is None:
+            return False
+        if not self.__kv_mode:
+            return False
+        return key in self.__keys
+
     def aggregate(self, *args):
         # First called, init the collector and decide the key mode
         if self.__saved is None:
-            if Aggregator.__arg_has_key(*args):
-                self.__has_key = True
+            if Aggregator.__args_kv_mode(*args):
+                self.__kv_mode = True
                 self.__keys = list(map(lambda x: x[0], args))
             # else:
             #     self.keys = ['__{}' for i in range(len(args))]
             self.__saved = [[] for _ in range(len(args))]
         # Later called
-        if Aggregator.__arg_has_key(*args) != self.__has_key:
+        if Aggregator.__args_kv_mode(*args) != self.__kv_mode:
             raise Exception("you must always specify a key or not")
         for i in range(len(args)):
-            if self.__has_key:
+            if self.__kv_mode:
                 saved_id = self.__keys.index(args[i][0])
                 to_save = args[i][1]
             else:
@@ -477,7 +484,7 @@ class Aggregator:
                 self.__saved[saved_id].append(to_save)
 
     @staticmethod
-    def __arg_has_key(*args):
+    def __args_kv_mode(*args):
         # print("args is {}".format(args))
         has_key_num = 0
         for arg in args:
@@ -517,7 +524,7 @@ class Aggregator:
                 'reduce must be None, mean, sum, std or a function.')
 
         if key is None:
-            if not self.__has_key:
+            if not self.__kv_mode:
                 if len(self.__saved) == 1:
                     return reduce_fn(self.__saved[0])
                 else:
@@ -525,7 +532,7 @@ class Aggregator:
             else:
                 raise Exception("you must specify a key")
         elif key is not None:
-            if self.__has_key:
+            if self.__kv_mode:
                 saved_id = self.__keys.index(key)
                 return reduce_fn(self.__saved[saved_id])
             else:

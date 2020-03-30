@@ -20,6 +20,9 @@ from luna import lazy_property
 
 
 class Genetic(Attacker):
+    """
+    EMNLP 2018 - Generating Natural Language Adversarial Examples
+    """
     def __init__(self,
                  predictor,
                  *,

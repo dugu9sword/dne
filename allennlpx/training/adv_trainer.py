@@ -5,8 +5,6 @@ import re
 import time
 import traceback
 from typing import Any, Dict, List, Optional, Tuple, Union
-from functools import partial
-from itertools import chain
 
 import torch
 import torch.distributed as dist
@@ -30,7 +28,6 @@ from allennlp.training.trainer_base import TrainerBase
 from torch.nn.parallel import DistributedDataParallel
 from allennlp.nn import util
 from allennlpx.training import adv_utils
-from allennlpx.interpret.attackers.cached_searcher import CachedIndexSearcher
 from luna import ram_write, ram_pop
 
 try:
@@ -39,6 +36,24 @@ except ImportError:
     amp = None
 
 logger = logging.getLogger(__name__)
+
+
+class BatchCallback:
+    def __call__(
+        self,
+        trainer,
+        epoch: int,
+        batch_number: int,
+        is_training: bool,
+    ) -> None:
+        raise NotImplementedError
+
+
+class EpochCallback:
+    def __call__(
+        self, trainer, metrics: Dict[str, Any], epoch: int
+    ) -> None:
+        raise NotImplementedError 
 
 
 """
@@ -72,6 +87,8 @@ class AdvTrainer(TrainerBase):
             should_log_learning_rate: bool = False,
             log_batch_size_period: Optional[int] = None,
             moving_average: Optional[MovingAverage] = None,
+            batch_callbacks: List[BatchCallback] = None,
+            epoch_callbacks: List[EpochCallback] = None,
             distributed: bool = False,
             local_rank: int = 0,
             world_size: int = 1,
@@ -249,6 +266,9 @@ class AdvTrainer(TrainerBase):
         self._learning_rate_scheduler = learning_rate_scheduler
         self._momentum_scheduler = momentum_scheduler
         self._moving_average = moving_average
+        
+        self._batch_callbacks = batch_callbacks or []
+        self._epoch_callbacks = epoch_callbacks or []
 
         # We keep the total batch number as an instance variable because it
         # is used inside a closure for the hook which logs activations in
@@ -365,8 +385,9 @@ class AdvTrainer(TrainerBase):
         # Set the model to "train" mode.
         self._pytorch_model.train()
 
-        hooks = self._register_embedding_hooks()
-        embedding_matrix = util.find_embedding_layer(self.model).weight
+        if self.adv_policy.adv_iteration > 0:
+            hooks = self._register_embedding_hooks()
+            embedding_matrix = util.find_embedding_layer(self.model).weight
 
         # Get tqdm for the training batches
         batch_generator = iter(self.data_loader)
@@ -430,24 +451,26 @@ class AdvTrainer(TrainerBase):
             train_loss += loss.item()
 
             # adversarial samples
-            raw_tokens = batch['sent']['tokens']['tokens'].cuda()
-            dbg_adv_tokens_lst = [raw_tokens.tolist()]
-            if isinstance(self.adv_policy, adv_utils.HotFlipPolicy):
-                if self.adv_policy.searcher is not None:
-                    constrain_fn_ = partial(adv_utils.apply_constraint, self.adv_policy.searcher)
-                else:
-                    # Maybe we shall mask some special tokens.
-                    constrain_fn_ = None
+            if self.adv_policy.adv_iteration>0:
                 for adv_idx in range(self.adv_policy.adv_iteration):
-                    # import ipdb; ipdb.set_trace()
-                    adv_tokens = adv_utils.hotflip(
-                        src_tokens=raw_tokens,
-                        embeds=ram_pop('fw'),
-                        grads=ram_pop('bw'),
-                        embedding_matrix=embedding_matrix,
-                        constrain_fn_=constrain_fn_,
-                        replace_num=self.adv_policy.replace_num,
-                    )
+                    raw_tokens = batch['sent']['tokens']['tokens'].cuda()
+                    if isinstance(self.adv_policy, adv_utils.HotFlipPolicy):
+                        adv_tokens = adv_utils.hotflip(
+                            src_tokens=raw_tokens,
+                            embeds=ram_pop('fw'),
+                            grads=ram_pop('bw'),
+                            embedding_matrix=embedding_matrix,
+                            searcher=self.adv_policy.searcher,
+                            replace_num=self.adv_policy.replace_num,
+                        )
+                    elif isinstance(self.adv_policy, adv_utils.RandomNeighbourPolicy):
+                        adv_tokens = adv_utils.random_swap(
+                            src_tokens=raw_tokens,
+                            searcher=self.adv_policy.searcher,
+                            replace_num=self.adv_policy.replace_num,
+                        )
+                    else:
+                        raise Exception('You must specify a policy')
                     batch['sent']['tokens']['tokens'] = adv_tokens
                     loss = self.batch_loss(batch, for_training=True)
                     if torch.isnan(loss):
@@ -458,14 +481,7 @@ class AdvTrainer(TrainerBase):
                     else:
                         loss.backward()
                     train_loss += loss.item()
-                    dbg_adv_tokens_lst.append(adv_tokens.tolist())
-            
-#             print(' ==== ')
-#             for tokens in dbg_adv_tokens_lst:
-#                 print(tokens[:1])
-#                 for sent in tokens[:1]:
-#                     print(' '.join(list(map(self.adv_policy.searcher.idx2word, sent))))
-                    
+
 
 
             batch_grad_norm = self.rescale_gradients()
@@ -515,6 +531,15 @@ class AdvTrainer(TrainerBase):
                 description = training_util.description_from_metrics(metrics)
                 batch_generator_tqdm.set_description(description, refresh=False)
 
+            if self._master:
+                for callback in self._batch_callbacks:
+                    callback(
+                        self,
+                        epoch,
+                        batches_this_epoch,
+                        is_training=True,
+                    )
+                    
             # Log parameter values to Tensorboard (only from the master)
             if self._tensorboard.should_log_this_batch() and self._master:
                 self._tensorboard.log_parameter_and_gradient_statistics(self.model, batch_grad_norm)
@@ -556,8 +581,9 @@ class AdvTrainer(TrainerBase):
         if self._distributed:
             dist.barrier()
 
-        for hook in hooks:
-            hook.remove()
+        if self.adv_policy.adv_iteration>0:
+            for hook in hooks:
+                hook.remove()
 
         metrics = training_util.get_metrics(
             self.model,
@@ -674,6 +700,9 @@ class AdvTrainer(TrainerBase):
         metrics["best_epoch"] = self._metric_tracker.best_epoch
         for key, value in self._metric_tracker.best_epoch_metrics.items():
             metrics["best_validation_" + key] = value
+            
+        for callback in self._epoch_callbacks:
+            callback(self, metrics={}, epoch=-1)
 
         for epoch in range(epoch_counter, self._num_epochs):
             epoch_start_time = time.time()
@@ -759,6 +788,9 @@ class AdvTrainer(TrainerBase):
             # Wait for the master to finish saving the checkpoint
             if self._distributed:
                 dist.barrier()
+                
+            for callback in self._epoch_callbacks:
+                callback(self, metrics=metrics, epoch=epoch)
 
             epoch_elapsed_time = time.time() - epoch_start_time
             logger.info("Epoch duration: %s", datetime.timedelta(seconds=epoch_elapsed_time))

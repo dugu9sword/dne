@@ -13,6 +13,9 @@ from allennlpx.interpret.attackers.policies import (CandidatePolicy, EmbeddingPo
 
 
 class BruteForce(Attacker):
+    """
+    Replace k words randomly (each time), try n times.
+    """
     def __init__(self,
                  predictor,
                  *,

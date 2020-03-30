@@ -1,11 +1,13 @@
 import re
+import torch
 from contextlib import contextmanager
+from copy import deepcopy
 from typing import Callable, Iterator, List, Union
 
 from allennlp.data import Instance
 from allennlp.modules.text_field_embedders import TextFieldEmbedder
 from allennlp.predictors.predictor import Predictor as Predictor_
-from allennlp.common.util import JsonDict, sanitize
+from allennlp.common.util import JsonDict, sanitize, lazy_groups_of
 
 
 class Predictor(Predictor_):
@@ -13,6 +15,11 @@ class Predictor(Predictor_):
         super().__init__(*args, **kwargs)
         self._transform_fn: Callable[[List[Instance]], List[Instance]] = lambda x: x
         self._ensemble_num: int = 1
+        # Following CVPR 2019 - Defense Against Adversarial Images using Web-Scale
+        # Nearest-Neighbor Search, we prefer probabilities that are more "confident",
+        # thus [0.9, 0.1] has larger weight than [0.6, 0.4].
+        # if p=0, it is equivilant to simply averaging all probabilities.
+        self._ensemble_p = 3
 
     def _register_embedding_gradient_hooks(self, embedding_gradients):
         """
@@ -80,30 +87,33 @@ class Predictor(Predictor_):
             hook.remove()
 
     def predict_instance(self, instance: Instance) -> JsonDict:
+        # Here we do not apply deepcopy for each element,
+        # but an element wise deepcopy in _transform_fn is needed!
+        # if id(instances[0]) == id(instances[1])
+        #   d1 = deepcopy(instances), id(d1[0]) == id(d1[1])
+        #   d2 = [deepcopy(e) for e in instances], id(d1[0]) != id(d1[1])
         instances = [instance for i in range(self._ensemble_num)]
         instances = self._transform_fn(instances)
         outputs = self._model.forward_on_instances(instances)
-        ret = {'probs': outputs[0]['probs']}
-        for output in outputs[1:]:
-            ret['probs'] += output['probs']
-        ret['probs'] /= self._ensemble_num
+        probs_to_ensemble = [ele['probs'] for ele in outputs]
+        ret = {'probs': self._weighted_average(probs_to_ensemble)}
         return sanitize(ret)
 
     def predict_batch_instance(self, instances):
-        bsz = len(instances)
-        b_en_instances = []  # batch x ensemble
-        for instance in instances:
-            b_en_instances.extend([instance for _ in range(self._ensemble_num)])
-        b_en_instances = self._transform_fn(b_en_instances)
-        outputs = self._model.forward_on_instances(b_en_instances)
         ret = []
-        for bid in range(bsz):
-            offset = bid * self._ensemble_num
-            en_output = {'probs': outputs[offset]['probs']}
-            for eid in range(1, self._ensemble_num):
-                en_output['probs'] += outputs[offset + eid]['probs']
-            en_output['probs'] /= self._ensemble_num
-            ret.append(en_output)
+        for group in lazy_groups_of(instances, int(1024 / self._ensemble_num)):
+            bsz = len(group)
+            b_en_instances = []  # batch x ensemble
+            for instance in group:
+                b_en_instances.extend([instance for _ in range(self._ensemble_num)])
+            b_en_instances = self._transform_fn(b_en_instances)
+            outputs = self._model.forward_on_instances(b_en_instances)
+            
+            for bid in range(bsz):
+                offset = bid * self._ensemble_num
+                probs_to_ensemble = [ele['probs'] for ele in outputs[offset: offset + self._ensemble_num]]
+                en_output = {'probs': self._weighted_average(probs_to_ensemble)}
+                ret.append(en_output)
         return sanitize(ret)
 
     def set_ensemble_num(self, ensemble_num):
@@ -111,3 +121,25 @@ class Predictor(Predictor_):
 
     def set_transform_fn(self, transform_fn):
         self._transform_fn = transform_fn
+        
+    def _weighted_average(self, probs_to_ensemble):
+        # w = \sigma (max_prob - other_prob) ^ p
+        # p = 0, weighted_average = mean
+        # tensor([[0.2685, 0.7315],
+        #         [0.3716, 0.6284],
+        #         [0.4910, 0.5090],
+        #         [0.8707, 0.1293],
+        #         [0.4254, 0.5746]])
+        # tensor([0.4854, 0.5146])
+        # tensor([0.7384, 0.2616])
+        if isinstance(probs_to_ensemble, list):
+            probs_to_ensemble = torch.tensor(probs_to_ensemble)
+        delta = probs_to_ensemble.max(dim=1, keepdims=True)[0] - probs_to_ensemble
+        delta = delta ** self._ensemble_p
+        delta = delta.sum(dim=1)
+        delta = delta / delta.sum()
+        ret = delta @ probs_to_ensemble
+        # print(probs_to_ensemble)
+        # print(probs_to_ensemble.mean(dim=0))
+        # print(ret)
+        return ret

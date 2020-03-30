@@ -23,6 +23,9 @@ from allennlpx.interpret.attackers.policies import (CandidatePolicy,
 
 
 class HotFlip(Attacker):
+    """
+    ACL 2018 - HotFlip White-Box Adversarial Examples for Text Classiﬁcation
+    """
     def __init__(self, 
              predictor, 
              *,

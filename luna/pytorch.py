@@ -26,7 +26,7 @@ def cast_list(array, squeeze=True):
             return array.tolist()
 
 
-def flt2str(flt, fmt=":8.4f", cat=None):
+def flt2str(flt, fmt=":6.2f", cat=None):
     fmter = "{{{}}}".format(fmt)
     if isinstance(flt, (float, int)):
         return fmter.format(flt)

@@ -19,8 +19,8 @@ class BertPooler(torch.nn.Module):
 
 
 class BertClassifier(Model):
-    def __init__(self, vocab, finetunable):
-        super().__init__(vocab)
+    def __init__(self, vocab):
+        super().__init__(vocab, num_labels)
         """
             A note for the pipline:
             - BertyTSVReader will use BertTokenizer to tokenize the sentence and
@@ -56,24 +56,24 @@ class BertClassifier(Model):
 
         self.bert_model = PretrainedBertModel.load('bert-base-uncased')
 
-        if finetunable:
-            for name, param in self.bert_model.named_parameters():
-                param.requires_grad = True
-            else:
-                param.requires_grad = False
-        else:
-            found_unfrozen_layer = False
-            for name, param in self.bert_model.named_parameters():
-                if "layer.10" in name:
-                    found_unfrozen_layer = True
-                if found_unfrozen_layer:
-                    param.requires_grad = True
-                else:
-                    param.requires_grad = False
+#         if finetunable:
+#             for name, param in self.bert_model.named_parameters():
+#                 param.requires_grad = True
+#             else:
+#                 param.requires_grad = False
+#         else:
+#             found_unfrozen_layer = False
+#             for name, param in self.bert_model.named_parameters():
+#                 if "layer.10" in name:
+#                     found_unfrozen_layer = True
+#                 if found_unfrozen_layer:
+#                     param.requires_grad = True
+#                 else:
+#                     param.requires_grad = False
 
         self.linear = torch.nn.Sequential(
             torch.nn.Dropout(0.1),
-            torch.nn.Linear(in_features=768, out_features=vocab.get_vocab_size('label')),
+            torch.nn.Linear(in_features=768, out_features=num_labels)
         )
 
         self.accuracy = CategoricalAccuracy()
@@ -84,9 +84,9 @@ class BertClassifier(Model):
         # embeddings = self.word_embedders(berty_tokens)
         # encoder_out = self.pooler(embeddings)
 
-        _, encoder_out = self.bert_model(input_ids=berty_tokens['berty_tokens'],
-                                         token_type_ids=berty_tokens['berty_tokens-type-ids'],
-                                         attention_mask=(berty_tokens['berty_tokens'] != 0).long(),
+        _, encoder_out = self.bert_model(input_ids=berty_tokens['berty_tokens']['token_ids'],
+                                         token_type_ids=berty_tokens['berty_tokens']['type_ids'],
+                                         attention_mask=berty_tokens['berty_tokens']['mask'],
                                          output_all_encoded_layers=False)
 
         logits = self.linear(encoder_out)

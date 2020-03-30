@@ -18,6 +18,10 @@ from luna import cast_list
 
 
 class PGD(Attacker):
+    """
+    Projective gradient descent, not efficient. 
+    Hotflip is better.
+    """
     def __init__(self, 
                  predictor, 
                  *,

@@ -12,6 +12,7 @@ from luna.logging import log, log_config
 import numpy as np
 
 import torch
+import sys
 
 config = Config()._parse_args()
 
@@ -25,6 +26,11 @@ ram_write("config", config)
 
 log_config("log", "c")
 log(config)
+sys.stdout.flush()
+
+if not config.alchemist:
+    os.environ['CUDA_VISIBLE_DEVICES'] = str(config.cuda)
+    
 
 task = Task(config)
 
@@ -33,13 +39,13 @@ task = Task(config)
     'meval': task.evaluate_model,
     'peval': task.evaluate_predictor,
     'attack': task.attack,
+    'transfer': task.transfer_attack,
 
     # BELOW COMMANDS ARE NOT STABLE
-    'knn_build': task.knn_build_index,
-    'knn_eval': task.knn_evaluate,
-    'knn_attack': task.knn_attack,
-    'transfer': task.transfer_attack,
-    'build_manifold': task.build_manifold,
-    'test_distance': task.test_distance,
-    'test_ppl': task.test_ppl
+#     'knn_build': task.knn_build_index,
+#     'knn_eval': task.knn_evaluate,
+#     'knn_attack': task.knn_attack,
+#     'build_manifold': task.build_manifold,
+#     'test_distance': task.test_distance,
+#     'test_ppl': task.test_ppl
 }[config.mode]()
