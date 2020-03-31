@@ -6,13 +6,13 @@ class Config(ProgramArgs):
         super().__init__()
 
         # basic settings
-        self.task_id = "TOYNLI"
+        self.task_id = "SNLI"
         self.embed = ''   # d/g/_
         self.arch = 'esim'
         self.pretrain = 'glove'
 #         self._model_name = "AGNEWS-lstm-hot.1.5.con"
         self._model_name = ""   # if set to tmp, existing models will be overrided
-        self.mode = 'attack'
+        self.mode = 'train'
         
         # dirichlet settings
         self.dir_temp = 5.0
@@ -24,7 +24,7 @@ class Config(ProgramArgs):
         # training settings
         # self.aug_data = 'nogit/AGNEWS-lstm.pwws.aug.tsv'
         self.aug_data = ''
-        self.adv_iter = 0
+        self.adv_iter = 1
         self.adv_policy = 'hot'    # hot -> hotflip, rdm -> random
         self.adv_replace_num = 5
         self.adv_constraint = True
@@ -35,7 +35,7 @@ class Config(ProgramArgs):
         self.pred_transform_args = ""
 
         # attack settings
-        self.attack_method = 'hotflip'
+        self.attack_method = 'pwws'
         self.attack_vectors = 'counter'
         self.attack_data_split = 'dev'
         self.attack_size = 200

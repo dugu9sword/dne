@@ -35,7 +35,7 @@ class PWWS(Attacker):
         _volatile_json_ = inputs.copy()
 
         raw_instance = self.predictor.json_to_labeled_instances(inputs)[0]
-        raw_tokens = list(map(lambda x: x.text, self.spacy.tokenize(inputs[field_to_change])))
+        raw_tokens = list(map(lambda x: x.text, self.spacy.tokenize(inputs[self.f2c])))
 
         # Select words that can be changed
         sids_to_change = []
