@@ -66,19 +66,17 @@ class HotFlip(Attacker):
     
     def attack_from_json(self,
                          inputs: JsonDict = None,
-                         field_to_change: str = 'tokens',
-                         field_to_attack: str = 'label',
                          grad_input_field: str = 'grad_input_1') -> JsonDict:
         # Not use spacy to tokenize it since we use the tokenizer provided 
         # by the model.
         raw_instance = self.predictor.json_to_labeled_instances(inputs)[0]
-        raw_tokens = list(map(lambda x: x.text, raw_instance[field_to_change].tokens))
+        raw_tokens = list(map(lambda x: x.text, raw_instance[self.f2c].tokens))
         max_change_num = self.max_change_num(len(raw_tokens))
 
         adv_instance = deepcopy(raw_instance)
 
         # Gets a list of the fields that we want to check to see if they change.
-        adv_text_field: TextField = adv_instance[field_to_change]  # type: ignore
+        adv_text_field: TextField = adv_instance[self.f2c]  # type: ignore
         grads, outputs = self.predictor.get_gradients([adv_instance])
 
         # ignore any token that is in the ignore_tokens list by setting the token to already flipped
@@ -136,7 +134,7 @@ class HotFlip(Attacker):
             current_instance_labeled = self.predictor.predictions_to_labeled_instances(
                 adv_instance, result)[0]
             
-            if current_instance_labeled[field_to_attack] != raw_instance[field_to_attack]:
+            if current_instance_labeled[self.f2a] != raw_instance[self.f2a]:
                 successful = True
                 break
         

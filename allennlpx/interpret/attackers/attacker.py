@@ -29,6 +29,9 @@ class Attacker(Registrable):
     def __init__(
         self,
         predictor: Predictor,
+        # change a field to attack another field
+        field_to_change: str = 'sent',
+        field_to_attack: str = 'label',
         *,  # only accept keyword arguments
         ignore_tokens: List[str] = DEFAULT_IGNORE_TOKENS,
         forbidden_tokens: List[str] = DEFAULT_IGNORE_TOKENS,
@@ -36,6 +39,8 @@ class Attacker(Registrable):
         vocab=None,
         token_embedding=None):
         self.predictor = predictor
+        self.f2c = field_to_change
+        self.f2a = field_to_attack
 
         self.ignore_tokens = ignore_tokens
         self.forbidden_tokens = forbidden_tokens
@@ -50,29 +55,7 @@ class Attacker(Registrable):
             # self.token_embedding = self._construct_embedding_matrix().to(self.model_device)
             self.token_embedding = find_embedding_layer(self.predictor._model).weight
 
-    def attack_from_json(self, inputs: JsonDict, field_to_change: str,
-                         field_to_attack: str) -> JsonDict:
-        """
-        This function finds a modification to the input text that would change the model's
-        prediction in some desired manner (e.g., an adversarial attack).
-
-        Parameters
-        ----------
-        inputs : ``JsonDict``
-            The input you want to attack (the same as the argument to a Predictor, e.g.,
-            predict_json()).
-        input_field_to_attack : ``str``
-            The key in the inputs JsonDict you want to attack, e.g., ``tokens``.
-        grad_input_field : ``str``
-            The field in the gradients dictionary that contains the input gradients.  For example,
-            `grad_input_1` will be the field for single input tasks. See get_gradients() in
-            `Predictor` for more information on field names.
-
-        Returns
-        -------
-        reduced_input : ``JsonDict``
-            Contains the final, sanitized input after adversarial modification.
-        """
+    def attack_from_json(self, inputs: JsonDict) -> JsonDict:
         raise NotImplementedError()
 
     @lru_cache(maxsize=None)
@@ -81,7 +64,7 @@ class Attacker(Registrable):
             return 100000
         else:
             if self.max_change_num_or_ratio < 1:
-                max_change_num = int(len_tokens * self.max_change_num_or_ratio)
+                max_change_num = max(1, int(len_tokens * self.max_change_num_or_ratio))
             else:
                 max_change_num = self.max_change_num_or_ratio
             return max_change_num

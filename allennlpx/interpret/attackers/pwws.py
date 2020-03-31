@@ -13,7 +13,7 @@ from allennlp.modules.text_field_embedders.text_field_embedder import \
 from allennlpx.interpret.attackers.attacker import (DEFAULT_IGNORE_TOKENS, Attacker)
 from allennlpx.interpret.attackers.policies import (CandidatePolicy, EmbeddingPolicy,
                                                     SpecifiedPolicy, SynonymPolicy)
-
+from allennlpx import allenutil
 
 class PWWS(Attacker):
     """
@@ -28,9 +28,12 @@ class PWWS(Attacker):
     def attack_from_json(
             self,
             inputs: JsonDict = None,
-            field_to_change: str = 'tokens',
-            field_to_attack: str = 'label',
     ) -> JsonDict:
+        # we reuse volatile_json to avoid deepcopy of the dict each time a new
+        # instance is created, which is rather time consuming.
+        # !!! MUST BE CAREFUL since volatile_json will change through the code.
+        _volatile_json_ = inputs.copy()
+
         raw_instance = self.predictor.json_to_labeled_instances(inputs)[0]
         raw_tokens = list(map(lambda x: x.text, self.spacy.tokenize(inputs[field_to_change])))
 
@@ -61,16 +64,19 @@ class PWWS(Attacker):
         for sid in sids_to_change:
             tmp_instances = []
             # first element is the raw sentence
-            tmp_instances.append(self._tokens_to_instance(raw_tokens))
+            _volatile_json_[self.f2c] = " ".join(raw_tokens)
+            tmp_instances.append(self.predictor._json_to_instance(_volatile_json_))
             # second element is the UNK sentence
             tmp_tokens = copy.copy(raw_tokens)
             tmp_tokens[sid] = DEFAULT_OOV_TOKEN
-            tmp_instances.append(self._tokens_to_instance(tmp_tokens))
+            _volatile_json_[self.f2c] = " ".join(tmp_tokens)
+            tmp_instances.append(self.predictor._json_to_instance(_volatile_json_))
             # starting from the third one are modified sentences
             for nbr in nbr_dct[sid]:
                 tmp_tokens = copy.copy(raw_tokens)
                 tmp_tokens[sid] = nbr
-                tmp_instances.append(self._tokens_to_instance(tmp_tokens))
+                _volatile_json_[self.f2c] = " ".join(tmp_tokens)
+                tmp_instances.append(self.predictor._json_to_instance(_volatile_json_))
 
             _offsets[sid] = (len(_instances), len(tmp_instances))
             _instances.extend(tmp_instances)
@@ -88,8 +94,6 @@ class PWWS(Attacker):
 
         # Compute the word saliency
         repl_dct = {}  # {idx: "the replaced word"}
-        drop_dct = {}  # {idx: prob_current - prob_replaced}
-        sali_dct = {}  # {idx: prob_current - prob_unk}
         pwws_dct = {}
         for sid in sids_to_change:
             _start, _num = _offsets[sid]
@@ -100,20 +104,9 @@ class PWWS(Attacker):
             oov_prob = true_probs[1]
             other_probs = true_probs[2:]
             repl_dct[sid] = nbr_dct[sid][np.argmin(other_probs)]
-            drop_dct[sid] = np.max(raw_prob - other_probs)
-            sali_dct[sid] = raw_prob - oov_prob
+            pwws_dct[sid] = np.max(raw_prob - other_probs) * np.exp(raw_prob - oov_prob)
 
-            pwws_dct[sid] = drop_dct[sid] * np.exp(sali_dct[sid])
-
-
-#         total_exp = 0
-#         for sid in sids_to_change:
-#             sali_dct[sid] = np.exp(sali_dct[sid])
-#             total_exp += sali_dct[sid]
-#         for sid in sids_to_change:
-#             pwws_dct[sid] = drop_dct[sid] * sali_dct[sid] / total_exp
-
-# max number of tokens that can be changed
+        # max number of tokens that can be changed
         max_change_num = min(self.max_change_num(len(raw_tokens)), len(sids_to_change))
 
         final_tokens = [ele for ele in raw_tokens]
@@ -123,11 +116,12 @@ class PWWS(Attacker):
         for i in range(max_change_num):
             sid = sorted_pwws[i][0]
             final_tokens[sid] = repl_dct[sid]
-            final_instance = self.predictor._dataset_reader.text_to_instance(" ".join(final_tokens))
+            _volatile_json_[self.f2c] = " ".join(final_tokens)
+            final_instance = self.predictor._json_to_instance(_volatile_json_)
             result = self.predictor.predict_instance(final_instance)
             final_instance = self.predictor.predictions_to_labeled_instances(
                 final_instance, result)[0]
-            if final_instance[field_to_attack].label != raw_instance[field_to_attack].label:
+            if final_instance[self.f2a].label != raw_instance[self.f2a].label:
                 successful = True
                 break
 

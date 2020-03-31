@@ -2,6 +2,7 @@ import csv
 import sys
 from collections import Counter
 from functools import partial
+from copy import deepcopy
 
 import numpy as np
 import pandas
@@ -37,13 +38,14 @@ from allennlpx.modules.token_embedders.embedding import \
     _read_pretrained_embeddings_file
 from allennlpx.modules.token_embedders.graph_funcs import MeanAggregator, PoolingAggregator
 from allennlpx.predictors.text_classifier import TextClassifierPredictor
+from allennlpx.predictors.bitext_classifier import BiTextClassifierPredictor
 from awesome_glue.config import Config
 from awesome_glue.vanilla_classifier import Classifier
 from awesome_glue.esim import ESIM
 from awesome_glue import embed_util
 from awesome_glue.embed_util import EMBED_DIM, WORD2VECS
 from awesome_glue.bert_classifier import BertClassifier
-from awesome_glue.task_specs import TASK_SPECS
+from awesome_glue.task_specs import TASK_SPECS, is_sentence_pair, is_str_label
 from awesome_glue.transforms import (BackTrans, DAE, BertAug, Crop, EmbedAug,
                                      Identity, RandDrop, SynAug,
                                      transform_collate,
@@ -132,10 +134,14 @@ class Task:
         # - ensemble several models
         # Note that the attacker receives a predictor as the proxy of the model,
         # which allows for test-time attacks.
-        self.predictor = TextClassifierPredictor(
-            self.model,
-            self.reader,
-            key='sent' if self.config.arch != 'bert' else 'berty_tokens')
+        if is_sentence_pair(self.config.task_id):
+            self.predictor = BiTextClassifierPredictor(
+                self.model, self.reader, key1='sent1', key2='sent2'
+            )
+        else:
+            self.predictor = TextClassifierPredictor(
+                self.model, self.reader, key='sent'
+            )
 
         # list[str] -> list[str]
         transform_fn = parse_transform_fn_from_args(
@@ -188,13 +194,16 @@ class Task:
             "adv_iteration": self.config.adv_iter,
             "replace_num": self.config.adv_replace_num,
             "searcher": searcher,
+            'adv_field': 'sent2' if is_sentence_pair(self.config.task_id) else 'sent'
         }
         if self.config.adv_policy == 'hot':
+            if is_sentence_pair(self.config.task_id):
+                policy_args['forward_order'] = 1
             adv_policy = adv_utils.HotFlipPolicy(**policy_args)
         elif self.config.adv_policy == 'rad':
             adv_policy = adv_utils.RandomNeighbourPolicy(**policy_args)
         else:
-            adv_policy = None
+            adv_policy = adv_utils.NoPolicy
 
         # Set callbacks
         epoch_callbacks = []
@@ -259,7 +268,10 @@ class Task:
             preds, labels = [], []
             for inst, outp in zip(instances, outputs):
                 preds.append([outp['probs']])
-                labels.append([inst.fields['label'].label])
+                label_idx = inst.fields['label'].label
+                if isinstance(inst.fields['label'].label, str):
+                    label_idx = self.vocab.get_token_index(label_idx, 'labels')
+                labels.append([label_idx])
                 metric(predictions=torch.tensor(preds),
                        gold_labels=torch.tensor(labels))
         print(metric.get_metric())
@@ -301,34 +313,33 @@ class Task:
     def attack(self):
         self.from_pretrained()
 
-        spacy_vocab, spacy_weight = self.get_spacy_vocab_and_vec()
+        # Set up the data to attack
+        if self.config.attack_data_split == 'train':
+            data_to_attack = self.train_data
+        elif self.config.attack_data_split == 'dev':
+            data_to_attack = self.dev_data
+        if is_sentence_pair(self.config.task_id):
+            field_to_change = 'sent2'
+        else:
+            field_to_change = 'sent'
+        data_to_attack = list(
+            filter(lambda x: len(x[field_to_change].tokens) < 300,
+                   data_to_attack))
 
-        if self.config.attack_gen_adv:
-            f_adv = open(
-                f"nogit/{self.config.model_name}.{self.config.attack_method}.adv.tsv",
-                'w')
-            f_adv.write("raw\tadv\tlabel\n")
+        if self.config.attack_size != -1:
+            data_to_attack = data_to_attack[:self.config.attack_size]
 
-        for module in self.model.modules():
-            if isinstance(module, TextFieldEmbedder):
-                for embed in module._token_embedders.keys():
-                    module._token_embedders[embed].weight.requires_grad = True
-
+        # Set up the attacker
         forbidden_words = load_banned_words(self.config.task_id)
-
-        forbidden_words += stopwords.words("english")
-        #         STOP_WORDS = stopwords.words("english")
-        #         for ele in ['nor', 'above']:
-        #             STOP_WORDS.remove(ele)
-        #         for ele in STOP_WORDS:
-        #             if "'" in ele:
-        #                 STOP_WORDS.remove(ele)
-        #         FreqUtil.topk_frequency(self.vocab, 100, 'least', forbidden_words)
+        # forbidden_words += stopwords.words("english")
         general_kwargs = {
             "ignore_tokens": forbidden_words,
             "forbidden_tokens": forbidden_words,
-            "max_change_num_or_ratio": 0.15
+            "max_change_num_or_ratio": 0.15,
+            "field_to_change": field_to_change,
+            "field_to_attack": 'label'
         }
+        spacy_vocab, spacy_weight = self.get_spacy_vocab_and_vec()
         blackbox_kwargs = {
             "vocab": spacy_vocab,
             "token_embedding": spacy_weight
@@ -373,98 +384,77 @@ class Task:
         else:
             raise Exception()
 
-        # For SST, we do not attack all sentences in train set.
-        # We attack sentences whose length is larger than 20 instead.
-        if self.config.attack_data_split == 'train':
-            data_to_attack = self.train_data
-            if self.config.task_id == 'SST':
-                if self.config.arch == 'bert':
-                    field_name = 'berty_tokens'
-                else:
-                    field_name = 'sent'
-                data_to_attack = list(
-                    filter(lambda x: len(x[field_name].tokens) > 20,
-                           data_to_attack))
-        elif self.config.attack_data_split == 'dev':
-            data_to_attack = self.dev_data
-
-        if self.config.arch == 'bert':
-            field_to_change = 'berty_tokens'
-        else:
-            field_to_change = 'sent'
-        data_to_attack = list(
-            filter(lambda x: len(x[field_to_change].tokens) < 300,
-                   data_to_attack))
-
-        if self.config.attack_size == -1:
-            adv_number = len(data_to_attack)
-        else:
-            adv_number = self.config.attack_size
-        data_to_attack = data_to_attack[:adv_number]
-
+        # Start attacking
+        if self.config.attack_gen_adv:
+            f_adv = open(
+                f"nogit/{self.config.model_name}.{self.config.attack_method}.adv.tsv",
+                'w')
+            f_adv.write("raw\tadv\tlabel\n")
         strict_metric = AttackMetric()
         loose_metric = AttackMetric()
         agg = Aggregator()
         raw_counter = Counter()
         adv_counter = Counter()
-        for i in tqdm(range(adv_number)):
-            raw_text = allenutil.as_sentence(data_to_attack[i])
-            adv_text = None
+        for i in tqdm(range(len(data_to_attack))):
+            raw_json = allenutil.as_json(data_to_attack[i])
+            adv_json = raw_json.copy()
 
-            raw_probs = self.predictor.predict_instance(
-                data_to_attack[i])['probs']
+            raw_probs = self.predictor.predict_instance(data_to_attack[i])['probs']
             raw_pred = np.argmax(raw_probs)
             raw_label = data_to_attack[i]['label'].label
+            if isinstance(raw_label, str):
+                raw_label = self.vocab.get_token_index(raw_label, 'labels')
+
             # Only attack correct instance
             if raw_pred == raw_label:
-                result = attacker.attack_from_json(
-                    {field_to_change: raw_text},
-                    field_to_change=field_to_change)
-                adv_text = allenutil.as_sentence(result['adv'])
-                adv_probs = self.predictor.predict(adv_text)['probs']
-                adv_pred = np.argmax(adv_probs)
+                # yapf:disable
+                result = attacker.attack_from_json(raw_json)
+                adv_json[field_to_change] = allenutil.as_sentence(result['adv'])
 
+                # Count
+                diff = text_diff(result['raw'], result['adv'])
+                raw_counter.update(diff['a_changes'])
+                adv_counter.update(diff['b_changes'])
+                to_aggregate = [('change_num', diff['change_num']),
+                                ('change_ratio', diff['change_ratio'])]
+                if "generation" in result:
+                    to_aggregate.append(
+                        ('generation', result['generation']))
+                agg.aggregate(*to_aggregate)
+                print(result)
+                log("[raw]", raw_json, "\n[prob]", flt2str(raw_probs, cat=', '))
+                log("[adv]", adv_json, '\n[prob]', flt2str(result['outputs']['probs'], cat=', '))
+                if "changed" in result:
+                    log("[changed]", result['changed'])
+                log()
+
+                log("Avg.change#", round(agg.mean("change_num"), 2),
+                    "Avg.change%", round(100 * agg.mean("change_ratio"), 2))
+                if "generation" in result:
+                    log("Aggregated generation", agg.mean("generation"))
+
+                # Strict metric: An attacker thinks that it attacks successfully.
                 if result['success']:
                     strict_metric.succeed()
                 else:
                     strict_metric.fail()
 
-                # yapf:disable
-                if raw_text != adv_text and raw_pred != adv_pred:
+                # Loose metric: Passing the adversarial example to the model will
+                # have a different result. (Since there may be randomness in the model.)
+                adv_probs = self.predictor.predict_json(adv_json)['probs']
+                adv_pred = np.argmax(adv_probs)
+                if raw_pred != adv_pred:
                     loose_metric.succeed()
-                    diff = text_diff(result['raw'], result['adv'])
-                    raw_counter.update(diff['a_changes'])
-                    adv_counter.update(diff['b_changes'])
-                    to_aggregate = [('change_num', diff['change_num']),
-                                    ('change_ratio', diff['change_ratio'])]
-                    if "generation" in result:
-                        to_aggregate.append(
-                            ('generation', result['generation']))
-                    agg.aggregate(*to_aggregate)
-                    adv_text = allenutil.as_sentence(result['adv'])
-                    log("[raw]", raw_text, "\n[prob]", flt2str(raw_probs, cat=', '))
-                    log("[adv]", adv_text, '\n[prob]', flt2str(adv_probs, cat=', '))
-                    if "changed" in result:
-                        log("[changed]", result['changed'])
-                    log()
-
-                    log("Avg.change#", round(agg.mean("change_num"), 2),
-                        "Avg.change%", round(100 * agg.mean("change_ratio"), 2))
-                    if "generation" in result:
-                        log("Aggregated generation", agg.mean("generation"))
-                    log(f"Aggregated metric: [loose] {loose_metric} [strict] {strict_metric}")
                 else:
                     loose_metric.fail()
+                log(f"Aggregated metric: [loose] {loose_metric} [strict] {strict_metric}")
                 # yapf:enable
             else:
                 loose_metric.escape()
                 strict_metric.escape()
 
-            if adv_text is None:
-                adv_text = raw_text
-
             if self.config.attack_gen_adv:
-                f_adv.write(f"{raw_text}\t{adv_text}\t{raw_label}\n")
+                f_adv.write(f"{raw_json[field_to_change]}\t{adv_json[field_to_change]}\t{raw_label}\n")
             sys.stdout.flush()
 
         if self.config.attack_gen_adv:

@@ -1,6 +1,9 @@
 from allennlp.data.fields import TextField
 from allennlp.data.instance import Instance
 from allennlp.data.tokenizers import Token
+from allennlp.common.util import JsonDict
+from copy import deepcopy
+from copy import copy
 
 
 def as_sentence(something, field=None):
@@ -24,3 +27,17 @@ def as_sentence(something, field=None):
     sent = " ".join(tkstrs)
     sent = sent.replace(" ##" , "", -1)  # replace word piece
     return sent
+
+
+def as_json(instance: Instance):
+    ret = {}
+    for k, v in instance.items():
+        if isinstance(v, TextField):
+            ret[k] = as_sentence(v)
+    return ret
+
+
+def modified_copy(jsonDict: JsonDict, key, value):
+    ret = jsonDict.copy()
+    ret[key] = as_sentence(value)
+    return ret

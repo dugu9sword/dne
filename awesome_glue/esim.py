@@ -29,7 +29,7 @@ class ESIM(Model):
     ) -> None:
         super().__init__(vocab)
 
-        self._text_field_embedder = BasicTextFieldEmbedder(
+        self.word_embedders = BasicTextFieldEmbedder(
             {"tokens": token_embedder})
         self._encoder = LstmSeq2SeqEncoder(300, 300, 2)
         # self._encoder = PytorchTransformer(300, 3, 300, 4)
@@ -57,8 +57,8 @@ class ESIM(Model):
         sent2: TextFieldTensors,
         label: torch.IntTensor = None,
     ) -> Dict[str, torch.Tensor]:
-        embedded_sent1 = self._text_field_embedder(sent1)
-        embedded_sent2 = self._text_field_embedder(sent2)
+        embedded_sent1 = self.word_embedders(sent1)
+        embedded_sent2 = self.word_embedders(sent2)
         sent1_mask = get_text_field_mask(sent1)
         sent2_mask = get_text_field_mask(sent2)
 

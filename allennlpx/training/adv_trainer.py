@@ -28,7 +28,7 @@ from allennlp.training.trainer_base import TrainerBase
 from torch.nn.parallel import DistributedDataParallel
 from allennlp.nn import util
 from allennlpx.training import adv_utils
-from luna import ram_write, ram_pop
+from luna import ram_write, ram_pop, ram_append, ram_reset, ram_read
 
 try:
     from apex import amp
@@ -53,7 +53,7 @@ class EpochCallback:
     def __call__(
         self, trainer, metrics: Dict[str, Any], epoch: int
     ) -> None:
-        raise NotImplementedError 
+        raise NotImplementedError
 
 
 """
@@ -340,6 +340,9 @@ class AdvTrainer(TrainerBase):
         Does a forward pass on the given batches and returns the `loss` value in the result.
         If `for_training` is `True` also applies regularization penalty.
         """
+        ram_reset('fw')
+        ram_reset('bw')
+
         batch = nn_util.move_to_device(batch, self.cuda_device)
         output_dict = self._pytorch_model(**batch)
 
@@ -360,10 +363,10 @@ class AdvTrainer(TrainerBase):
 
         # grad_in/grad_out/inputs are tuples, outputs is a tensor
         def fw_hook_layers(module, inputs, outputs):
-            ram_write('fw', outputs)
+            ram_append('fw', outputs)
 
         def bw_hook_layers(module, grad_in, grad_out):
-            ram_write('bw', grad_out[0])
+            ram_append('bw', grad_out[0])
 
         fw_hook = embedding_layer.register_forward_hook(fw_hook_layers)
         bw_hook = embedding_layer.register_backward_hook(bw_hook_layers)
@@ -451,14 +454,14 @@ class AdvTrainer(TrainerBase):
             train_loss += loss.item()
 
             # adversarial samples
-            if self.adv_policy.adv_iteration>0:
+            if self.adv_policy.adv_iteration > 0:
                 for adv_idx in range(self.adv_policy.adv_iteration):
-                    raw_tokens = batch['sent']['tokens']['tokens'].cuda()
+                    raw_tokens = batch[self.adv_policy.adv_field]['tokens']['tokens'].cuda()
                     if isinstance(self.adv_policy, adv_utils.HotFlipPolicy):
                         adv_tokens = adv_utils.hotflip(
                             src_tokens=raw_tokens,
-                            embeds=ram_pop('fw'),
-                            grads=ram_pop('bw'),
+                            embeds=ram_read('fw')[self.adv_policy.forward_order],
+                            grads=ram_read('bw')[-(self.adv_policy.forward_order + 1)],
                             embedding_matrix=embedding_matrix,
                             searcher=self.adv_policy.searcher,
                             replace_num=self.adv_policy.replace_num,
@@ -471,7 +474,7 @@ class AdvTrainer(TrainerBase):
                         )
                     else:
                         raise Exception('You must specify a policy')
-                    batch['sent']['tokens']['tokens'] = adv_tokens
+                    batch[self.adv_policy.adv_field]['tokens']['tokens'] = adv_tokens
                     loss = self.batch_loss(batch, for_training=True)
                     if torch.isnan(loss):
                         raise ValueError("nan loss encountered")
@@ -481,8 +484,6 @@ class AdvTrainer(TrainerBase):
                     else:
                         loss.backward()
                     train_loss += loss.item()
-
-
 
             batch_grad_norm = self.rescale_gradients()
 

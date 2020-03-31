@@ -39,7 +39,7 @@ class BertyTSVReader(DatasetReader):
         self._max_sequence_length = max_sequence_length
         self._skip_label_indexing = skip_label_indexing
         self._token_indexers = {
-            "berty_tokens": PretrainedTransformerIndexer(model_name=bert_model)
+            "tokens": PretrainedTransformerIndexer(model_name=bert_model)
         }
 
     @overrides
@@ -79,7 +79,7 @@ class BertyTSVReader(DatasetReader):
         else:
             tokens = self._tokenizer.tokenize(sent1)
 
-        fields['berty_tokens'] = TextField(tokens, self._token_indexers)
+        fields['sent'] = TextField(tokens, self._token_indexers)
         
         if label is not None:
             fields['label'] = LabelField(label, skip_indexing=self._skip_label_indexing)

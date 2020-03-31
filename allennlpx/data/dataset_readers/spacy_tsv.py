@@ -89,13 +89,17 @@ class SpacyTSVReader(DatasetReader):
         # For simple transformation, a single for-loop is enough.
         # However for complex transformation such as back-translation/DAE/SpanBERT,
         # a batch version is required.
+        if 'sent' in instances[0].fields:
+            field_to_transform = 'sent'
+        else:
+            field_to_transform = 'sent2'
         ret_instances = [deepcopy(ele) for ele in instances]
         sents = []
         for instance in ret_instances:
-            sents.append(allenutil.as_sentence(instance.fields['sent']))
+            sents.append(allenutil.as_sentence(instance.fields[field_to_transform]))
         new_sents = transform(sents)
         for i, instance in enumerate(ret_instances):
-            instance.fields['sent'] = TextField(self._tokenizer.tokenize(new_sents[i]), self._token_indexers)
+            instance.fields[field_to_transform] = TextField(self._tokenizer.tokenize(new_sents[i]), self._token_indexers)
             instance.indexed = False
 #             instance.fields['sent'].tokens = self._tokenizer.tokenize(new_sents[i])
 #             instance.fields['sent'].indexed = False

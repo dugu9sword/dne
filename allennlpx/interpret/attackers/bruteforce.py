@@ -28,11 +28,10 @@ class BruteForce(Attacker):
 
     @torch.no_grad()
     def attack_from_json(self,
-                         inputs: JsonDict = None,
-                         field_to_change: str = 'tokens',
-                         field_to_attack: str = 'label') -> JsonDict:
+                         inputs: JsonDict = None) -> JsonDict:
+        _volatile_json_ = inputs.copy()
         raw_instance = self.predictor.json_to_labeled_instances(inputs)[0]
-        raw_tokens = list(map(lambda x: x.text, self.spacy.tokenize(inputs[field_to_change])))
+        raw_tokens = list(map(lambda x: x.text, self.spacy.tokenize(inputs[self.f2c])))
 
         # Select words that can be changed
         sids_to_change = []
@@ -61,8 +60,8 @@ class BruteForce(Attacker):
             word_sids = random.choices(sids_to_change, k=max_change_num)
             for word_sid in word_sids:
                 adv_tokens[word_sid] = random.choice(nbr_dct[word_sid])
-            adv_instances.append(
-                self.predictor._dataset_reader.text_to_instance(" ".join(adv_tokens)))
+            _volatile_json_[self.f2c] = " ".join(adv_tokens)
+            adv_instances.append(self.predictor._json_to_instance(_volatile_json_))
 
         # Checking attacking status, early stop
         successful = False
@@ -71,10 +70,10 @@ class BruteForce(Attacker):
         for i, result in enumerate(results):
             adv_instance = self.predictor.predictions_to_labeled_instances(
                 adv_instances[i], result)[0]
-            if adv_instance[field_to_attack].label != raw_instance[field_to_attack].label:
+            if adv_instance[self.f2a].label != raw_instance[self.f2a].label:
                 successful = True
                 break
-        adv_tokens = adv_instances[i][field_to_change].tokens
+        adv_tokens = adv_instances[i][self.f2c].tokens
         outputs = result
 
         return sanitize({
