@@ -163,11 +163,13 @@ class Task:
         # list[str] -> list[str]
         transform_fn = parse_transform_fn_from_args(
             self.config.pred_transform, self.config.pred_transform_args)
-        # list[instance] -> list[instance]
-        transform_fn = partial(self.reader.transform_instances, transform_fn)
 
         self.predictor.set_ensemble_num(self.config.pred_ensemble)
         self.predictor.set_transform_fn(transform_fn)
+        if is_sentence_pair(self.config.task_id):
+            self.predictor.set_transform_field("sent2")
+        else:
+            self.predictor.set_transform_field("sent")
 
     def train(self):
         if self.config.arch == 'bert':

@@ -58,39 +58,39 @@ class PWWS(Attacker):
         # 1. Replace each word with <UNK> and other candidate words
         # 2. Generate all sentences, then concatenate them into a
         #    list for batch forwarding
-        _instances = []  # concatenate all instances
-        _offsets = {}  # {sid: [start_offset, number_of_instances]}
+        _jsons = []  # concatenate all jsons
+        _offsets = {}  # {sid: [start_offset, number_of_jsons]}
 
         for sid in sids_to_change:
-            tmp_instances = []
+            tmp_jsons = []
             # first element is the raw sentence
             _volatile_json_[self.f2c] = " ".join(raw_tokens)
-            tmp_instances.append(self.predictor._json_to_instance(_volatile_json_))
+            tmp_jsons.append(_volatile_json_.copy())
             # second element is the UNK sentence
             tmp_tokens = copy.copy(raw_tokens)
             tmp_tokens[sid] = '[UNK]' if self.use_bert else DEFAULT_OOV_TOKEN
             _volatile_json_[self.f2c] = " ".join(tmp_tokens)
-            tmp_instances.append(self.predictor._json_to_instance(_volatile_json_))
+            tmp_jsons.append(_volatile_json_.copy())
             # starting from the third one are modified sentences
             for nbr in nbr_dct[sid]:
                 tmp_tokens = copy.copy(raw_tokens)
                 tmp_tokens[sid] = nbr
                 _volatile_json_[self.f2c] = " ".join(tmp_tokens)
-                tmp_instances.append(self.predictor._json_to_instance(_volatile_json_))
+                tmp_jsons.append(_volatile_json_.copy())
 
-            _offsets[sid] = (len(_instances), len(tmp_instances))
-            _instances.extend(tmp_instances)
+            _offsets[sid] = (len(_jsons), len(tmp_jsons))
+            _jsons.extend(tmp_jsons)
 
         # ugly
-        if len(_instances) == 0:
+        if len(_jsons) == 0:
             return sanitize({
                 "adv": raw_tokens,
                 "raw": raw_tokens,
-                "outputs": self.predictor.predict_instance(raw_instance),
+                "outputs": self.predictor.predict_json(inputs),
                 "changed": 0,
                 "success": 0
             })
-        _results = self.predictor.predict_batch_instance(_instances)
+        _results = self.predictor.predict_batch_json(_jsons)
 
         # Compute the word saliency
         repl_dct = {}  # {idx: "the replaced word"}

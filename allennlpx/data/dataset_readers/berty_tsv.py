@@ -13,7 +13,7 @@ from allennlp.data.tokenizers.token import Token
 from overrides import overrides
 from allennlp.data.tokenizers import PretrainedTransformerTokenizer
 from allennlpx import allenutil
-from copy import deepcopy
+from copy import deepcopy, copy
 
 
 logger = logging.getLogger(__name__)
@@ -88,16 +88,9 @@ class BertyTSVReader(DatasetReader):
             fields['label'] = LabelField(label, skip_indexing=self._skip_label_indexing)
         return Instance(fields)
 
-    def transform_instances(self,
-                            transform: Callable[[List[str]], List[str]],
-                            instances: List[Instance],
-                          ) -> List[Instance]:
-        ret_instances = [deepcopy(ele) for ele in instances]
-        sents = []
-        for instance in ret_instances:
-            sents.append(allenutil.as_sentence(instance.fields['sent']))
-        new_sents = transform(sents)
-        for i, instance in enumerate(ret_instances):
-            instance.fields['sent'] = TextField(self._tokenizer.tokenize(new_sents[i]), self._token_indexers)
-            instance.indexed = False
-        return ret_instances
+    def instance_to_text(self, instance: Instance):
+        if self._sent2_col is None:
+            return {"sent": allenutil.as_sentence(instance['sent'])}
+        else:
+            raise NotImplementedError()
+        

@@ -81,29 +81,11 @@ class SpacyTSVReader(DatasetReader):
         if label is not None:
             fields['label'] = LabelField(label, skip_indexing=self._skip_label_indexing)
         return Instance(fields)
-    
-    def transform_instances(self,
-                            transform: Callable[[List[str]], List[str]],
-                            instances: List[Instance],
-                          ) -> List[Instance]:
-        # For simple transformation, a single for-loop is enough.
-        # However for complex transformation such as back-translation/DAE/SpanBERT,
-        # a batch version is required.
-        if 'sent' in instances[0].fields:
-            field_to_transform = 'sent'
+
+    def instance_to_text(self, instance: Instance):
+        if self._sent2_col is None:
+            return {"sent": allenutil.as_sentence(instance['sent'])}
         else:
-            field_to_transform = 'sent2'
-        ret_instances = [deepcopy(ele) for ele in instances]
-        sents = []
-        for instance in ret_instances:
-            sents.append(allenutil.as_sentence(instance.fields[field_to_transform]))
-        new_sents = transform(sents)
-        for i, instance in enumerate(ret_instances):
-            instance.fields[field_to_transform] = TextField(self._tokenizer.tokenize(new_sents[i]), self._token_indexers)
-            instance.indexed = False
-#             instance.fields['sent'].tokens = self._tokenizer.tokenize(new_sents[i])
-#             instance.fields['sent'].indexed = False
-#             instance.fields['sent']._indexed_tokens = None
-#         import pdb
-#         pdb.set_trace()
-        return ret_instances
+            return {"sent1": allenutil.as_sentence(instance['sent1']),
+                    "sent2": allenutil.as_sentence(instance['sent2'])}
+                    

@@ -8,7 +8,7 @@ import faiss
 import torch
 import random
 import numpy as np
-from allennlpx.training.adv_trainer import EpochCallback
+from allennlpx.training.adv_trainer import EpochCallback, BatchCallback
 from typing import Dict, Any
 import logging
 
@@ -17,6 +17,34 @@ logger = logging.getLogger(__name__)
 
 class set_environments():
     os.environ["TORCH_HOME"] == '/disks/sdb/torch_home'
+
+
+class DirichletAnnealing(BatchCallback):
+    def __init__(self, anneal_epoch_num=3, batch_per_epoch=None):
+        self.anneal_epoch_num = anneal_epoch_num
+        self.batch_per_epoch = batch_per_epoch
+        self.total_steps = anneal_epoch_num * batch_per_epoch
+        self.start_temp = 0.01
+
+    def __call__(self, trainer, epoch: int, batch_number: int,
+                 is_training: bool):
+        if hasattr(trainer.model, "word_embedders"):
+            dir_embed = trainer.model.word_embedders.token_embedder_tokens
+        elif hasattr(trainer.model, "bert_embedder"):
+            dir_embed = trainer.model.bert_embedder.transformer_model.embeddings.word_embeddings
+        if dir_embed.temperature < self.start_temp:
+            return
+        cur_step = epoch * self.batch_per_epoch + batch_number
+        if self.epoch >= self.anneal_epoch_num:
+            cur_temp = dir_embed.temperature
+        else:
+            cur_ratio = cur_step / self.total_steps
+            cur_temp = cur_ratio * dir_embed.temperature + (
+                1 - cur_ratio) * self.start_temp
+        dir_embed.current_temperature = cur_temp
+        logger.info(
+            f'At {epoch}/{batch_number}, temperature is set to {cur_temp}//{dir_embed.temperature}'
+        )
 
 
 class AnnealingTemperature(EpochCallback):
@@ -41,6 +69,7 @@ class AnnealingTemperature(EpochCallback):
         logger.info(
             f'Before epoch {next_epoch}, temperature is set to {cur_temp}/{dir_embed.temperature}'
         )
+
 
 def get_neighbours(vec, return_edges=False):
     """
@@ -163,7 +192,6 @@ class AttackMetric:
             self.flip_ratio)
 
 
-
 def text_diff(a_text, b_text):
     if isinstance(a_text, list):
         a_lst, b_lst = a_text, b_text
@@ -183,5 +211,4 @@ def text_diff(a_text, b_text):
         "change_num": len(a_changes),
         "change_ratio": len(a_changes) / len(a_lst)
     }
-
 

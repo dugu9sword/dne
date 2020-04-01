@@ -6,8 +6,8 @@ class Config(ProgramArgs):
         super().__init__()
 
         # basic settings
-        self.task_id = "SST"
-        self.embed = ''   # d/g/_
+        self.task_id = "AGNEWS"
+        self.embed = 'd'   # d/g/_
         self.arch = 'bert'
         self.pretrain = 'glove'
 #         self._model_name = "AGNEWS-lstm-hot.1.5.con"
@@ -24,7 +24,7 @@ class Config(ProgramArgs):
         # training settings
         # self.aug_data = 'nogit/AGNEWS-lstm.pwws.aug.tsv'
         self.aug_data = ''
-        self.adv_iter = 1
+        self.adv_iter = 0
         self.adv_policy = 'hot'    # hot -> hotflip, rdm -> random
         self.adv_replace_num = 5
         self.adv_constraint = True

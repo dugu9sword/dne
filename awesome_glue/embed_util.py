@@ -26,9 +26,7 @@ def build_bert_vocab_and_vec(pretrain):
     bert_indexer = PretrainedTransformerIndexer("bert-base-uncased", "tokens")
     bert_indexer._add_encoding_to_vocabulary_if_needed(vocab)
     assert vocab.get_vocab_size('tokens') == 30522
-    vec = read_weight(
-        vocab, pretrain,f"{pretrain}-for-bert.vec"
-    )
+    vec = read_weight(vocab, pretrain, f"{pretrain}-for-bert.vec")
     return vocab, vec
 
 

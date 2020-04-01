@@ -8,13 +8,20 @@ from allennlp.data import Instance
 from allennlp.modules.text_field_embedders import TextFieldEmbedder
 from allennlp.predictors.predictor import Predictor as Predictor_
 from allennlp.common.util import JsonDict, sanitize, lazy_groups_of
+from allennlpx import allenutil
+import logging
 
+logger = logging.getLogger(__name__)
 
 class Predictor(Predictor_):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._transform_fn: Callable[[List[Instance]], List[Instance]] = lambda x: x
+        self._grad_enabled: bool = False
+        self._max_batch_forward: int = 512
         self._ensemble_num: int = 1
+        self._transform_fn: Callable[[List[str]], List[str]] = None
+        self._transform_field: str = 'sent'
+        
         # Following CVPR 2019 - Defense Against Adversarial Images using Web-Scale
         # Nearest-Neighbor Search, we prefer probabilities that are more "confident",
         # thus [0.9, 0.1] has larger weight than [0.6, 0.4].
@@ -86,41 +93,63 @@ class Predictor(Predictor_):
         for hook in hooks:
             hook.remove()
 
-    def predict_instance(self, instance: Instance) -> JsonDict:
-        # Here we do not apply deepcopy for each element,
-        # but an element wise deepcopy in _transform_fn is needed!
-        # if id(instances[0]) == id(instances[1])
-        #   d1 = deepcopy(instances), id(d1[0]) == id(d1[1])
-        #   d2 = [deepcopy(e) for e in instances], id(d1[0]) != id(d1[1])
-        instances = [instance for i in range(self._ensemble_num)]
-        instances = self._transform_fn(instances)
-        outputs = self._model.forward_on_instances(instances)
-        probs_to_ensemble = [ele['probs'] for ele in outputs]
-        ret = {'probs': self._weighted_average(probs_to_ensemble)}
-        return sanitize(ret)
+    def predict_batch_json(self, json_dicts: List[JsonDict]):
+        with torch.set_grad_enabled(self._grad_enabled):
+            ret = []
+            for group in lazy_groups_of(json_dicts, int(self._max_batch_forward / self._ensemble_num)):
+                bsz = len(group)
+                b_en_jsons = []  # batch x ensemble
+                for json_dict in group:
+                    # Assuming that the values of the dict are all strings, 
+                    # so copy = deepcopy
+                    b_en_jsons.extend([json_dict.copy() for _ in range(self._ensemble_num)])
+                if self._transform_fn:
+                    tf_in = list(map(lambda x: x[self._transform_field], b_en_jsons))
+                    tf_out = self._transform_fn(tf_in)
+                    for i in range(bsz):
+                        b_en_jsons[i][self._transform_field] = tf_out[i]
+                b_en_insts = self._batch_json_to_instances(b_en_jsons)
+                outputs = self._model.forward_on_instances(b_en_insts)
+                
+                for bid in range(bsz):
+                    offset = bid * self._ensemble_num
+                    probs_to_ensemble = [ele['probs'] for ele in outputs[offset: offset + self._ensemble_num]]
+                    en_output = {'probs': self._weighted_average(probs_to_ensemble)}
+                    ret.append(en_output)
+            return sanitize(ret)
 
-    def predict_batch_instance(self, instances):
-        ret = []
-        for group in lazy_groups_of(instances, int(1024 / self._ensemble_num)):
-            bsz = len(group)
-            b_en_instances = []  # batch x ensemble
-            for instance in group:
-                b_en_instances.extend([instance for _ in range(self._ensemble_num)])
-            b_en_instances = self._transform_fn(b_en_instances)
-            outputs = self._model.forward_on_instances(b_en_instances)
-            
-            for bid in range(bsz):
-                offset = bid * self._ensemble_num
-                probs_to_ensemble = [ele['probs'] for ele in outputs[offset: offset + self._ensemble_num]]
-                en_output = {'probs': self._weighted_average(probs_to_ensemble)}
-                ret.append(en_output)
-        return sanitize(ret)
+    def predict_json(self, json_dict: JsonDict):
+        return self.predict_batch_json([json_dict])[0]
+
+    def predict_batch_instance(self, instances: List[Instance]):
+        if self._ensemble_num == 1 and self._transform_fn is None:
+            with torch.set_grad_enabled(self._grad_enabled):
+                results = sanitize(self._model.forward_on_instances(instances))
+        else:
+            json_dicts = list(map(self._dataset_reader.instance_to_text, instances))
+            results = self.predict_batch_json(json_dicts)
+        return results
+
+    def predict_instance(self, instance):
+        return self.predict_batch_instance([instance])[0]
 
     def set_ensemble_num(self, ensemble_num):
         self._ensemble_num = ensemble_num
 
     def set_transform_fn(self, transform_fn):
-        self._transform_fn = transform_fn
+        if not check_identity(transform_fn):
+            self._transform_fn = transform_fn
+        else:
+            logger.info("Identity transformation detected.")
+
+    def set_transform_field(self, transform_field):
+        self._transform_field = transform_field
+
+    def set_max_batch_forward(self, max_batch_forward):
+        self._max_batch_forward = max_batch_forward
+
+    def set_grad_enabled(self, grad_enabled):
+        self._grad_enabled = grad_enabled
         
     def _weighted_average(self, probs_to_ensemble):
         # w = \sigma (max_prob - other_prob) ^ p
@@ -143,3 +172,13 @@ class Predictor(Predictor_):
         # print(probs_to_ensemble.mean(dim=0))
         # print(ret)
         return ret
+
+
+def check_identity(fn):
+    if fn is None:
+        return True
+    x = ["this method is used to check whether a function that ",
+         "maps a list of string to another is an identity function ",
+         "lambda x: x. The id of input should be equal to output "]
+    y = fn(x)
+    return id(x) == id(y)

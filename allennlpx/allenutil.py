@@ -3,6 +3,7 @@ from allennlp.data.instance import Instance
 from allennlp.data.tokenizers import Token
 from allennlp.common.util import JsonDict
 from copy import deepcopy
+from typing import List
 from copy import copy
 
 
