@@ -4,92 +4,34 @@ from allennlp.models import Model
 from allennlp.modules.text_field_embedders.basic_text_field_embedder import \
     BasicTextFieldEmbedder
 from allennlp.training.metrics import CategoricalAccuracy
-# from allennlp.training.optimizers import BertAdam
-# from torch.optim import AdamW
-from transformers import AdamW
+from transformers import AdamW, get_linear_schedule_with_warmup
 
-from allennlpx.modules.token_embedders.bert_token_embedder import (
-    PretrainedBertEmbedder, PretrainedBertModel)
+from allennlp.modules.token_embedders import PretrainedTransformerEmbedder
+from allennlp.modules.seq2vec_encoders import ClsPooler
 from luna import ram_globalize
 
-
-class BertPooler(torch.nn.Module):
-    def forward(self, bert_outputs):
-        return bert_outputs[:, 0]
-
-
 class BertClassifier(Model):
-    def __init__(self, vocab):
-        super().__init__(vocab, num_labels)
-        """
-            A note for the pipline:
-            - BertyTSVReader will use BertTokenizer to tokenize the sentence and
-                generate instances, then it set the PretrainedBertIndexer to be 
-                the indexer of the textfield (but it do not start the indexing process)
-            - When an iterator starts iterating the dataset, it use different indexers
-                to index different fields. For the `berty_tokens` field, it uses a 
-                PretrainedBertIndexer to convert it into a dict containing four elements:
-                    {x: ~, x-offsets: ~, x-type-ids: ~, mask: ~}    (x = berty_tokens)
-            - After each field is indexed, the BasicTextFieldEmbedder will use the 
-                corresponding embedders to embed them.  Here, PretrainedBertEmbedder will
-                generate the embedding by accepting three args:
-                    {input_ids: ~, offsets: ~, token_type_ids: ~}
-                    DO NOT PASS OFFSETS INTO BERT!
-                Therefore we should first keep a mapping between the input of an embedder
-                and the output of a indexer.
-        """
-        # bert_embedder = PretrainedBertEmbedder('bert-base-uncased',
-        #                                        requires_grad=finetunable,
-        #                                        top_layer_only=True)
-        # self.word_embedders = BasicTextFieldEmbedder(
-        #     token_embedders={"berty_tokens": bert_embedder},
-        #     embedder_to_indexer_map={
-        #         "berty_tokens": {
-        #             'input_ids': 'berty_tokens',
-        #             # 'offsets': 'berty_tokens-offsets',
-        #             'token_type_ids': 'berty_tokens-type-ids'
-        #         }
-        #     },
-        #     allow_unmatched_keys=True
-        #     )
-        # self.pooler = BertPooler()
-
-        self.bert_model = PretrainedBertModel.load('bert-base-uncased')
-
-#         if finetunable:
-#             for name, param in self.bert_model.named_parameters():
-#                 param.requires_grad = True
-#             else:
-#                 param.requires_grad = False
-#         else:
-#             found_unfrozen_layer = False
-#             for name, param in self.bert_model.named_parameters():
-#                 if "layer.10" in name:
-#                     found_unfrozen_layer = True
-#                 if found_unfrozen_layer:
-#                     param.requires_grad = True
-#                 else:
-#                     param.requires_grad = False
+    def __init__(self, vocab, num_labels):
+        super().__init__(vocab)
+        self.bert_embedder = PretrainedTransformerEmbedder('bert-base-uncased')
+        self.pooler = ClsPooler()
 
         self.linear = torch.nn.Sequential(
             torch.nn.Dropout(0.1),
-            torch.nn.Linear(in_features=768, out_features=num_labels)
-        )
+            torch.nn.Linear(in_features=768, out_features=num_labels))
 
         self.accuracy = CategoricalAccuracy()
         self.loss_function = torch.nn.CrossEntropyLoss()
-#         self.loss_function = LabelSmoothingLoss(0.05)
-    
-    def forward(self, berty_tokens, label=None):
-        # embeddings = self.word_embedders(berty_tokens)
-        # encoder_out = self.pooler(embeddings)
 
-        _, encoder_out = self.bert_model(input_ids=berty_tokens['berty_tokens']['token_ids'],
-                                         token_type_ids=berty_tokens['berty_tokens']['type_ids'],
-                                         attention_mask=berty_tokens['berty_tokens']['mask'],
-                                         output_all_encoded_layers=False)
 
-        logits = self.linear(encoder_out)
+    def forward(self, sent, label=None):
+        bert_embeddings = self.bert_embedder(
+            token_ids=sent['tokens']['token_ids'],
+            type_ids=sent['tokens']['type_ids'],
+            mask=sent['tokens']['mask'])
+        bert_vec = self.pooler(bert_embeddings)
+
+        logits = self.linear(bert_vec)
         output = {"logits": logits, "probs": F.softmax(logits, dim=1)}
         if label is not None:
             self.accuracy(logits, label)
@@ -100,9 +42,11 @@ class BertClassifier(Model):
         return {'accuracy': self.accuracy.get_metric(reset)}
 
     def get_optimizer(self):
-        return AdamW(self.parameters(), lr=2e-5, weight_decay=0.01)
-
-
+        optimizer = AdamW(self.parameters(), lr=2e-5, eps=1e-8)
+        # get_linear_schedule_with_warmup(
+        #     optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
+        # )
+        return optimizer
 
 
 @ram_globalize()

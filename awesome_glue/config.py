@@ -6,13 +6,13 @@ class Config(ProgramArgs):
         super().__init__()
 
         # basic settings
-        self.task_id = "SNLI"
+        self.task_id = "SST"
         self.embed = ''   # d/g/_
-        self.arch = 'esim'
+        self.arch = 'bert'
         self.pretrain = 'glove'
 #         self._model_name = "AGNEWS-lstm-hot.1.5.con"
         self._model_name = ""   # if set to tmp, existing models will be overrided
-        self.mode = 'train'
+        self.mode = 'attack'
         
         # dirichlet settings
         self.dir_temp = 5.0

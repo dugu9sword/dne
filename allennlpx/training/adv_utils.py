@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
+from allennlpx.interpret.attackers.searchers import EmbeddingSearcher
 import torch
 from luna import batch_pad
 import random
@@ -18,6 +18,15 @@ class NoPolicy(AdvTrainingPolicy):
 
 @dataclass
 class HotFlipPolicy(AdvTrainingPolicy):
+    """
+        Use hotflip to change some words to maximize the loss.
+        Since there may exist two sentences (sent_a, sent_b) forwarding through the
+        embedding one-by-one, the forward hooks will catch (output_a, output_b),
+        while the backward hooks will catch (grad_b, grad_a). We only support
+        change one sentence during adversarial training, so you should specify the
+        index of the sentence you want to change, if sent_b, set `forward_order` to
+        1; if sent_a, set it to 0. 
+    """
     forward_order: int = 0
     # searcher: CachedIndexSearcher = None
     searcher: EmbeddingSearcher = None
@@ -26,6 +35,9 @@ class HotFlipPolicy(AdvTrainingPolicy):
 
 @dataclass
 class RandomNeighbourPolicy(AdvTrainingPolicy):
+    """
+        Randomly change some words during training.
+    """
     searcher: EmbeddingSearcher = None
     replace_num: int = None
 
@@ -118,3 +130,23 @@ def random_swap(*, src_tokens, replace_num, searcher):
                 adv_tokens_lst[bid][sid] = random.choice(
                     idxs.cpu().numpy().tolist())
     return torch.tensor(adv_tokens_lst, device=src_tokens.device)
+
+
+def guess_token_key_from_field(batch_fields):
+    # Given an indexed field, we suppose that the key of the token indexer
+    # is "tokens", but we still need to guess the key of the indexed tokens.
+    # The structure of an indexed field is like:
+    #    { indexer_name_1: {key_1: tensor, key_2: tensor},
+    #      indexer_name_2: {key: tensor}, ... }
+    # For a vanilla word-based model, the field is like:
+    #    { "tokens": {"tokens": tensor} }
+    # For a bert-based model, the field is like:
+    #    { "tokens": {"token_ids": tensor, "offsets": tensor, "mask": tensor}}
+    if "tokens" not in batch_fields:
+        raise Exception("The name of the token indexer is not `tokens`")
+    if 'tokens' in batch_fields['tokens']: 
+        return 'tokens'
+    elif 'token_ids' in batch_fields['tokens']:
+        return 'token_ids'
+    else:
+        raise Exception('Something wrong, boy.')

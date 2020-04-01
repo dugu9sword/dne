@@ -15,8 +15,7 @@ from allennlp.data.tokenizers import SpacyTokenizer, Token
 
 from allennlpx.predictors.predictor import Predictor
 from luna import cast_list, lazy_property
-from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
-from allennlpx.interpret.attackers.synonym_searcher import SynonymSearcher
+from allennlpx.interpret.attackers.searchers import SynonymSearcher, EmbeddingSearcher
 from allennlp.nn.util import find_embedding_layer
 
 DEFAULT_IGNORE_TOKENS = [
@@ -32,6 +31,7 @@ class Attacker(Registrable):
         # change a field to attack another field
         field_to_change: str = 'sent',
         field_to_attack: str = 'label',
+        use_bert: bool = False,
         *,  # only accept keyword arguments
         ignore_tokens: List[str] = DEFAULT_IGNORE_TOKENS,
         forbidden_tokens: List[str] = DEFAULT_IGNORE_TOKENS,
@@ -41,6 +41,7 @@ class Attacker(Registrable):
         self.predictor = predictor
         self.f2c = field_to_change
         self.f2a = field_to_attack
+        self.use_bert = use_bert
 
         self.ignore_tokens = ignore_tokens
         self.forbidden_tokens = forbidden_tokens

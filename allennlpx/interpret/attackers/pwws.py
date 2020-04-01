@@ -68,7 +68,7 @@ class PWWS(Attacker):
             tmp_instances.append(self.predictor._json_to_instance(_volatile_json_))
             # second element is the UNK sentence
             tmp_tokens = copy.copy(raw_tokens)
-            tmp_tokens[sid] = DEFAULT_OOV_TOKEN
+            tmp_tokens[sid] = '[UNK]' if self.use_bert else DEFAULT_OOV_TOKEN
             _volatile_json_[self.f2c] = " ".join(tmp_tokens)
             tmp_instances.append(self.predictor._json_to_instance(_volatile_json_))
             # starting from the third one are modified sentences

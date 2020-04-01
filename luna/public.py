@@ -19,12 +19,19 @@ import arrow
 import traceback
 from sklearn.linear_model import LinearRegression
 import torch
+import logging
 
 __saved_path__ = "saved/vars"
 
 arg_required = object()
 arg_optional = object()
 arg_place_holder = object()
+
+
+def shutdown_logging(repo_name):
+    for key, logger in logging.root.manager.loggerDict.items():
+        if isinstance(key, str) and key.startswith(repo_name):
+            logging.getLogger(key).setLevel(logging.ERROR)
 
 
 def lazy_property(func):

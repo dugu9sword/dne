@@ -1,7 +1,7 @@
 # yapf:disable
 TASK_SPECS = {
     "SST": {
-        "path": "datasets/glue_data/SST-2/",
+        "path": "datasets/glue_data/SST-2",
         "sent1_col": "sentence",
         "sent2_col": None,
         "label_col": "label",
@@ -10,7 +10,7 @@ TASK_SPECS = {
         "num_labels": 2,  # if skip_label_indexing, this key should be specified
     },
     "AGNEWS": {
-        "path": "datasets/agnews/",
+        "path": "datasets/agnews",
         "sent1_col": "sentence",
         "sent2_col": None,
         "label_col": "label",
@@ -18,7 +18,7 @@ TASK_SPECS = {
         "num_labels": 4,
     },
     "IMDB": {
-        "path": "datasets/imdb/",
+        "path": "datasets/imdb",
         "sent1_col": "sentence",
         "sent2_col": None,
         "label_col": "label",
@@ -27,7 +27,7 @@ TASK_SPECS = {
         "num_labels": 2,
     },
     "SNLI": {
-        "path": "datasets/snli/",
+        "path": "datasets/snli",
         "sent1_col": "sentence1",
         "sent2_col": "sentence2",
         "label_col": "gold_label",
@@ -35,7 +35,7 @@ TASK_SPECS = {
         "num_labels": 3,
     },
     "TOYNLI": {
-        "path": "datasets/toynli/",
+        "path": "datasets/toynli",
         "sent1_col": "sentence1",
         "sent2_col": "sentence2",
         "label_col": "gold_label",

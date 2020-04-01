@@ -1,9 +1,10 @@
 from functools import lru_cache
 
 from nltk.corpus import wordnet as wn
+from .searcher import Searcher
 
 
-class SynonymSearcher:
+class SynonymSearcher(Searcher):
     def __init__(self, vocab_list = None):
         self.vocab_list = vocab_list
     

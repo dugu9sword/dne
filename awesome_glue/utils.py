@@ -25,7 +25,10 @@ class AnnealingTemperature(EpochCallback):
 
     def __call__(self, trainer, metrics: Dict[str, Any], epoch: int) -> None:
         next_epoch = epoch + 1
-        dir_embed = trainer.model.word_embedders.token_embedder_tokens
+        if hasattr(trainer.model, "word_embedders"):
+            dir_embed = trainer.model.word_embedders.token_embedder_tokens
+        elif hasattr(trainer.model, "bert_embedder"):
+            dir_embed = trainer.model.bert_embedder.transformer_model.embeddings.word_embeddings
         if dir_embed.temperature < 0.01:
             return
         if next_epoch < self.anneal_num:
@@ -38,7 +41,6 @@ class AnnealingTemperature(EpochCallback):
         logger.info(
             f'Before epoch {next_epoch}, temperature is set to {cur_temp}/{dir_embed.temperature}'
         )
-
 
 def get_neighbours(vec, return_edges=False):
     """

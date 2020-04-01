@@ -7,6 +7,7 @@ from allennlpx.modules.token_embedders.graph_embedding import GraphEmbedding
 from allennlpx.modules.token_embedders.dirichlet_embedding import DirichletEmbedding
 from collections import defaultdict
 import pathlib
+from allennlp.data.token_indexers import PretrainedTransformerIndexer
 
 
 def read_weight(vocab: Vocabulary, pretrain: str, cache_embed_path: str):
@@ -18,6 +19,17 @@ def read_weight(vocab: Vocabulary, pretrain: str, cache_embed_path: str):
             vocab=vocab,
             namespace="tokens"), True)
     return weight
+
+
+def build_bert_vocab_and_vec(pretrain):
+    vocab = Vocabulary(padding_token='[PAD]', oov_token='[UNK]')
+    bert_indexer = PretrainedTransformerIndexer("bert-base-uncased", "tokens")
+    bert_indexer._add_encoding_to_vocabulary_if_needed(vocab)
+    assert vocab.get_vocab_size('tokens') == 30522
+    vec = read_weight(
+        vocab, pretrain,f"{pretrain}-for-bert.vec"
+    )
+    return vocab, vec
 
 
 def build_embedding(vocab: Vocabulary, pretrain: str, cache_embed_path: str):
@@ -79,4 +91,4 @@ WORD2VECS = {
     )
 }
 
-EMBED_DIM = defaultdict(lambda: 300, {"elmo": 256})
+EMBED_DIM = defaultdict(lambda: 300, {"elmo": 256, "bert": 768})

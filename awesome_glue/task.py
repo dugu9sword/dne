@@ -18,40 +18,34 @@ from nltk.corpus import stopwords
 from tqdm import tqdm
 import pathlib
 import shutil
+from allennlp.training.checkpointer import Checkpointer
 
 from allennlpx import allenutil
-from allennlpx.data.dataset_readers.berty_tsv import BertyTSVReader
-from allennlpx.data.dataset_readers.spacy_tsv import SpacyTSVReader
+from allennlpx.data.dataset_readers import BertyTSVReader, SpacyTSVReader
 from allennlpx.interpret.attackers.attacker import DEFAULT_IGNORE_TOKENS
-from allennlpx.interpret.attackers.bruteforce import BruteForce
-from allennlpx.interpret.attackers.genetic import Genetic
-from allennlpx.interpret.attackers.hotflip import HotFlip
-from allennlpx.interpret.attackers.pgd import PGD
+from allennlpx.interpret.attackers import BruteForce, Genetic, HotFlip, PGD, PWWS
 from allennlpx.interpret.attackers.policies import (CandidatePolicy,
                                                     EmbeddingPolicy,
                                                     SpecifiedPolicy,
                                                     SynonymPolicy,
                                                     UnconstrainedPolicy)
-from allennlpx.interpret.attackers.pwws import PWWS
 from allennlpx.modules.knn_utils import H5pyCollector, build_faiss_index
 from allennlpx.modules.token_embedders.embedding import \
     _read_pretrained_embeddings_file
 from allennlpx.modules.token_embedders.graph_funcs import MeanAggregator, PoolingAggregator
-from allennlpx.predictors.text_classifier import TextClassifierPredictor
-from allennlpx.predictors.bitext_classifier import BiTextClassifierPredictor
+from allennlpx.predictors import TextClassifierPredictor, BiTextClassifierPredictor
 from awesome_glue.config import Config
 from awesome_glue.vanilla_classifier import Classifier
 from awesome_glue.esim import ESIM
 from awesome_glue import embed_util
-from awesome_glue.embed_util import EMBED_DIM, WORD2VECS
 from awesome_glue.bert_classifier import BertClassifier
 from awesome_glue.task_specs import TASK_SPECS, is_sentence_pair, is_str_label
 from awesome_glue.transforms import (BackTrans, DAE, BertAug, Crop, EmbedAug,
                                      Identity, RandDrop, SynAug,
                                      transform_collate,
                                      parse_transform_fn_from_args)
-from awesome_glue.utils import (AttackMetric, FreqUtil,
-                                set_environments, text_diff, get_neighbours,
+from awesome_glue.utils import (AttackMetric, FreqUtil, set_environments,
+                                text_diff, get_neighbours,
                                 AnnealingTemperature)
 from luna import flt2str, ram_write, ram_read
 from luna.logging import log
@@ -59,9 +53,14 @@ from luna.public import Aggregator, auto_create
 from luna.pytorch import set_seed
 from allennlp.training.metrics.categorical_accuracy import CategoricalAccuracy
 from allennlpx.training import adv_utils
-from allennlpx.interpret.attackers.embedding_searcher import EmbeddingSearcher
+from allennlpx.interpret.attackers.searchers import EmbeddingSearcher
 import logging
 from awesome_glue.data_loader import load_data, load_banned_words
+from allennlp.data.token_indexers import PretrainedTransformerIndexer
+from allennlpx.modules.token_embedders.dirichlet_embedding import DirichletEmbedding
+from luna import shutdown_logging
+
+shutdown_logging("transformers")
 
 logger = logging.getLogger(__name__)
 
@@ -84,30 +83,32 @@ class Task:
             "pretrain": config.pretrain,
             "cache_embed_path": f"{config.task_id}-{config.pretrain}.vec"
         }
-        if config.embed == "":
-            token_embedder = embed_util.build_embedding(**embed_args)
-        elif config.embed == "d":
-            _, spacy_vec = self.get_spacy_vocab_and_vec()
-            neighbours, nbr_mask = get_neighbours(spacy_vec,
-                                                  return_edges=False)
-            token_embedder = embed_util.build_dirichlet_embedding(
-                **embed_args,
-                temperature=config.dir_temp,
-                neighbours=neighbours.cuda(),
-                nbr_mask=nbr_mask.cuda())
-        elif config.embed == "g":
-            _, spacy_vec = self.get_spacy_vocab_and_vec()
-            edges = get_neighbours(spacy_vec, return_edges=True)
-            token_embedder = embed_util.build_graph_embedding(
-                **embed_args,
-                gnn={
-                    "mean": MeanAggregator(300),
-                    "pool": PoolingAggregator(300)
-                }[config.gnn_type],
-                edges=edges.cuda(),
-                hop=config.gnn_hop)
-        else:
-            raise Exception()
+        if config.arch != 'bert':
+            if config.embed == "":
+                token_embedder = embed_util.build_embedding(**embed_args)
+            elif config.embed == "d":
+                _, spacy_vec = self.get_spacy_vocab_and_vec()
+                neighbours, nbr_mask = get_neighbours(spacy_vec,
+                                                      return_edges=False)
+                token_embedder = embed_util.build_dirichlet_embedding(
+                    **embed_args,
+                    temperature=config.dir_temp,
+                    neighbours=neighbours.cuda(),
+                    nbr_mask=nbr_mask.cuda())
+            elif config.embed == "g":
+                _, spacy_vec = self.get_spacy_vocab_and_vec()
+                edges = get_neighbours(spacy_vec, return_edges=True)
+                token_embedder = embed_util.build_graph_embedding(
+                    **embed_args,
+                    gnn={
+                        "mean": MeanAggregator(300),
+                        "pool": PoolingAggregator(300)
+                    }[config.gnn_type],
+                    edges=edges.cuda(),
+                    hop=config.gnn_hop)
+            else:
+                raise Exception()
+
         if config.arch in ['boe', 'cnn', 'lstm']:
             self.model = Classifier(
                 vocab=self.vocab,
@@ -122,8 +123,23 @@ class Task:
         elif config.arch == 'bert':
             self.model = BertClassifier(
                 self.vocab,
-                num_labels=TASK_SPECS[config.task_id]['num_labels']
-            )
+                num_labels=TASK_SPECS[config.task_id]['num_labels'])
+            if config.embed == "d":
+                bert_embeddings = self.model.bert_embedder.transformer_model.embeddings
+                bert_vocab, bert_vec = embed_util.build_bert_vocab_and_vec(
+                    "counter")
+                neighbours, nbr_mask = get_neighbours(bert_vec,
+                                                      return_edges=False)
+                token_embedder = DirichletEmbedding(
+                    num_embeddings=bert_vocab.get_vocab_size('tokens'),
+                    embedding_dim=768,
+                    weight=bert_embeddings.word_embeddings.weight,
+                    temperature=config.dir_temp,
+                    neighbours=neighbours.cuda(),
+                    nbr_mask=nbr_mask.cuda(),
+                    sparse=False,
+                    trainable=True)
+                bert_embeddings.word_embeddings = token_embedder
         self.model.cuda()
 
         # The predictor is a wrapper of the model.
@@ -135,13 +151,14 @@ class Task:
         # Note that the attacker receives a predictor as the proxy of the model,
         # which allows for test-time attacks.
         if is_sentence_pair(self.config.task_id):
-            self.predictor = BiTextClassifierPredictor(
-                self.model, self.reader, key1='sent1', key2='sent2'
-            )
+            self.predictor = BiTextClassifierPredictor(self.model,
+                                                       self.reader,
+                                                       key1='sent1',
+                                                       key2='sent2')
         else:
-            self.predictor = TextClassifierPredictor(
-                self.model, self.reader, key='sent'
-            )
+            self.predictor = TextClassifierPredictor(self.model,
+                                                     self.reader,
+                                                     key='sent')
 
         # list[str] -> list[str]
         transform_fn = parse_transform_fn_from_args(
@@ -155,18 +172,26 @@ class Task:
     def train(self):
         if self.config.arch == 'bert':
             num_epochs = 3
+            if self.config.embed == 'd':
+                num_epochs = 8
         else:
             num_epochs = 15
-        if self.config.task_id == 'SNLI' and self.config.arch != 'bert':
-            batch_size = 128
+        if self.config.arch == 'bert':
+            if self.config.task_id == 'SST':
+                batch_size = 32
+            else:
+                batch_size = 16
         else:
-            batch_size = 32
-            
+            if self.config.task_id == 'SNLI':
+                batch_size = 128
+            else:
+                batch_size = 32
+
         if self.config.model_name == 'tmp':
             p = pathlib.Path('saved/models/tmp')
             if p.exists():
                 shutil.rmtree(p)
-            
+
         # Maybe we will do some data augmentation here.
         if self.config.aug_data != '':
             log(f'Augment data from {self.config.aug_data}')
@@ -178,24 +203,27 @@ class Task:
 
         # Set up the adversarial training policy
         if self.config.adv_constraint:
-            # VERY IMPORTANT!
-            # we use the spacy_weight here since during attacks we use an external weight.
-            # but it is also possible to use the model's internal weight.
-            # one thing is important: the weight must be corresponding to the vocab!
-            _, spacy_weight = self.get_spacy_vocab_and_vec()
+            # We use an external weight to generate candidates for a word to replace.
+            # The external weight must be corresponding to the internal weight!
+            if self.config.arch == 'bert':
+                adv_vocab, adv_weight = embed_util.build_bert_vocab_and_vec('counter')
+            else:
+                adv_vocab, adv_weight = self.get_spacy_vocab_and_vec()
             searcher = EmbeddingSearcher(
-                embed=spacy_weight,
-                idx2word=self.vocab.get_token_from_index,
-                word2idx=self.vocab.get_token_index)
+                embed=adv_weight,
+                idx2word=adv_vocab.get_token_from_index,
+                word2idx=adv_vocab.get_token_index)
             searcher.pre_search('euc', 10)
         else:
             searcher = None
+        # yapf: disable
         policy_args = {
             "adv_iteration": self.config.adv_iter,
             "replace_num": self.config.adv_replace_num,
             "searcher": searcher,
             'adv_field': 'sent2' if is_sentence_pair(self.config.task_id) else 'sent'
         }
+        # yapf: enable
         if self.config.adv_policy == 'hot':
             if is_sentence_pair(self.config.task_id):
                 policy_args['forward_order'] = 1
@@ -233,16 +261,18 @@ class Task:
                 batch_size=batch_size,
             ),
             num_epochs=num_epochs,
-            patience=3,
+            patience=None,
             grad_clipping=1.,
             cuda_device=0,
             epoch_callbacks=epoch_callbacks,
             batch_callbacks=[],
             serialization_dir=f'saved/models/{self.config.model_name}',
-            num_serialized_models_to_keep=3)
+            num_serialized_models_to_keep=20)
         trainer.train()
 
     def from_pretrained(self):
+        # ckpter = Checkpointer(f'saved/models/{self.config.model_name}'')
+        # model_path = ckpter.find_latest_checkpoint()[0]
         model_path = f'saved/models/{self.config.model_name}/best.th'
         print(f'Load model from {model_path}')
         self.model.load_state_dict(torch.load(model_path))
@@ -337,7 +367,8 @@ class Task:
             "forbidden_tokens": forbidden_words,
             "max_change_num_or_ratio": 0.15,
             "field_to_change": field_to_change,
-            "field_to_attack": 'label'
+            "field_to_attack": 'label',
+            "use_bert": self.config.arch == 'bert'
         }
         spacy_vocab, spacy_weight = self.get_spacy_vocab_and_vec()
         blackbox_kwargs = {
@@ -399,7 +430,8 @@ class Task:
             raw_json = allenutil.as_json(data_to_attack[i])
             adv_json = raw_json.copy()
 
-            raw_probs = self.predictor.predict_instance(data_to_attack[i])['probs']
+            raw_probs = self.predictor.predict_instance(
+                data_to_attack[i])['probs']
             raw_pred = np.argmax(raw_probs)
             raw_label = data_to_attack[i]['label'].label
             if isinstance(raw_label, str):
@@ -454,7 +486,9 @@ class Task:
                 strict_metric.escape()
 
             if self.config.attack_gen_adv:
-                f_adv.write(f"{raw_json[field_to_change]}\t{adv_json[field_to_change]}\t{raw_label}\n")
+                f_adv.write(
+                    f"{raw_json[field_to_change]}\t{adv_json[field_to_change]}\t{raw_label}\n"
+                )
             sys.stdout.flush()
 
         if self.config.attack_gen_adv:

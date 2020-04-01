@@ -1,6 +1,6 @@
 import csv
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, List, Callable
 
 import pandas
 from allennlp.common.file_utils import cached_path
@@ -12,6 +12,9 @@ from allennlp.data.token_indexers.pretrained_transformer_indexer import \
 from allennlp.data.tokenizers.token import Token
 from overrides import overrides
 from allennlp.data.tokenizers import PretrainedTransformerTokenizer
+from allennlpx import allenutil
+from copy import deepcopy
+
 
 logger = logging.getLogger(__name__)
 
@@ -85,5 +88,16 @@ class BertyTSVReader(DatasetReader):
             fields['label'] = LabelField(label, skip_indexing=self._skip_label_indexing)
         return Instance(fields)
 
-    def transform_instances(self, instances):
-        pass
+    def transform_instances(self,
+                            transform: Callable[[List[str]], List[str]],
+                            instances: List[Instance],
+                          ) -> List[Instance]:
+        ret_instances = [deepcopy(ele) for ele in instances]
+        sents = []
+        for instance in ret_instances:
+            sents.append(allenutil.as_sentence(instance.fields['sent']))
+        new_sents = transform(sents)
+        for i, instance in enumerate(ret_instances):
+            instance.fields['sent'] = TextField(self._tokenizer.tokenize(new_sents[i]), self._token_indexers)
+            instance.indexed = False
+        return ret_instances

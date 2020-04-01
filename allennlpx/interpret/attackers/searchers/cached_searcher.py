@@ -2,9 +2,10 @@ import csv
 from typing import Union, Callable, Dict
 from collections import defaultdict
 from functools import lru_cache
+from .searcher import Searcher
 
 
-class CachedWordSearcher:
+class CachedWordSearcher(Searcher):
     def __init__(
         self,
         file_name: str
@@ -20,7 +21,7 @@ class CachedWordSearcher:
         return words
 
 
-class CachedIndexSearcher:
+class CachedIndexSearcher(Searcher):
     def __init__(
         self,
         file_name: str,

@@ -25,7 +25,11 @@ def as_sentence(something, field=None):
     else:
         raise Exception(f'the arg you passes is {type(something)}')
     sent = " ".join(tkstrs)
-    sent = sent.replace(" ##" , "", -1)  # replace word piece
+    # replace word piece
+    sent = sent.replace("[CLS]", "", -1)
+    sent = sent.replace("[SEP]", "", -1)
+    sent = sent.replace(" ##", "", -1)
+    sent = sent.strip()
     return sent
 
 

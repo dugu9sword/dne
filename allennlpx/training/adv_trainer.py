@@ -456,7 +456,9 @@ class AdvTrainer(TrainerBase):
             # adversarial samples
             if self.adv_policy.adv_iteration > 0:
                 for adv_idx in range(self.adv_policy.adv_iteration):
-                    raw_tokens = batch[self.adv_policy.adv_field]['tokens']['tokens'].cuda()
+                    adv_fields = batch[self.adv_policy.adv_field]
+                    token_key = adv_utils.guess_token_key_from_field(adv_fields)
+                    raw_tokens = adv_fields['tokens'][token_key].cuda()
                     if isinstance(self.adv_policy, adv_utils.HotFlipPolicy):
                         adv_tokens = adv_utils.hotflip(
                             src_tokens=raw_tokens,
@@ -474,7 +476,7 @@ class AdvTrainer(TrainerBase):
                         )
                     else:
                         raise Exception('You must specify a policy')
-                    batch[self.adv_policy.adv_field]['tokens']['tokens'] = adv_tokens
+                    adv_fields['tokens'][token_key] = adv_tokens
                     loss = self.batch_loss(batch, for_training=True)
                     if torch.isnan(loss):
                         raise ValueError("nan loss encountered")

@@ -6,9 +6,10 @@ import torch
 from tabulate import tabulate
 
 from luna import cast_list, show_mean_std
+from .searcher import Searcher
 
 
-class EmbeddingSearcher:
+class EmbeddingSearcher(Searcher):
     """
         When loading a pretrained embedding matrix, some words may not
         occur in the pretrained vectors, thus they may be filled with random
@@ -160,40 +161,6 @@ class EmbeddingSearcher:
             table.append([nbr, dists[nbr].mean().item(), dists[nbr].std().item()])
         print(tabulate(table, headers=['N', 'mean', 'std'], floatfmt='.2f'))
         # exit()
-
-        print('*** Statistics of distances in a N-nearest neighbourhood ***\n'
-              '    when randomly moving by different step sizes')
-        mve_nom = [1, 2, 5, 10, 20, 50]
-        nbr_num = [5, 10, 20, 50, 100, 500]
-        dists = {mve: {nbr: [] for nbr in nbr_num} for mve in mve_nom}
-        cover = {mve: {nbr: [] for nbr in nbr_num} for mve in mve_nom}
-        for ele in cast_list(torch.randint(self.embed.size(0), (50, ))):
-            if self.embed[ele].sum() == 0.:
-                continue
-            vect = torch.rand_like(self.embed[ele])
-            vect = vect / torch.norm(vect)
-            rvals, ridxs = self.find_neighbours(self.embed[ele], measure, None)
-            for mve in mve_nom:
-                vals, idxs = self.find_neighbours(self.embed[ele] + vect * mve, measure, 500)
-                for nbr in nbr_num:
-                    dists[mve][nbr].append(vals[1:nbr + 1])
-                    cover[mve][nbr].append(compare_idxes(idxs[1:nbr + 1], ridxs[1:nbr + 1]))
-        table = []
-        for mve in mve_nom:
-            row = [mve]
-            for nbr in nbr_num:
-                dist = torch.cat(dists[mve][nbr])
-                row.append(dist.mean().item())
-                row.append("{:.1f}%".format(np.mean(cover[mve][nbr]) / nbr * 100))
-            table.append(row)
-
-        print(
-            tabulate(table,
-                     headers=[
-                         'Step', 'D-5', 'I-5', 'D-10', 'I-10', 'D-20', 'I-20', 'D-50', 'I-50',
-                         'D-100', 'I-100'
-                     ],
-                     floatfmt='.2f'))
 
 
 
