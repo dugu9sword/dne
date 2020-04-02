@@ -11,12 +11,24 @@ import numpy as np
 from allennlpx.training.adv_trainer import EpochCallback, BatchCallback
 from typing import Dict, Any
 import logging
+import pandas
 
 logger = logging.getLogger(__name__)
 
 
 class set_environments():
     os.environ["TORCH_HOME"] == '/disks/sdb/torch_home'
+
+
+def read_hyper(task_id, arch, key):
+    df = pandas.read_csv("hyper_params.csv", delimiter=',\s+' ,engine='python')
+    df.columns = df.columns.str.strip()
+    for t in [task_id, '*']:
+        for a in [arch, '*']:
+            x = df.query(f"task=='{t}' and arch=='{a}'")
+            if x.shape[0] == 1:
+                return x[key].values[0]
+    raise Exception()
 
 
 class DirichletAnnealing(BatchCallback):
@@ -35,21 +47,23 @@ class DirichletAnnealing(BatchCallback):
         if dir_embed.temperature < self.start_temp:
             return
         cur_step = epoch * self.batch_per_epoch + batch_number
-        if self.epoch >= self.anneal_epoch_num:
+        if epoch >= self.anneal_epoch_num:
             cur_temp = dir_embed.temperature
         else:
             cur_ratio = cur_step / self.total_steps
             cur_temp = cur_ratio * dir_embed.temperature + (
                 1 - cur_ratio) * self.start_temp
         dir_embed.current_temperature = cur_temp
-        logger.info(
-            f'At {epoch}/{batch_number}, temperature is set to {cur_temp}//{dir_embed.temperature}'
-        )
+        if batch_number % (self.batch_per_epoch // 4) == 0: 
+            logger.info(
+                f'At epoch-{epoch} batch-{batch_number},' + 
+                f'temperature is set to {cur_temp}({dir_embed.temperature})'
+            )
 
 
 class AnnealingTemperature(EpochCallback):
-    def __init__(self, anneal_num=5):
-        self.anneal_num = anneal_num
+    def __init__(self, anneal_epoch_num=5):
+        self.anneal_epoch_num = anneal_epoch_num
 
     def __call__(self, trainer, metrics: Dict[str, Any], epoch: int) -> None:
         next_epoch = epoch + 1
@@ -59,10 +73,10 @@ class AnnealingTemperature(EpochCallback):
             dir_embed = trainer.model.bert_embedder.transformer_model.embeddings.word_embeddings
         if dir_embed.temperature < 0.01:
             return
-        if next_epoch < self.anneal_num:
+        if next_epoch < self.anneal_epoch_num:
             cur_temp = np.linspace(0.01,
                                    dir_embed.temperature,
-                                   num=self.anneal_num)[next_epoch]
+                                   num=self.anneal_epoch_num)[next_epoch]
         else:
             cur_temp = dir_embed.temperature
         dir_embed.current_temperature = cur_temp

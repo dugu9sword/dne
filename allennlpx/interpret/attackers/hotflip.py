@@ -141,5 +141,5 @@ class HotFlip(Attacker):
         adv_tokens = list(map(lambda x: x.text, adv_text_field.tokens))
         return sanitize({"adv": adv_tokens,
                          "raw": raw_tokens,
-                         "outputs": outputs,
+                         "outputs": result,
                          "success": 1 if successful else 0})

@@ -7,8 +7,7 @@ from allennlp.nn.util import get_text_field_mask
 from allennlp.training.metrics import CategoricalAccuracy
 from allennlp.training.optimizers import DenseSparseAdam
 
-from allennlpx.modules.seq2vec_encoders.pytorch_seq2vec_wrapper import \
-    PytorchSeq2VecWrapper
+from allennlp.modules.seq2vec_encoders import PytorchSeq2VecWrapper
 
 from allennlp.modules.seq2vec_encoders import BagOfEmbeddingsEncoder
 from allennlp.modules.seq2vec_encoders import CnnEncoder

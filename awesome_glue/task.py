@@ -45,8 +45,8 @@ from awesome_glue.transforms import (BackTrans, DAE, BertAug, Crop, EmbedAug,
                                      transform_collate,
                                      parse_transform_fn_from_args)
 from awesome_glue.utils import (AttackMetric, FreqUtil, set_environments,
-                                text_diff, get_neighbours,
-                                AnnealingTemperature)
+                                text_diff, get_neighbours, DirichletAnnealing, 
+                                AnnealingTemperature, read_hyper)
 from luna import flt2str, ram_write, ram_read
 from luna.logging import log
 from luna.public import Aggregator, auto_create
@@ -60,7 +60,7 @@ from allennlp.data.token_indexers import PretrainedTransformerIndexer
 from allennlpx.modules.token_embedders.dirichlet_embedding import DirichletEmbedding
 from luna import shutdown_logging
 
-shutdown_logging("transformers")
+logging.getLogger('transformers').setLevel(logging.CRITICAL)
 
 logger = logging.getLogger(__name__)
 
@@ -172,22 +172,12 @@ class Task:
             self.predictor.set_transform_field("sent")
 
     def train(self):
-        if self.config.arch == 'bert':
-            num_epochs = 3
-            if self.config.embed == 'd':
-                num_epochs = 8
-        else:
-            num_epochs = 15
-        if self.config.arch == 'bert':
-            if self.config.task_id == 'SST':
-                batch_size = 32
-            else:
-                batch_size = 16
-        else:
-            if self.config.task_id == 'SNLI':
-                batch_size = 128
-            else:
-                batch_size = 32
+        read_hyper_ = partial(read_hyper, self.config.task_id, self.config.arch)
+        num_epochs = int(read_hyper_("num_epochs"))
+        batch_size = int(read_hyper_("batch_size"))
+        if self.config.arch == 'bert' and self.config.embed == 'd':
+            num_epochs = 8
+        logger.info(f"num_epochs: {num_epochs}, batch_size: {batch_size}")
 
         if self.config.model_name == 'tmp':
             p = pathlib.Path('saved/models/tmp')
@@ -235,16 +225,24 @@ class Task:
         else:
             adv_policy = adv_utils.NoPolicy
 
-        # Set callbacks
-        epoch_callbacks = []
-        if self.config.embed == 'd':
-            epoch_callbacks.append(AnnealingTemperature())
-
         # A collate_fn will do some transformation an instance before
         # fed into a model. If we want to train a model with some transformations
         # such as cropping/DAE, we can modify code here. e.g.,
         # collate_fn = partial(transform_collate, self.vocab, self.reader, Crop(0.3))
         collate_fn = allennlp_collate
+        train_data_sampler = BucketBatchSampler(
+            # HIGHLIGHT: 
+            data_source=self.train_data,
+            batch_size=batch_size,
+        )
+        # Set callbacks
+        epoch_callbacks = []
+        # if self.config.embed == 'd':
+        #     epoch_callbacks.append(AnnealingTemperature(anneal_epoch_num=5))
+        batch_callbacks = []
+        if self.config.embed == 'd':
+            batch_callbacks.append(DirichletAnnealing(
+                anneal_epoch_num=4, batch_per_epoch=len(train_data_sampler)))
         trainer = AdvTrainer(
             model=self.model,
             optimizer=self.model.get_optimizer(),
@@ -252,10 +250,7 @@ class Task:
             adv_policy=adv_policy,
             data_loader=DataLoader(
                 self.train_data,
-                batch_sampler=BucketBatchSampler(
-                    data_source=self.train_data,
-                    batch_size=batch_size,
-                ),
+                batch_sampler=train_data_sampler,
                 collate_fn=collate_fn,
             ),
             validation_data_loader=DataLoader(
@@ -267,7 +262,7 @@ class Task:
             grad_clipping=1.,
             cuda_device=0,
             epoch_callbacks=epoch_callbacks,
-            batch_callbacks=[],
+            batch_callbacks=batch_callbacks,
             serialization_dir=f'saved/models/{self.config.model_name}',
             num_serialized_models_to_keep=20)
         trainer.train()
@@ -370,48 +365,25 @@ class Task:
             "max_change_num_or_ratio": 0.15,
             "field_to_change": field_to_change,
             "field_to_attack": 'label',
-            "use_bert": self.config.arch == 'bert'
+            "use_bert": self.config.arch == 'bert',
+            "policy": EmbeddingPolicy(measure='euc', topk=10, rho=None),
         }
         spacy_vocab, spacy_weight = self.get_spacy_vocab_and_vec()
         blackbox_kwargs = {
             "vocab": spacy_vocab,
             "token_embedding": spacy_weight
         }
-        if self.config.attack_method == 'pgd':
-            attacker = PGD(self.predictor,
-                           step_size=100.,
-                           max_step=20,
-                           iter_change_num=1,
-                           **general_kwargs)
-        elif self.config.attack_method == 'hotflip':
-            attacker = HotFlip(
-                self.predictor,
-                policy=EmbeddingPolicy(measure='euc', topk=10, rho=None),
-                #                                policy=UnconstrainedPolicy(),
-                **general_kwargs)
+        if self.config.attack_method == 'hotflip':
+            attacker = HotFlip(self.predictor, **general_kwargs)
         elif self.config.attack_method == 'bruteforce':
-            attacker = BruteForce(self.predictor,
-                                  policy=EmbeddingPolicy(measure='euc',
-                                                         topk=10,
-                                                         rho=None),
-                                  **general_kwargs,
-                                  **blackbox_kwargs)
+            attacker = BruteForce(self.predictor, **general_kwargs, **blackbox_kwargs)
         elif self.config.attack_method == 'pwws':
-            attacker = PWWS(
-                self.predictor,
-                #                 policy=SpecifiedPolicy(words=STOP_WORDS),
-                policy=EmbeddingPolicy(measure='euc', topk=10, rho=None),
-                #                             policy=SynonymPolicy(),
-                **general_kwargs,
-                **blackbox_kwargs)
+            attacker = PWWS(self.predictor, **general_kwargs, **blackbox_kwargs)
         elif self.config.attack_method == 'genetic':
             attacker = Genetic(self.predictor,
-                               num_generation=10,
-                               num_population=20,
-                               policy=EmbeddingPolicy(measure='euc',
-                                                      topk=10,
-                                                      rho=None),
-                               lm_topk=4,
+                               num_generation=20,
+                               num_population=40,
+                               lm_topk=-1,
                                **general_kwargs,
                                **blackbox_kwargs)
         else:
@@ -419,9 +391,7 @@ class Task:
 
         # Start attacking
         if self.config.attack_gen_adv:
-            f_adv = open(
-                f"nogit/{self.config.model_name}.{self.config.attack_method}.adv.tsv",
-                'w')
+            f_adv = open(f"nogit/{self.config.model_name}.{self.config.attack_method}.adv.tsv", 'w')
             f_adv.write("raw\tadv\tlabel\n")
         strict_metric = AttackMetric()
         loose_metric = AttackMetric()
@@ -432,8 +402,7 @@ class Task:
             raw_json = allenutil.as_json(data_to_attack[i])
             adv_json = raw_json.copy()
 
-            raw_probs = self.predictor.predict_instance(
-                data_to_attack[i])['probs']
+            raw_probs = self.predictor.predict_json(raw_json)['probs']
             raw_pred = np.argmax(raw_probs)
             raw_label = data_to_attack[i]['label'].label
             if isinstance(raw_label, str):
@@ -446,26 +415,25 @@ class Task:
                 adv_json[field_to_change] = allenutil.as_sentence(result['adv'])
 
                 # Count
-                diff = text_diff(result['raw'], result['adv'])
-                raw_counter.update(diff['a_changes'])
-                adv_counter.update(diff['b_changes'])
-                to_aggregate = [('change_num', diff['change_num']),
-                                ('change_ratio', diff['change_ratio'])]
-                if "generation" in result:
-                    to_aggregate.append(
-                        ('generation', result['generation']))
-                agg.aggregate(*to_aggregate)
-                print(result)
-                log("[raw]", raw_json, "\n[prob]", flt2str(raw_probs, cat=', '))
-                log("[adv]", adv_json, '\n[prob]', flt2str(result['outputs']['probs'], cat=', '))
-                if "changed" in result:
-                    log("[changed]", result['changed'])
-                log()
+                if result['success']:
+                    diff = text_diff(result['raw'], result['adv'])
+                    raw_counter.update(diff['a_changes'])
+                    adv_counter.update(diff['b_changes'])
+                    to_aggregate = [('change_num', diff['change_num']),
+                                    ('change_ratio', diff['change_ratio'])]
+                    if "generation" in result:
+                        to_aggregate.append(('generation', result['generation']))
+                    agg.aggregate(*to_aggregate)
+                    log("[raw]", raw_json, "\n[prob]", flt2str(raw_probs, cat=', '))
+                    log("[adv]", adv_json, '\n[prob]', flt2str(result['outputs']['probs'], cat=', '))
+                    if "changed" in result:
+                        log("[changed]", result['changed'])
+                    log()
 
-                log("Avg.change#", round(agg.mean("change_num"), 2),
-                    "Avg.change%", round(100 * agg.mean("change_ratio"), 2))
-                if "generation" in result:
-                    log("Aggregated generation", agg.mean("generation"))
+                    log("Avg.change#", round(agg.mean("change_num"), 2),
+                        "Avg.change%", round(100 * agg.mean("change_ratio"), 2))
+                    if "generation" in result:
+                        log("Avg.gen#", agg.mean("generation"))
 
                 # Strict metric: An attacker thinks that it attacks successfully.
                 if result['success']:
@@ -519,25 +487,6 @@ class Task:
             spacy_vocab, self.config.attack_vectors,
             f"{self.config.task_id}-{self.config.attack_vectors}.vec")
         return spacy_vocab, spacy_weight
-
-
-#     def knn_build_index(self):
-#         self.from_pretrained()
-#         iterator = BasicIterator(batch_size=32)
-#         iterator.index_with(self.vocab)
-
-#         ram_write("knn_flag", "collect")
-#         filtered = list(filter(lambda x: len(x.fields['berty_tokens'].tokens) > 10,
-#                                self.train_data))
-#         evaluate(self.model, filtered, iterator, 0, None)
-
-#     def knn_evaluate(self):
-#         ram_write("knn_flag", "infer")
-#         self.evaluate()
-
-#     def knn_attack(self):
-#         ram_write("knn_flag", "infer")
-#         self.attack()
 
 #     def build_manifold(self):
 #         spacy_data = load_data(self.config.task_id, "spacy")

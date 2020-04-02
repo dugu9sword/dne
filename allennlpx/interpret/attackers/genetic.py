@@ -65,13 +65,13 @@ class Genetic(Attacker):
 
         # select the one that maximize the drop
         _volatile_json_[self.f2c] = " ".join(raw_tokens)
-        tmp_instances = [self.predictor._json_to_instance(_volatile_json_)]
+        tmp_jsons = [_volatile_json_.copy()]
         for cand in cands:
             tmp_tokens = copy.copy(cur_tokens)
             tmp_tokens[sid] = cand
             _volatile_json_[self.f2c] = " ".join(tmp_tokens)
-            tmp_instances.append(self.predictor._json_to_instance(_volatile_json_))
-        results = self.predictor.predict_batch_instance(tmp_instances)
+            tmp_jsons.append(_volatile_json_.copy())
+        results = self.predictor.predict_batch_json(tmp_jsons)
 
         probs = np.array([result['probs'] for result in results])
         other_probs = probs[1:]
@@ -117,7 +117,6 @@ class Genetic(Attacker):
     def attack_from_json(self,
                          inputs: JsonDict = None) -> JsonDict:
         _volatile_json_ = inputs.copy()
-        #         raw_instance = self.predictor.json_to_labeled_instances(inputs)[0]
         raw_tokens = list(map(lambda x: x.text, self.spacy.tokenize(inputs[self.f2c])))
 
         # pre-compute some variables for later operations
@@ -146,7 +145,7 @@ class Genetic(Attacker):
         self.ram_pool['nbr_dct'] = nbr_dct
         self.ram_pool['volatile_json'] = _volatile_json_
 
-        adv_tokens = None
+        adv_tokens = raw_tokens.copy()
         gid = -1
         if len(legal_sids) != 0:
             # initialzie the population
@@ -177,8 +176,7 @@ class Genetic(Attacker):
 
         _volatile_json_[self.f2c] = " ".join(adv_tokens)
         if adv_tokens is not None:
-            adv_instance = self.predictor._json_to_instance(_volatile_json_)
-            result = self.predictor.predict_instance(adv_instance)
+            result = self.predictor.predict_json(_volatile_json_)
         else:
             result = None
 

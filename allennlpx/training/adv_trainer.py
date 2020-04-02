@@ -443,6 +443,7 @@ class AdvTrainer(TrainerBase):
             self.optimizer.zero_grad()
 
             # normal samples
+            print(batch['sent']['tokens']['token_ids'].size(), common_util.gpu_memory_mb().items())
             loss = self.batch_loss(batch, for_training=True)
             if torch.isnan(loss):
                 raise ValueError("nan loss encountered")

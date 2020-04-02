@@ -7,8 +7,8 @@ class Config(ProgramArgs):
 
         # basic settings
         self.task_id = "AGNEWS"
-        self.embed = 'd'   # d/g/_
-        self.arch = 'bert'
+        self.embed = ''   # d/g/_
+        self.arch = 'lstm'
         self.pretrain = 'glove'
 #         self._model_name = "AGNEWS-lstm-hot.1.5.con"
         self._model_name = ""   # if set to tmp, existing models will be overrided

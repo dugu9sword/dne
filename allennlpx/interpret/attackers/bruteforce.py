@@ -54,26 +54,27 @@ class BruteForce(Attacker):
         max_change_num = min(self.max_change_num(len(raw_tokens)), len(sids_to_change))
 
         # Construct adversarial instances
-        adv_instances = []
+        adv_jsons = []
         for i in range(self.search_num):
             adv_tokens = [ele for ele in raw_tokens]
             word_sids = random.choices(sids_to_change, k=max_change_num)
             for word_sid in word_sids:
                 adv_tokens[word_sid] = random.choice(nbr_dct[word_sid])
             _volatile_json_[self.f2c] = " ".join(adv_tokens)
-            adv_instances.append(self.predictor._json_to_instance(_volatile_json_))
+            adv_jsons.append(_volatile_json_.copy())
 
         # Checking attacking status, early stop
         successful = False
-        results = self.predictor.predict_batch_instance(adv_instances)
+        results = self.predictor.predict_batch_json(adv_jsons)
 
         for i, result in enumerate(results):
+            adv_instance = self.predictor._json_to_instance(adv_jsons[i])
             adv_instance = self.predictor.predictions_to_labeled_instances(
-                adv_instances[i], result)[0]
+                adv_instance, result)[0]
             if adv_instance[self.f2a].label != raw_instance[self.f2a].label:
                 successful = True
                 break
-        adv_tokens = adv_instances[i][self.f2c].tokens
+        adv_tokens = adv_jsons[i][self.f2c].split(" ")
         outputs = result
 
         return sanitize({
