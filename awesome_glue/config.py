@@ -6,8 +6,8 @@ class Config(ProgramArgs):
         super().__init__()
 
         # basic settings
-        self.task_id = "AGNEWS"
-        self.embed = ''   # d/g/_
+        self.task_id = "IMDB"
+        self.embed = 'd'   # d/g/_
         self.arch = 'lstm'
         self.pretrain = 'glove'
 #         self._model_name = "AGNEWS-lstm-hot.1.5.con"
