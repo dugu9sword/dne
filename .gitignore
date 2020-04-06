@@ -23,4 +23,5 @@ saved/*
 universal-triggers-master/
 .ipynb_checkpoints
 glue_data/* 
-
+awesome_siamese/*
+ipynbs/*

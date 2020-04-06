@@ -3,6 +3,7 @@ from allennlpx.interpret.attackers.searchers import EmbeddingSearcher
 import torch
 from luna import batch_pad
 import random
+from typing import Union
 
 
 @dataclass
@@ -30,7 +31,7 @@ class HotFlipPolicy(AdvTrainingPolicy):
     forward_order: int = 0
     # searcher: CachedIndexSearcher = None
     searcher: EmbeddingSearcher = None
-    replace_num: int = None
+    replace_num: Union[int, float] = None
 
 
 @dataclass
@@ -39,7 +40,7 @@ class RandomNeighbourPolicy(AdvTrainingPolicy):
         Randomly change some words during training.
     """
     searcher: EmbeddingSearcher = None
-    replace_num: int = None
+    replace_num: Union[int, float] = None
 
 
 def apply_constraint_(searcher, src_tokens, scores):
@@ -76,14 +77,21 @@ def apply_constraint_(searcher, src_tokens, scores):
     scores.masked_fill_(mask, -19260817.)
 
 
+def get_replace_num(replace_num, length):
+    if replace_num > 1:
+        return int(min(replace_num, length))
+    else:
+        return int(replace_num * length)
+
+
 def hotflip(*,
             src_tokens,
             embeds,
             grads,
             embedding_matrix,
-            replace_num=3,
+            replace_num,
             searcher=None):
-    replace_num = min(replace_num, src_tokens.size(1))
+    replace_num = get_replace_num(replace_num, src_tokens.size(1))
 
     # compute the direction vector dot the gradient
     prev_embed_dot_grad = torch.einsum("bij,bij->bi", grads, embeds)
@@ -122,7 +130,7 @@ def random_swap(*, src_tokens, replace_num, searcher):
             sid for sid in range(src_tokens.size(1))
             if adv_tokens_lst[bid][sid] != 0
         ]
-        sids = random.sample(sids, k=min(replace_num, len(sids)))
+        sids = random.sample(sids, k=get_replace_num(replace_num, len(sids)))
         for sid in sids:
             _, idxs = searcher.search(adv_tokens_lst[bid][sid], 'euc', 10,
                                       None)

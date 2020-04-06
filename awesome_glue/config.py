@@ -6,8 +6,8 @@ class Config(ProgramArgs):
         super().__init__()
 
         # basic settings
-        self.task_id = "IMDB"
-        self.embed = 'd'   # d/g/_
+        self.task_id = "AGNEWS"
+        self.embed = ''   # d/g/_
         self.arch = 'lstm'
         self.pretrain = 'glove'
 #         self._model_name = "AGNEWS-lstm-hot.1.5.con"
@@ -24,9 +24,9 @@ class Config(ProgramArgs):
         # training settings
         # self.aug_data = 'nogit/AGNEWS-lstm.pwws.aug.tsv'
         self.aug_data = ''
-        self.adv_iter = 0
+        self.adv_iter = 1
         self.adv_policy = 'hot'    # hot -> hotflip, rdm -> random
-        self.adv_replace_num = 5
+        self.adv_replace_num = 0.15
         self.adv_constraint = True
 
         # predictor settings
@@ -37,7 +37,7 @@ class Config(ProgramArgs):
         # attack settings
         self.attack_method = 'pwws'
         self.attack_vectors = 'counter'
-        self.attack_data_split = 'dev'
+        self.attack_data_split = 'test'
         self.attack_size = 200
         # self.attack_data_split = 'train'
         # self.attack_size = -1
@@ -49,7 +49,7 @@ class Config(ProgramArgs):
         # other settings
         self.alchemist = False
         self.seed = 2
-        self.cuda = 3
+        self.cuda = 0
 
     @property
     def tokenizer(self):

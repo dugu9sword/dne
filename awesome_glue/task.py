@@ -3,6 +3,7 @@ import sys
 from collections import Counter
 from functools import partial
 from copy import deepcopy
+import random
 
 import numpy as np
 import pandas
@@ -231,7 +232,6 @@ class Task:
         # collate_fn = partial(transform_collate, self.vocab, self.reader, Crop(0.3))
         collate_fn = allennlp_collate
         train_data_sampler = BucketBatchSampler(
-            # HIGHLIGHT: 
             data_source=self.train_data,
             batch_size=batch_size,
         )
@@ -268,7 +268,7 @@ class Task:
         trainer.train()
 
     def from_pretrained(self):
-        # ckpter = Checkpointer(f'saved/models/{self.config.model_name}'')
+        # ckpter = Checkpointer(f'saved/models/{self.config.model_name}')
         # model_path = ckpter.find_latest_checkpoint()[0]
         model_path = f'saved/models/{self.config.model_name}/best.th'
         print(f'Load model from {model_path}')
@@ -345,6 +345,8 @@ class Task:
             data_to_attack = self.train_data
         elif self.config.attack_data_split == 'dev':
             data_to_attack = self.dev_data
+        elif self.config.attack_data_split == 'test':
+            data_to_attack = self.test_data
         if is_sentence_pair(self.config.task_id):
             field_to_change = 'sent2'
         else:
@@ -354,7 +356,7 @@ class Task:
                    data_to_attack))
 
         if self.config.attack_size != -1:
-            data_to_attack = data_to_attack[:self.config.attack_size]
+            data_to_attack = random.sample(data_to_attack, k=self.config.attack_size)
 
         # Set up the attacker
         forbidden_words = load_banned_words(self.config.task_id)
