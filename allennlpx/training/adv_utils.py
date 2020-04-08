@@ -54,8 +54,7 @@ def apply_constraint_(searcher, src_tokens, scores):
             if src_tokens_lst[bid][sid] == 0:
                 idxes_to_mask.append([])
                 continue
-            _, idxs = searcher.search(src_tokens_lst[bid][sid], 'euc', 10,
-                                      None)
+            _, idxs = searcher.find_neighbours(src_tokens_lst[bid][sid], 'euc', 10, None)
             if idxs is None:
                 idxes_to_mask.append([src_tokens_lst[bid][sid]])
             else:

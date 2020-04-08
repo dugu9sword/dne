@@ -6,7 +6,7 @@ TASK_SPECS = {
         "sent2_col": None,
         "label_col": "label",
         "skip_label_indexing": True,
-        "banned_words": "banned_words/sentiment.txt",
+        "banned_words": "external_data/sentiment.txt",
         "num_labels": 2,  # if skip_label_indexing, this key should be specified
     },
     "AGNEWS": {
@@ -23,7 +23,7 @@ TASK_SPECS = {
         "sent2_col": None,
         "label_col": "label",
         "skip_label_indexing": True,
-        "banned_words": "banned_words/sentiment.txt",
+        "banned_words": "external_data/sentiment.txt",
         "num_labels": 2,
     },
     "SNLI": {

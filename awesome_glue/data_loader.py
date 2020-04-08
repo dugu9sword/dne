@@ -5,6 +5,8 @@ from allennlp.data.vocabulary import Vocabulary
 from allennlpx.interpret.attackers.attacker import DEFAULT_IGNORE_TOKENS
 from copy import copy
 from luna import auto_create
+import json
+from collections import defaultdict
 
 
 def load_data(task_id: str, tokenizer: str):
@@ -42,16 +44,36 @@ def load_data(task_id: str, tokenizer: str):
         return train_data, dev_data, test_data, vocab
 
     # The cache name is {task}-{tokenizer}
-    train_data, dev_data, test_data, vocab = auto_create(f"{task_id}-{tokenizer}.data", __load_data,
-                                                         True)
+    train_data, dev_data, test_data, vocab = auto_create(
+        f"{task_id}-{tokenizer}.data", __load_data, True)
 
-    return {"reader": reader, "data": (train_data, dev_data, test_data), "vocab": vocab}
+    return {
+        "reader": reader,
+        "data": (train_data, dev_data, test_data),
+        "vocab": vocab
+    }
 
 
 def load_banned_words(task_id: str):
     banned_words = copy(DEFAULT_IGNORE_TOKENS)
     if 'banned_words' in TASK_SPECS[task_id]:
         banned_words.extend([
-            line.rstrip('\n') for line in open(TASK_SPECS[task_id]['banned_words'])
+            line.rstrip('\n')
+            for line in open(TASK_SPECS[task_id]['banned_words'])
         ])
     return banned_words
+
+
+def load_neighbour_words(vocab: Vocabulary,
+                         file_name='external_data/counter_fitted_neighbors.json'):
+    nbr_dct = json.load(open(file_name))
+    tokens = vocab.get_token_to_index_vocabulary()
+    ret = {}
+    for k in nbr_dct:
+        if k in tokens:
+            ret[k] = []
+            for v in nbr_dct[k]:
+                if v in tokens:
+                    ret[k].append(v)
+    ret = defaultdict(lambda: [], ret)
+    return ret

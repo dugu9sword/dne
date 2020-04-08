@@ -14,6 +14,7 @@ from allennlpx.interpret.attackers.attacker import (DEFAULT_IGNORE_TOKENS,
                                                     Attacker)
 from allennlpx.interpret.attackers.policies import (CandidatePolicy,
                                                     EmbeddingPolicy,
+                                                    SpecifiedPolicy,
                                                     SynonymPolicy)
 from luna import lazy_property
 
@@ -72,7 +73,9 @@ class Genetic(Attacker):
             _volatile_json_[self.f2c] = " ".join(tmp_tokens)
             tmp_jsons.append(_volatile_json_.copy())
         results = self.predictor.predict_batch_json(tmp_jsons)
+#         print(results)
 
+        other_results = results[1:]
         probs = np.array([result['probs'] for result in results])
         other_probs = probs[1:]
         true_idx = np.argmax(probs[0])
@@ -91,6 +94,7 @@ class Genetic(Attacker):
 
         if target_idx == -1:
             success = 1 if np.argmax(other_probs[cand_idx]) != true_idx else 0
+#             success = 1 if other_probs[cand_idx][true_idx] < 0.3 else 0
         else:
             success = 1 if np.argmax(
                 other_probs[cand_idx]) == target_idx else 0
@@ -100,6 +104,7 @@ class Genetic(Attacker):
 
         #         print(final_tokens)
         return {
+            "result": other_results[cand_idx],
             "individual": final_tokens,
             "fitness": cand_fitness,
             "success": success
@@ -124,8 +129,7 @@ class Genetic(Attacker):
         legal_sids = []
         nbr_dct = {}
         for i in range(len(raw_tokens)):
-            if raw_tokens[
-                    i] not in self.ignore_tokens and self.embed_searcher.is_pretrained(
+            if raw_tokens[i] not in self.ignore_tokens and self.embed_searcher.is_pretrained(
                         raw_tokens[i]):
                 lucky_dog = raw_tokens[i]  # use the original word
                 if isinstance(self.policy, EmbeddingPolicy):
@@ -135,6 +139,8 @@ class Genetic(Attacker):
                                                      self.policy.rho)
                 elif isinstance(self.policy, SynonymPolicy):
                     cands = self.synom_searcher.search(lucky_dog)
+                elif isinstance(self.policy, SpecifiedPolicy):
+                    cands = self.policy.nbrs[lucky_dog]
                 cands = [
                     ele for ele in cands if ele not in self.forbidden_tokens
                 ]
@@ -147,6 +153,7 @@ class Genetic(Attacker):
 
         adv_tokens = raw_tokens.copy()
         gid = -1
+        success = False
         if len(legal_sids) != 0:
             # initialzie the population
             P = [
@@ -154,15 +161,22 @@ class Genetic(Attacker):
                 for _ in range(self.num_population)
             ]
 
-            #             for gid in range(self.num_generation):
+            for gid in range(self.num_generation):
             # after G generation, the maximum change maybe 2^(G-1)
-            max_change_num = self.max_change_num(len(raw_tokens))
-            for gid in range(min(self.num_generation, max_change_num)):
+#             max_change_num = self.max_change_num(len(raw_tokens))
+#             for gid in range(min(self.num_generation, max_change_num)):
                 fitnesses = np.array([ele['fitness'] for ele in P])
+                # print(fitnesses)
                 best = P[np.argmax(fitnesses)]
+                print("generation ", gid, ":", best['fitness'])
                 if best['success']:
-                    adv_tokens = best['individual']
-                    break
+                    return sanitize({
+                        "adv": best['individual'],
+                        "raw": raw_tokens,
+                        "outputs": best['result'],
+                        "success": 1,
+                        "generation": gid + 1
+                    })
                 else:
                     new_P = [best]
                     for _ in range(self.num_population - 1):
@@ -170,21 +184,23 @@ class Genetic(Attacker):
                         p1, p2 = np.random.choice(P, 2, False, select_prob)
                         child_tokens = self.crossover(p1['individual'],
                                                       p2['individual'])
-                        new_tokens = self.perturb(raw_tokens, child_tokens)
-                        new_P.append(new_tokens)
+                        next_gen = self.perturb(raw_tokens, child_tokens)
+                        new_P.append(next_gen)
                     P = new_P
-
+        
+        adv_tokens = best['individual']
         _volatile_json_[self.f2c] = " ".join(adv_tokens)
-        if adv_tokens is not None:
-            result = self.predictor.predict_json(_volatile_json_)
-        else:
-            result = None
+        result = self.predictor.predict_json(_volatile_json_)
+        raw_instance = self.predictor._json_to_labeled_instance(inputs)
+        final_instance = self.predictor._json_to_instance(_volatile_json_)
+        final_instance = self.predictor.predictions_to_labeled_instances(final_instance, result)[0]
+        success = raw_instance[self.f2a].label != final_instance[self.f2a].label
 
         return sanitize({
             "adv": adv_tokens,
             "raw": raw_tokens,
             "outputs": result,
-            "success": 1 if adv_tokens else 0,
+            "success": success,
             "generation": gid + 1
         })
 

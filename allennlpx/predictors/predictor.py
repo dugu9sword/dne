@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 class Predictor(Predictor_):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._max_tokens: int = None
         self._grad_enabled: bool = False
         self._ensemble_num: int = 1
         self._transform_fn: Callable[[List[str]], List[str]] = None
@@ -98,7 +99,11 @@ class Predictor(Predictor_):
 
     def predict_batch_json(self, json_dicts: List[JsonDict]):
         sent_size = len(json_dicts[-1][self._transform_field].split(" "))
-        max_batch_forward = guess_max_batch(sent_size, guess_bert(self._model))   
+        if self._max_tokens:
+            max_batch_forward = self._max_tokens // sent_size
+        else:
+            max_batch_forward = guess_max_batch(sent_size, guess_bert(self._model))
+#         print(len(json_dicts), max_batch_forward, len(json_dicts)//max_batch_forward)
 
         ret = []
         for group in lazy_groups_of(json_dicts, int(max_batch_forward / self._ensemble_num)):
@@ -132,7 +137,10 @@ class Predictor(Predictor_):
         if self._ensemble_num == 1 and self._transform_fn is None:
             # In a normal mode, we split the instances and feed into the model
             sent_size = len(instances[-1][self._transform_field].tokens)
-            max_batch_forward = guess_max_batch(sent_size, guess_bert(self._model))   
+            if self._max_tokens:
+                max_batch_forward = self._max_tokens // sent_size
+            else:
+                max_batch_forward = guess_max_batch(sent_size, guess_bert(self._model))   
             results = []
             for group in lazy_groups_of(instances, max_batch_forward):
                 results.extend(self._model.forward_on_instances(group))
@@ -145,6 +153,12 @@ class Predictor(Predictor_):
 
     def predict_instance(self, instance):
         return self.predict_batch_instance([instance])[0]
+
+    def _json_to_labeled_instance(self, json):
+        instance = self._json_to_instance(json)
+        result = self.predict_json(json)
+        ret = self.predictions_to_labeled_instances(instance, result)[0]
+        return ret
 
     def set_ensemble_num(self, ensemble_num):
         self._ensemble_num = ensemble_num
@@ -161,6 +175,9 @@ class Predictor(Predictor_):
     def set_grad_enabled(self, grad_enabled):
         self._grad_enabled = grad_enabled
         
+    def set_max_tokens(self, max_tokens):
+        self._max_tokens = max_tokens
+    
     def _weighted_average(self, probs_to_ensemble):
         # w = \sigma (max_prob - other_prob) ^ p
         # p = 0, weighted_average = mean

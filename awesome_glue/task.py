@@ -56,7 +56,7 @@ from allennlp.training.metrics.categorical_accuracy import CategoricalAccuracy
 from allennlpx.training import adv_utils
 from allennlpx.interpret.attackers.searchers import EmbeddingSearcher
 import logging
-from awesome_glue.data_loader import load_data, load_banned_words
+from awesome_glue.data_loader import load_data, load_banned_words, load_neighbour_words
 from allennlp.data.token_indexers import PretrainedTransformerIndexer
 from allennlpx.modules.token_embedders.dirichlet_embedding import DirichletEmbedding
 from luna import shutdown_logging
@@ -382,9 +382,12 @@ class Task:
         elif self.config.attack_method == 'pwws':
             attacker = PWWS(self.predictor, **general_kwargs, **blackbox_kwargs)
         elif self.config.attack_method == 'genetic':
+            general_kwargs['policy'] = SpecifiedPolicy(load_neighbour_words(self.vocab))
+            from allennlp.data.tokenizers.whitespace_tokenizer import WhitespaceTokenizer 
+            self.reader._tokenizer = WhitespaceTokenizer()
             attacker = Genetic(self.predictor,
-                               num_generation=20,
-                               num_population=40,
+                               num_generation=40,
+                               num_population=60,
                                lm_topk=-1,
                                **general_kwargs,
                                **blackbox_kwargs)
@@ -415,6 +418,13 @@ class Task:
                 # yapf:disable
                 result = attacker.attack_from_json(raw_json)
                 adv_json[field_to_change] = allenutil.as_sentence(result['adv'])
+                
+                # sanity check: in case of failure, the changed num should be close to
+                # the max change num.
+                if not result['success']:
+                    print(result['generation'])
+                    diff = text_diff(result['raw'], result['adv'])
+                    print('[Fail statistics]', diff)
 
                 # Count
                 if result['success']:
@@ -451,7 +461,9 @@ class Task:
                     loose_metric.succeed()
                 else:
                     loose_metric.fail()
-                log(f"Aggregated metric: [loose] {loose_metric} [strict] {strict_metric}")
+                log(f"Aggregated metric: " +  
+                    # "[loose] {loose_metric}" +
+                    f"[strict] {strict_metric}")
                 # yapf:enable
             else:
                 loose_metric.escape()

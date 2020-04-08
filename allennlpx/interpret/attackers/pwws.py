@@ -49,7 +49,7 @@ class PWWS(Attacker):
                 elif isinstance(self.policy, SynonymPolicy):
                     nbrs = self.synom_searcher.search(word)
                 elif isinstance(self.policy, SpecifiedPolicy):
-                    nbrs = self.policy.words
+                    nbrs = self.policy.nbrs[word]
                 nbrs = [nbr for nbr in nbrs if nbr not in self.forbidden_tokens]
                 if len(nbrs) > 0:
                     sids_to_change.append(i)

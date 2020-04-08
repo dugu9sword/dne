@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List
+from typing import List, Dict
 
 
 @dataclass
@@ -41,4 +41,5 @@ class SpecifiedPolicy(CandidatePolicy):
     """
     Generate word candidates from a given word list.
     """
-    words: List[str]
+    nbrs: Dict[str, List[str]]
+

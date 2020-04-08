@@ -1,5 +1,6 @@
 import csv
 from typing import Union, Callable, Dict
+import json
 from collections import defaultdict
 from functools import lru_cache
 from .searcher import Searcher
@@ -11,10 +12,13 @@ class CachedWordSearcher(Searcher):
         file_name: str
     ):
         super().__init__()
-        f = csv.reader(open(file_name), delimiter='\t', quoting=csv.QUOTE_NONE)
-        self.nbrs = defaultdict(lambda: [])
-        for row in f:
-            self.nbrs[row[0]] = row[1:]
+        if file_name.endswith(".tsv"):
+            f = csv.reader(open(file_name), delimiter='\t', quoting=csv.QUOTE_NONE)
+            self.nbrs = defaultdict(lambda: [])
+            for row in f:
+                self.nbrs[row[0]] = row[1:]
+        elif file_name.endswith(".json"):
+            self.nbrs = json.load(open(file_name))
 
     def search(self, word):
         words = self.nbrs[word]

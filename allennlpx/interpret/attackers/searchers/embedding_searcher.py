@@ -34,9 +34,6 @@ class EmbeddingSearcher(Searcher):
         else:
             self.idx2word = idx2word
         self._cache = {}
-
-    def search(self, *args, **kwargs):
-        return self.find_neighbours(*args, **kwargs)
     
     def is_pretrained(self, element: Union[int, str]):
         return not all(self.as_vector(element) == 0.0)
@@ -78,6 +75,10 @@ class EmbeddingSearcher(Searcher):
         D, I = index.search(data, topk)
         self._cache[f'D-{measure}-{topk}-{rho}'] = D
         self._cache[f'I-{measure}-{topk}-{rho}'] = I
+
+
+    def search(self, *args, **kwargs):
+        return self.find_neighbours(*args, **kwargs)
 
     @lru_cache(maxsize=None)
     @torch.no_grad()
