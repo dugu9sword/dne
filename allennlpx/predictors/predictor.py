@@ -12,7 +12,7 @@ from allennlpx import allenutil
 import logging
 from functools import lru_cache
 import random
-
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
@@ -97,13 +97,12 @@ class Predictor(Predictor_):
         for hook in hooks:
             hook.remove()
 
-    def predict_batch_json(self, json_dicts: List[JsonDict]):
+    def predict_batch_json(self, json_dicts: List[JsonDict], fast=False):
         sent_size = len(json_dicts[-1][self._transform_field].split(" "))
         if self._max_tokens:
             max_batch_forward = self._max_tokens // sent_size
         else:
             max_batch_forward = guess_max_batch(sent_size, guess_bert(self._model))
-#         print(len(json_dicts), max_batch_forward, len(json_dicts)//max_batch_forward)
 
         ret = []
         for group in lazy_groups_of(json_dicts, int(max_batch_forward / self._ensemble_num)):
@@ -112,22 +111,34 @@ class Predictor(Predictor_):
             bsz = len(group)
             b_en_jsons = []  # batch x ensemble
             for json_dict in group:
-                # Assuming that the values of the dict are all strings, 
-                # so copy = deepcopy
+                # Assuming that the values of the dict are all strings, so copy = deepcopy
                 b_en_jsons.extend([json_dict.copy() for _ in range(self._ensemble_num)])
             if self._transform_fn:
                 tf_in = list(map(lambda x: x[self._transform_field], b_en_jsons))
                 tf_out = self._transform_fn(tf_in)
                 for i in range(bsz):
                     b_en_jsons[i][self._transform_field] = tf_out[i]
-            b_en_insts = self._batch_json_to_instances(b_en_jsons)
-            outputs = self._model.forward_on_instances(b_en_insts)
             
-            for bid in range(bsz):
-                offset = bid * self._ensemble_num
-                probs_to_ensemble = [ele['probs'] for ele in outputs[offset: offset + self._ensemble_num]]
-                en_output = {'probs': self._weighted_average(probs_to_ensemble)}
-                ret.append(en_output)
+            if not fast:
+                b_en_insts = self._batch_json_to_instances(b_en_jsons)
+                outputs = self._model.forward_on_instances(b_en_insts)
+                for bid in range(bsz):
+                    offset = bid * self._ensemble_num
+                    probs_to_ensemble = [ele['probs'] for ele in outputs[offset: offset + self._ensemble_num]]
+                    en_output = {'probs': self._weighted_average(probs_to_ensemble)}
+                    ret.append(en_output)
+            else:
+                t2i = self._model.vocab.get_token_to_index_vocabulary()
+                t2i = defaultdict(lambda: t2i['@@UNKNOWN@@'], t2i)
+                sents = []
+                for json_dict in b_en_jsons:
+                    sents.append([t2i[x] for x in json_dict['sent'].split(' ')])
+                outputs = self._model({"tokens": {"tokens": torch.tensor(sents).cuda()}})
+                for bid in range(bsz):
+                    offset = bid * self._ensemble_num
+                    probs_to_ensemble = outputs['probs'][offset: offset + self._ensemble_num]
+                    en_output = {'probs': self._weighted_average(probs_to_ensemble)}
+                    ret.append(en_output)
         return sanitize(ret)
 
     def predict_json(self, json_dict: JsonDict):

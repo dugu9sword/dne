@@ -35,9 +35,7 @@ class Attacker(Registrable):
         *,  # only accept keyword arguments
         ignore_tokens: List[str] = DEFAULT_IGNORE_TOKENS,
         forbidden_tokens: List[str] = DEFAULT_IGNORE_TOKENS,
-        max_change_num_or_ratio=None,
-        vocab=None,
-        token_embedding=None):
+        max_change_num_or_ratio=None):
         self.predictor = predictor
         self.f2c = field_to_change
         self.f2a = field_to_attack
@@ -48,13 +46,9 @@ class Attacker(Registrable):
         self.max_change_num_or_ratio = max_change_num_or_ratio
 
         self.spacy = SpacyTokenizer()
-        if vocab:
-            self.vocab = vocab
-            self.token_embedding = token_embedding.to(self.model_device)
-        else:
-            self.vocab = self.predictor._model.vocab
-            # self.token_embedding = self._construct_embedding_matrix().to(self.model_device)
-            self.token_embedding = find_embedding_layer(self.predictor._model).weight
+#         self.vocab = self.predictor._model.vocab
+#         # self.token_embedding = self._construct_embedding_matrix().to(self.model_device)
+#         self.token_embedding = find_embedding_layer(self.predictor._model).weight
 
     def attack_from_json(self, inputs: JsonDict) -> JsonDict:
         raise NotImplementedError()
@@ -69,9 +63,6 @@ class Attacker(Registrable):
             else:
                 max_change_num = self.max_change_num_or_ratio
             return max_change_num
-
-    def _tokens_to_instance(self, tokens):
-        return self.predictor._dataset_reader.text_to_instance(" ".join(tokens))
 
     @property
     def model_device(self):
@@ -121,22 +112,3 @@ class Attacker(Registrable):
         # pass all tokens through the fake matrix and create an embedding out of it.
         embedding_matrix = embedder(all_inputs).squeeze()
         return embedding_matrix
-
-    @lazy_property
-    def embed_searcher(self) -> EmbeddingSearcher:
-        return EmbeddingSearcher(embed=self.token_embedding,
-                                 idx2word=self.vocab.get_token_from_index,
-                                 word2idx=self.vocab.get_token_index)
-
-    @lazy_property
-    def synom_searcher(self) -> SynonymSearcher:
-        return SynonymSearcher(vocab_list=self.vocab.get_index_to_token_vocabulary().values())
-
-    @lru_cache(maxsize=None)
-    def neariest_neighbours(self, word, measure, topk, rho):
-        # May be accelerated by caching a the distance
-        vals, idxs = self.embed_searcher.find_neighbours(word, measure=measure, topk=topk, rho=rho)
-        if idxs is None:
-            return []
-        else:
-            return [self.vocab.get_token_from_index(idx) for idx in cast_list(idxs)]

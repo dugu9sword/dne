@@ -21,8 +21,10 @@ class CachedWordSearcher(Searcher):
             self.nbrs = json.load(open(file_name))
 
     def search(self, word):
-        words = self.nbrs[word]
-        return words
+        if word in self.nbrs:
+            return self.nbrs[word]
+        else:
+            return []
 
 
 class CachedIndexSearcher(Searcher):

@@ -8,7 +8,6 @@ import torch
 from allennlp.data import Instance
 from allennlp.data.batch import Batch
 from overrides import overrides
-from allennlpx.interpret.attackers.policies import EmbeddingPolicy
 from luna.registry import setup_registry
 from fastnumbers import fast_real
 
@@ -153,7 +152,7 @@ class EmbedAug(WordTransform):
         #             top_k=10,
         #             model_path = '/home/zhouyi/counter-fitting/word_vectors/counter-fitted-vectors.txt',
         #         )
-        f = csv.reader(open(EmbeddingPolicy('euc', 10, None).cache_name()),
+        f = csv.reader(open('euc-topk-10.txt'),
                        delimiter='\t',
                        quoting=csv.QUOTE_NONE)
         self.nbrs = {}

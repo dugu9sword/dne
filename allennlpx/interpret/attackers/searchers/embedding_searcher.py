@@ -9,7 +9,33 @@ from luna import cast_list, show_mean_std
 from .searcher import Searcher
 
 
-class EmbeddingSearcher(Searcher):
+class WrappedEmbeddingSearcher(Searcher):
+    def __init__(
+        self,
+        embed: torch.Tensor,
+        word2idx: Union[Callable, Dict],
+        idx2word: Union[Callable, Dict],
+        measure,
+        topk,
+        rho
+    ):
+        self._searcher = EmbeddingSearcher(embed, word2idx, idx2word)
+        self._measure = measure
+        self._topk = topk
+        self._rho = rho
+        
+    def is_pretrained(self, word):
+        return self._searcher.is_pretrained(word)
+    
+    def search(self, word):
+        return self._searcher.find_neighbours(word, 
+                                         self._measure, 
+                                         self._topk, 
+                                         self._rho,
+                                         return_words=True)
+
+
+class EmbeddingSearcher:
     """
         When loading a pretrained embedding matrix, some words may not
         occur in the pretrained vectors, thus they may be filled with random
@@ -75,10 +101,6 @@ class EmbeddingSearcher(Searcher):
         D, I = index.search(data, topk)
         self._cache[f'D-{measure}-{topk}-{rho}'] = D
         self._cache[f'I-{measure}-{topk}-{rho}'] = I
-
-
-    def search(self, *args, **kwargs):
-        return self.find_neighbours(*args, **kwargs)
 
     @lru_cache(maxsize=None)
     @torch.no_grad()

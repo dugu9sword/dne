@@ -1,7 +1,4 @@
 class Searcher:
-    def search(self, word):
-        """
-            Given a word, return a list of words that are 
-            close to the word.
-        """
+    def search(self, element):
         raise NotImplementedError
+        

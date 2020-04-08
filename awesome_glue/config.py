@@ -7,7 +7,7 @@ class Config(ProgramArgs):
 
         # basic settings
         self.task_id = "IMDB"
-        self.embed = 'd'   # d/g/_
+        self.embed = ''   # d/g/_
         self.arch = 'cnn'
         self.pretrain = 'glove'
 #         self._model_name = "AGNEWS-lstm-hot.1.5.con"

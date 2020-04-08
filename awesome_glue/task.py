@@ -24,12 +24,8 @@ from allennlp.training.checkpointer import Checkpointer
 from allennlpx import allenutil
 from allennlpx.data.dataset_readers import BertyTSVReader, SpacyTSVReader
 from allennlpx.interpret.attackers.attacker import DEFAULT_IGNORE_TOKENS
-from allennlpx.interpret.attackers import BruteForce, Genetic, HotFlip, PGD, PWWS
-from allennlpx.interpret.attackers.policies import (CandidatePolicy,
-                                                    EmbeddingPolicy,
-                                                    SpecifiedPolicy,
-                                                    SynonymPolicy,
-                                                    UnconstrainedPolicy)
+from allennlpx.interpret.attackers import BruteForce, Genetic, HotFlip, PWWS
+from allennlpx.interpret.attackers.searchers import WrappedEmbeddingSearcher, CachedWordSearcher, EmbeddingSearcher
 from allennlpx.modules.knn_utils import H5pyCollector, build_faiss_index
 from allennlpx.modules.token_embedders.embedding import \
     _read_pretrained_embeddings_file
@@ -54,7 +50,6 @@ from luna.public import Aggregator, auto_create
 from luna.pytorch import set_seed
 from allennlp.training.metrics.categorical_accuracy import CategoricalAccuracy
 from allennlpx.training import adv_utils
-from allennlpx.interpret.attackers.searchers import EmbeddingSearcher
 import logging
 from awesome_glue.data_loader import load_data, load_banned_words, load_neighbour_words
 from allennlp.data.token_indexers import PretrainedTransformerIndexer
@@ -358,7 +353,11 @@ class Task:
         if self.config.attack_size != -1:
             data_to_attack = random.sample(data_to_attack, k=self.config.attack_size)
 
+        # Speed up the predictor
+        self.predictor.set_max_tokens(360000)
+            
         # Set up the attacker
+        spacy_vocab, spacy_weight = self.get_spacy_vocab_and_vec()
         forbidden_words = load_banned_words(self.config.task_id)
         # forbidden_words += stopwords.words("english")
         general_kwargs = {
@@ -368,29 +367,26 @@ class Task:
             "field_to_change": field_to_change,
             "field_to_attack": 'label',
             "use_bert": self.config.arch == 'bert',
-            "policy": EmbeddingPolicy(measure='euc', topk=10, rho=None),
-        }
-        spacy_vocab, spacy_weight = self.get_spacy_vocab_and_vec()
-        blackbox_kwargs = {
-            "vocab": spacy_vocab,
-            "token_embedding": spacy_weight
+            "searcher": WrappedEmbeddingSearcher(
+                embed=spacy_weight, 
+                word2idx=spacy_vocab.get_token_index,
+                idx2word=spacy_vocab.get_token_from_index,
+                measure='euc', topk=10, rho=None
+            ),
         }
         if self.config.attack_method == 'hotflip':
             attacker = HotFlip(self.predictor, **general_kwargs)
         elif self.config.attack_method == 'bruteforce':
-            attacker = BruteForce(self.predictor, **general_kwargs, **blackbox_kwargs)
+            attacker = BruteForce(self.predictor, **general_kwargs)
         elif self.config.attack_method == 'pwws':
-            attacker = PWWS(self.predictor, **general_kwargs, **blackbox_kwargs)
+            attacker = PWWS(self.predictor, **general_kwargs)
         elif self.config.attack_method == 'genetic':
-            general_kwargs['policy'] = SpecifiedPolicy(load_neighbour_words(self.vocab))
-            from allennlp.data.tokenizers.whitespace_tokenizer import WhitespaceTokenizer 
-            self.reader._tokenizer = WhitespaceTokenizer()
+            general_kwargs['searcher'] = CachedWordSearcher("external_data/counter_fitted_neighbors.json")
             attacker = Genetic(self.predictor,
                                num_generation=40,
                                num_population=60,
                                lm_topk=-1,
-                               **general_kwargs,
-                               **blackbox_kwargs)
+                               **general_kwargs)
         else:
             raise Exception()
 
@@ -422,7 +418,8 @@ class Task:
                 # sanity check: in case of failure, the changed num should be close to
                 # the max change num.
                 if not result['success']:
-                    print(result['generation'])
+                    if "generation" in result:
+                        print(result['generation'])
                     diff = text_diff(result['raw'], result['adv'])
                     print('[Fail statistics]', diff)
 

@@ -15,11 +15,6 @@ from allennlp.modules.text_field_embedders.text_field_embedder import \
 
 from allennlpx.interpret.attackers.attacker import (DEFAULT_IGNORE_TOKENS,
                                                     Attacker)
-from allennlpx.interpret.attackers.policies import (CandidatePolicy,
-                                                    EmbeddingPolicy,
-                                                    UnconstrainedPolicy,
-                                                    SpecifiedPolicy,
-                                                    SynonymPolicy)
 
 
 class HotFlip(Attacker):
@@ -29,23 +24,15 @@ class HotFlip(Attacker):
     def __init__(self, 
              predictor, 
              *,
-             policy: CandidatePolicy= None,
+             searcher,
              **kwargs,
             ):
         super().__init__(predictor, **kwargs)
-        self.policy = policy
+        self.searcher = searcher
         
     @lru_cache(maxsize=None)
     def special_mask(self, word):
-        if isinstance(self.policy, EmbeddingPolicy):
-            good = self.neariest_neighbours(word, 
-                                            self.policy.measure, 
-                                            self.policy.topk, 
-                                            self.policy.rho)
-        elif isinstance(self.policy, SynonymPolicy):
-            good = self.synom_searcher.search(word)
-        elif isinstance(self.policy, SpecifiedPolicy):
-            good = self.policy.words
+        good = self.searcher.search(word)
         all_words = self.vocab.get_index_to_token_vocabulary().values()
         mask = torch.zeros([len(all_words)])
         if len(good) > 0:

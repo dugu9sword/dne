@@ -12,12 +12,7 @@ from allennlp.modules.text_field_embedders.text_field_embedder import \
 
 from allennlpx.interpret.attackers.attacker import (DEFAULT_IGNORE_TOKENS,
                                                     Attacker)
-from allennlpx.interpret.attackers.policies import (CandidatePolicy,
-                                                    EmbeddingPolicy,
-                                                    SpecifiedPolicy,
-                                                    SynonymPolicy)
 from luna import lazy_property
-
 
 class Genetic(Attacker):
     """
@@ -29,94 +24,98 @@ class Genetic(Attacker):
         *,
         num_generation=5,
         num_population=20,
-        policy: CandidatePolicy = None,
+        searcher = None,
         lm_topk=4,  # if lm_topk=-1, the lm re-ranking will be passed
         **kwargs):
         super().__init__(predictor, **kwargs)
         self.num_generation = num_generation
         self.num_population = num_population
-        self.policy = policy
+        self.searcher = searcher
         self.lm_topk = lm_topk
 
         # during an attack, there may be many temp variables
         self.ram_pool = {}
-
-    def perturb(self, raw_tokens, cur_tokens, target_idx=-1):
+        
+    def evolve(self, P, target_idx = -1):
         _volatile_json_ = self.ram_pool['volatile_json']
-
-        # randomly select a word
         legal_sids = self.ram_pool['legal_sids']
-        sid = random.choice(legal_sids)
-        cands = self.ram_pool['nbr_dct'][sid]
+        nbr_dct = self.ram_pool['nbr_dct']
+        raw_tokens = self.ram_pool['raw_tokens']
+        
+        gen_fitnesses = np.array([ele['fitness'] for ele in P])
+        best = P[np.argmax(gen_fitnesses)]
+        
+        new_P = [best]
 
-        # re-ranking words with language model
-        if self.lm_topk > 0:
-            cand_sents = []
+        # Crossover
+        children = []
+        select_prob = gen_fitnesses / gen_fitnesses.sum()
+        for cid in range(self.num_population - 1):
+            p1, p2 = np.random.choice(P, 2, False, select_prob)
+            c = [random.sample([w1, w2], 1)[0] \
+                            for (w1, w2) in zip(p1['individual'], p2['individual'])]
+            children.append(c)
+
+        # Batch perturbation
+        _perturbed_sids = {} # {cid: sid}
+        _jsons = []  # concatenate all jsons
+        _offsets = {}  # {cid: [start_offset, number_of_jsons]}
+        for cid in range(self.num_population - 1):
+            child_tokens = children[cid]
+            # randomly select a word
+            sid = random.choice(legal_sids)
+            cands = nbr_dct[sid]
+            # replace with candidate word
+            tmp_jsons = []
             for cand in cands:
-                tmp_tokens = copy.copy(cur_tokens)
+                tmp_tokens = copy.copy(child_tokens)
                 tmp_tokens[sid] = cand
-                cand_sents.append(" ".join(tmp_tokens))
-            scores = self.lang_model.score(cand_sents)
-            ppls = np.array([
-                ele['positional_scores'].mean().neg().exp().item()
-                for ele in scores
-            ])
-            cand_idxs = ppls.argsort()[:self.lm_topk]
-            cands = [cands[i] for i in cand_idxs]
+                _volatile_json_[self.f2c] = " ".join(tmp_tokens)
+                tmp_jsons.append(_volatile_json_.copy())
+            _perturbed_sids[cid] = sid
+            _offsets[cid] = (len(_jsons), len(tmp_jsons))
+            _jsons.extend(tmp_jsons)
 
-        # select the one that maximize the drop
+        # Batch forward 
         _volatile_json_[self.f2c] = " ".join(raw_tokens)
-        tmp_jsons = [_volatile_json_.copy()]
-        for cand in cands:
-            tmp_tokens = copy.copy(cur_tokens)
-            tmp_tokens[sid] = cand
-            _volatile_json_[self.f2c] = " ".join(tmp_tokens)
-            tmp_jsons.append(_volatile_json_.copy())
-        results = self.predictor.predict_batch_json(tmp_jsons)
-#         print(results)
+        raw_result = self.predictor.predict_json(_volatile_json_)
+        _results= self.predictor.predict_batch_json(_jsons, fast=True)
 
-        other_results = results[1:]
-        probs = np.array([result['probs'] for result in results])
-        other_probs = probs[1:]
-        true_idx = np.argmax(probs[0])
+        # Stronger one will survive
+        true_idx = np.argmax(raw_result['probs'])
+        for cid in range(self.num_population - 1):
+            child_tokens = children[cid]
+            _start, _num = _offsets[cid]
+            results = _results[_start:_start + _num]
+            probs = np.array([result['probs'] for result in results])
 
-        if target_idx == -1:
-            true_probs = probs[:, true_idx]
-            target_probs = 1 - true_probs
-        else:
-            target_probs = probs[:, target_idx]
+            if target_idx == -1:
+                true_probs = probs[:, true_idx]
+                perturb_fitnesses = 1 - true_probs
+            else:
+                perturb_fitnesses = probs[:, target_idx]
+            
+            perturb_fitnesses += 1e-6
+            cand_idx = np.argmax(perturb_fitnesses)
+            cand_fitness = np.max(perturb_fitnesses)
 
+            if target_idx == -1:
+                success = 1 if np.argmax(probs[cand_idx]) != true_idx else 0
+            else:
+                success = 1 if np.argmax(probs[cand_idx]) == target_idx else 0
 
-#         raw_prob = true_probs[0]
-        fitnesses = target_probs[1:]
-        cand_idx = np.argmax(fitnesses)
-        cand_fitness = np.max(fitnesses)
+            final_tokens = copy.copy(child_tokens)
+            sid = _perturbed_sids[cid]
+            final_tokens[sid] = nbr_dct[sid][cand_idx]
 
-        if target_idx == -1:
-            success = 1 if np.argmax(other_probs[cand_idx]) != true_idx else 0
-#             success = 1 if other_probs[cand_idx][true_idx] < 0.3 else 0
-        else:
-            success = 1 if np.argmax(
-                other_probs[cand_idx]) == target_idx else 0
-
-        final_tokens = copy.copy(cur_tokens)
-        final_tokens[sid] = cands[cand_idx]
-
-        #         print(final_tokens)
-        return {
-            "result": other_results[cand_idx],
-            "individual": final_tokens,
-            "fitness": cand_fitness,
-            "success": success
-        }
-
-    def crossover(self, a_tokens, b_tokens):
-        coins = np.random.randint(0, 2, len(a_tokens))
-        ret = a_tokens.copy()
-        for i in range(len(ret)):
-            if coins[i] == 1:
-                ret[i] = b_tokens[i]
-        return ret
+            next_gen =  {
+                "result": results[cand_idx],
+                "individual": final_tokens,
+                "fitness": cand_fitness,
+                "success": success
+            }
+            new_P.append(next_gen)
+        return new_P
 
     @torch.no_grad()
     def attack_from_json(self,
@@ -129,18 +128,9 @@ class Genetic(Attacker):
         legal_sids = []
         nbr_dct = {}
         for i in range(len(raw_tokens)):
-            if raw_tokens[i] not in self.ignore_tokens and self.embed_searcher.is_pretrained(
-                        raw_tokens[i]):
+            if raw_tokens[i] not in self.ignore_tokens:
                 lucky_dog = raw_tokens[i]  # use the original word
-                if isinstance(self.policy, EmbeddingPolicy):
-                    cands = self.neariest_neighbours(lucky_dog,
-                                                     self.policy.measure,
-                                                     self.policy.topk,
-                                                     self.policy.rho)
-                elif isinstance(self.policy, SynonymPolicy):
-                    cands = self.synom_searcher.search(lucky_dog)
-                elif isinstance(self.policy, SpecifiedPolicy):
-                    cands = self.policy.nbrs[lucky_dog]
+                cands = self.searcher.search(lucky_dog)
                 cands = [
                     ele for ele in cands if ele not in self.forbidden_tokens
                 ]
@@ -150,6 +140,7 @@ class Genetic(Attacker):
         self.ram_pool['legal_sids'] = legal_sids
         self.ram_pool['nbr_dct'] = nbr_dct
         self.ram_pool['volatile_json'] = _volatile_json_
+        self.ram_pool['raw_tokens'] = raw_tokens
 
         adv_tokens = raw_tokens.copy()
         gid = -1
@@ -157,16 +148,12 @@ class Genetic(Attacker):
         if len(legal_sids) != 0:
             # initialzie the population
             P = [
-                self.perturb(raw_tokens, raw_tokens)
+                {"individual": raw_tokens, "fitness": 1e-6, "success": 0}
                 for _ in range(self.num_population)
             ]
 
             for gid in range(self.num_generation):
-            # after G generation, the maximum change maybe 2^(G-1)
-#             max_change_num = self.max_change_num(len(raw_tokens))
-#             for gid in range(min(self.num_generation, max_change_num)):
                 fitnesses = np.array([ele['fitness'] for ele in P])
-                # print(fitnesses)
                 best = P[np.argmax(fitnesses)]
                 print("generation ", gid, ":", best['fitness'])
                 if best['success']:
@@ -178,15 +165,7 @@ class Genetic(Attacker):
                         "generation": gid + 1
                     })
                 else:
-                    new_P = [best]
-                    for _ in range(self.num_population - 1):
-                        select_prob = fitnesses / fitnesses.sum()
-                        p1, p2 = np.random.choice(P, 2, False, select_prob)
-                        child_tokens = self.crossover(p1['individual'],
-                                                      p2['individual'])
-                        next_gen = self.perturb(raw_tokens, child_tokens)
-                        new_P.append(next_gen)
-                    P = new_P
+                    P = self.evolve(P)
         
         adv_tokens = best['individual']
         _volatile_json_[self.f2c] = " ".join(adv_tokens)
@@ -203,13 +182,4 @@ class Genetic(Attacker):
             "success": success,
             "generation": gid + 1
         })
-
-    @lazy_property
-    def lang_model(self):
-        en_lm = torch.hub.load('pytorch/fairseq',
-                               'transformer_lm.wmt19.en',
-                               tokenizer='moses',
-                               bpe='fastbpe')
-        en_lm.eval()
-        en_lm.cuda()
-        return en_lm
+        

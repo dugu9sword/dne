@@ -11,8 +11,6 @@ from allennlp.modules.text_field_embedders.text_field_embedder import \
     TextFieldEmbedder
 
 from allennlpx.interpret.attackers.attacker import (DEFAULT_IGNORE_TOKENS, Attacker)
-from allennlpx.interpret.attackers.policies import (CandidatePolicy, EmbeddingPolicy,
-                                                    SpecifiedPolicy, SynonymPolicy)
 from allennlpx import allenutil
 
 class PWWS(Attacker):
@@ -20,9 +18,9 @@ class PWWS(Attacker):
     ACL 2019 - Generating Natural Language Adversarial Examples through
     Probability Weighted Word Saliency
     """
-    def __init__(self, predictor, *, policy: CandidatePolicy = None, **kwargs):
+    def __init__(self, predictor, *, searcher, **kwargs):
         super().__init__(predictor, **kwargs)
-        self.policy = policy
+        self.searcher = searcher
 
     @torch.no_grad()
     def attack_from_json(
@@ -43,13 +41,7 @@ class PWWS(Attacker):
         for i in range(len(raw_tokens)):
             if raw_tokens[i] not in self.ignore_tokens:
                 word = raw_tokens[i]
-                if isinstance(self.policy, EmbeddingPolicy):
-                    nbrs = self.neariest_neighbours(word, self.policy.measure, self.policy.topk,
-                                                    self.policy.rho)
-                elif isinstance(self.policy, SynonymPolicy):
-                    nbrs = self.synom_searcher.search(word)
-                elif isinstance(self.policy, SpecifiedPolicy):
-                    nbrs = self.policy.nbrs[word]
+                nbrs = self.searcher.search(word)
                 nbrs = [nbr for nbr in nbrs if nbr not in self.forbidden_tokens]
                 if len(nbrs) > 0:
                     sids_to_change.append(i)
@@ -87,10 +79,9 @@ class PWWS(Attacker):
                 "adv": raw_tokens,
                 "raw": raw_tokens,
                 "outputs": self.predictor.predict_json(inputs),
-                "changed": 0,
                 "success": 0
             })
-        _results = self.predictor.predict_batch_json(_jsons)
+        _results = self.predictor.predict_batch_json(_jsons, fast=True)
 
         # Compute the word saliency
         repl_dct = {}  # {idx: "the replaced word"}
@@ -129,6 +120,5 @@ class PWWS(Attacker):
             "adv": final_tokens,
             "raw": raw_tokens,
             "outputs": result,
-            "changed": i + 1,
             "success": 1 if successful else 0
         })
