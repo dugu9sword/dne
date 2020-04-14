@@ -2,6 +2,7 @@ advdae/
 fairseq*
 fsgec/
 datasets/*
+*.bak/*
 *.h5py
 *.h5
 *.pt

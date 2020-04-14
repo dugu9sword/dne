@@ -1,4 +1,4 @@
-from typing import Dict, List, Any
+from typing import Dict
 
 import torch
 
@@ -17,7 +17,6 @@ from allennlp.modules.token_embedders import TokenEmbedder
 from allennlp.modules.text_field_embedders import BasicTextFieldEmbedder
 from allennlp.training.optimizers import DenseSparseAdam
 from allennlp.modules.seq2seq_encoders.pytorch_seq2seq_wrapper import LstmSeq2SeqEncoder
-from allennlp.modules.seq2seq_encoders.pytorch_transformer_wrapper import PytorchTransformer
 
 
 class ESIM(Model):

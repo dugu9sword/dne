@@ -10,6 +10,7 @@ from allennlp.data.batch import Batch
 from overrides import overrides
 from luna.registry import setup_registry
 from fastnumbers import fast_real
+from allennlpx.interpret.attackers.searchers import CachedWordSearcher
 
 register, R = setup_registry('transforms')
 
@@ -31,7 +32,7 @@ def transform_collate(
 
 class Transform:
     def __call__(self, xs: List[str]) -> List[str]:
-        raise NotImplemented
+        raise NotImplementedError
 
 
 class WordTransform(Transform):
@@ -152,12 +153,10 @@ class EmbedAug(WordTransform):
         #             top_k=10,
         #             model_path = '/home/zhouyi/counter-fitting/word_vectors/counter-fitted-vectors.txt',
         #         )
-        f = csv.reader(open('euc-topk-10.txt'),
-                       delimiter='\t',
-                       quoting=csv.QUOTE_NONE)
-        self.nbrs = {}
-        for row in f:
-            self.nbrs[row[0]] = row[1:]
+        self.searcher = CachedWordSearcher(
+            "external_data/euc-top8.json",
+            None
+        )
 
     @overrides
     def __call__(self, xs):
@@ -168,8 +167,9 @@ class EmbedAug(WordTransform):
             #             ys.append(self.aug.substitute(x))
             for cid in random.sample(range(len(x_split)), k=self.change_num(len(x_split))):
                 word = x_split[cid]
-                if word in self.nbrs:
-                    x_split[cid] = random.choice(self.nbrs[word])
+                nbrs = self.searcher.search(word)
+                if len(nbrs) > 1:
+                    x_split[cid] = random.choice(nbrs)
             ys.append(" ".join(x_split))
         return ys
 

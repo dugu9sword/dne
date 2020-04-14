@@ -7,16 +7,18 @@ class Config(ProgramArgs):
 
         # basic settings
         self.task_id = "IMDB"
-        self.embed = ''   # d/g/_
+        self.embed = 'd'   # d/g/_
         self.arch = 'cnn'
-        self.pretrain = 'glove'
+        self.pool = 'max'
+        self.pretrain = 'counter'
 #         self._model_name = "AGNEWS-lstm-hot.1.5.con"
-        self._model_name = ""   # if set to tmp, existing models will be overrided
-        self.mode = 'attack'
+        self._model_name = "tmp"   # if set to tmp, existing models will be overrided
+        self.mode = 'train'
         
         # dirichlet settings
-        self.dir_temp = 0.2
-        
+        self.dir_temp = 1.0
+        self.dist_reg = False
+    
         # graph settings
         self.gnn_type = 'mean'
         self.gnn_hop = 1
@@ -27,7 +29,6 @@ class Config(ProgramArgs):
         self.adv_iter = 0
         self.adv_policy = 'hot'    # hot -> hotflip, rdm -> random
         self.adv_replace_num = 0.15
-        self.adv_constraint = True
 
         # predictor settings
         self.pred_ensemble = 16
@@ -36,9 +37,8 @@ class Config(ProgramArgs):
 
         # attack settings
         self.attack_method = 'genetic'
-        self.attack_vectors = 'counter'
         self.attack_data_split = 'test'
-        self.attack_size = 200
+        self.attack_size = 100
         # self.attack_data_split = 'train'
         # self.attack_size = -1
         self.attack_gen_adv = False
@@ -49,7 +49,7 @@ class Config(ProgramArgs):
         # other settings
         self.alchemist = False
         self.seed = 2
-        self.cuda = 2
+        self.cuda = 0
 
     @property
     def tokenizer(self):
@@ -61,20 +61,18 @@ class Config(ProgramArgs):
     @property
     def model_name(self):
         if not self._model_name:
-            model_name = f"{self.task_id}-{self.embed + self.arch}"
+            model_name = f"{self.task_id}-{self.embed + self.arch}-{self.pretrain}-{self.pool}"
             assert not (self.aug_data != '' and self.adv_iter != 0)
             if self.aug_data != '':
                 model_name += '-aug'
             if self.embed == 'd':
                 model_name += f'-{self.dir_temp}'
+                if self.dist_reg:
+                    model_name += '-reg'
             if self.embed == 'g':
                 model_name += f'-{self.gnn_type}-{self.gnn_hop}'
             if self.adv_iter != 0:
                 model_name += f'-{self.adv_policy}.{self.adv_iter}.{self.adv_replace_num}'
-                if self.adv_constraint:
-                    model_name += '.con'
-                else:
-                    model_name += '.unc'
             return model_name
         else:
             return self._model_name

@@ -2,33 +2,23 @@ import csv
 import sys
 from collections import Counter
 from functools import partial
-from copy import deepcopy
-import random
+import json
 
 import numpy as np
 import pandas
 import torch
-from typing import Dict, List, Any
 from allennlp.data.dataloader import DataLoader, allennlp_collate
 from allennlp.data.samplers import BucketBatchSampler
 from allennlp.data.vocabulary import Vocabulary
-from allennlp.modules.text_field_embedders import TextFieldEmbedder
-from allennlpx.training.adv_trainer import AdvTrainer, EpochCallback, BatchCallback
+from allennlpx.training.adv_trainer import AdvTrainer
 from allennlp.training.util import evaluate
-from nltk.corpus import stopwords
 from tqdm import tqdm
 import pathlib
 import shutil
-from allennlp.training.checkpointer import Checkpointer
 
 from allennlpx import allenutil
-from allennlpx.data.dataset_readers import BertyTSVReader, SpacyTSVReader
-from allennlpx.interpret.attackers.attacker import DEFAULT_IGNORE_TOKENS
 from allennlpx.interpret.attackers import BruteForce, Genetic, HotFlip, PWWS
-from allennlpx.interpret.attackers.searchers import WrappedEmbeddingSearcher, CachedWordSearcher, EmbeddingSearcher
-from allennlpx.modules.knn_utils import H5pyCollector, build_faiss_index
-from allennlpx.modules.token_embedders.embedding import \
-    _read_pretrained_embeddings_file
+from allennlpx.interpret.attackers.searchers import EmbeddingSearcher, CachedWordSearcher, EmbeddingNbrUtil, WordIndexSearcher
 from allennlpx.modules.token_embedders.graph_funcs import MeanAggregator, PoolingAggregator
 from allennlpx.predictors import TextClassifierPredictor, BiTextClassifierPredictor
 from awesome_glue.config import Config
@@ -36,25 +26,21 @@ from awesome_glue.vanilla_classifier import Classifier
 from awesome_glue.esim import ESIM
 from awesome_glue import embed_util
 from awesome_glue.bert_classifier import BertClassifier
-from awesome_glue.task_specs import TASK_SPECS, is_sentence_pair, is_str_label
-from awesome_glue.transforms import (BackTrans, DAE, BertAug, Crop, EmbedAug,
-                                     Identity, RandDrop, SynAug,
-                                     transform_collate,
+from awesome_glue.task_specs import TASK_SPECS, is_sentence_pair
+from awesome_glue.transforms import (transform_collate,
                                      parse_transform_fn_from_args)
 from awesome_glue.utils import (AttackMetric, FreqUtil, set_environments,
-                                text_diff, get_neighbours, DirichletAnnealing, 
-                                AnnealingTemperature, read_hyper)
-from luna import flt2str, ram_write, ram_read
+                                text_diff, get_neighbours, get_neighbour_matrix,DirichletAnnealing, read_hyper)
+from luna import flt2str, ram_write
 from luna.logging import log
-from luna.public import Aggregator, auto_create
+from luna.public import Aggregator, auto_create, numpy_seed
 from luna.pytorch import set_seed
 from allennlp.training.metrics.categorical_accuracy import CategoricalAccuracy
+from allennlp.training.checkpointer import Checkpointer
 from allennlpx.training import adv_utils
 import logging
-from awesome_glue.data_loader import load_data, load_banned_words, load_neighbour_words
-from allennlp.data.token_indexers import PretrainedTransformerIndexer
+from awesome_glue.data_loader import load_banned_words, load_data
 from allennlpx.modules.token_embedders.dirichlet_embedding import DirichletEmbedding
-from luna import shutdown_logging
 
 logging.getLogger('transformers').setLevel(logging.CRITICAL)
 
@@ -83,25 +69,26 @@ class Task:
             if config.embed == "":
                 token_embedder = embed_util.build_embedding(**embed_args)
             elif config.embed == "d":
-                _, spacy_vec = self.get_spacy_vocab_and_vec()
-                neighbours, nbr_mask = get_neighbours(spacy_vec,
-                                                      return_edges=False)
+                counter_searcher = CachedWordSearcher(
+                    "external_data/IMDB-euc-top8.json",
+                    self.vocab.get_token_to_index_vocabulary("tokens")
+                )
+                neighbours = get_neighbour_matrix(self.vocab, counter_searcher)
                 token_embedder = embed_util.build_dirichlet_embedding(
                     **embed_args,
                     temperature=config.dir_temp,
-                    neighbours=neighbours.cuda(),
-                    nbr_mask=nbr_mask.cuda())
+                    neighbours=neighbours.cuda())
             elif config.embed == "g":
-                _, spacy_vec = self.get_spacy_vocab_and_vec()
-                edges = get_neighbours(spacy_vec, return_edges=True)
-                token_embedder = embed_util.build_graph_embedding(
-                    **embed_args,
-                    gnn={
-                        "mean": MeanAggregator(300),
-                        "pool": PoolingAggregator(300)
-                    }[config.gnn_type],
-                    edges=edges.cuda(),
-                    hop=config.gnn_hop)
+                pass
+#                 edges = get_neighbours(spacy_vec, return_edges=True)
+#                 token_embedder = embed_util.build_graph_embedding(
+#                     **embed_args,
+#                     gnn={
+#                         "mean": MeanAggregator(300),
+#                         "pool": PoolingAggregator(300)
+#                     }[config.gnn_type],
+#                     edges=edges.cuda(),
+#                     hop=config.gnn_hop)
             else:
                 raise Exception()
 
@@ -110,6 +97,7 @@ class Task:
                 vocab=self.vocab,
                 token_embedder=token_embedder,
                 arch=config.arch,
+                pool=config.pool,
                 num_labels=TASK_SPECS[config.task_id]['num_labels'])
         elif config.arch == 'esim':
             self.model = ESIM(
@@ -122,8 +110,7 @@ class Task:
                 num_labels=TASK_SPECS[config.task_id]['num_labels'])
             if config.embed == "d":
                 bert_embeddings = self.model.bert_embedder.transformer_model.embeddings
-                bert_vocab, bert_vec = embed_util.build_bert_vocab_and_vec(
-                    "counter")
+                bert_vocab = embed_util.get_bert_vocab()
                 neighbours, nbr_mask = get_neighbours(bert_vec,
                                                       return_edges=False)
                 token_embedder = DirichletEmbedding(
@@ -132,7 +119,6 @@ class Task:
                     weight=bert_embeddings.word_embeddings.weight,
                     temperature=config.dir_temp,
                     neighbours=neighbours.cuda(),
-                    nbr_mask=nbr_mask.cuda(),
                     sparse=False,
                     trainable=True)
                 bert_embeddings.word_embeddings = token_embedder
@@ -168,6 +154,7 @@ class Task:
             self.predictor.set_transform_field("sent")
 
     def train(self):
+        # ram_write('dist_reg', self.config.dist_reg)
         read_hyper_ = partial(read_hyper, self.config.task_id, self.config.arch)
         num_epochs = int(read_hyper_("num_epochs"))
         batch_size = int(read_hyper_("batch_size"))
@@ -190,25 +177,22 @@ class Task:
             self.train_data.instances.extend(aug_data.instances)
 
         # Set up the adversarial training policy
-        if self.config.adv_constraint:
-            # We use an external weight to generate candidates for a word to replace.
-            # The external weight must be corresponding to the internal weight!
-            if self.config.arch == 'bert':
-                adv_vocab, adv_weight = embed_util.build_bert_vocab_and_vec('counter')
-            else:
-                adv_vocab, adv_weight = self.get_spacy_vocab_and_vec()
-            searcher = EmbeddingSearcher(
-                embed=adv_weight,
-                idx2word=adv_vocab.get_token_from_index,
-                word2idx=adv_vocab.get_token_index)
-            searcher.pre_search('euc', 10)
+        if self.config.arch == 'bert':
+            model_vocab = embed_util.get_bert_vocab()
         else:
-            searcher = None
+            model_vocab = self.vocab
         # yapf: disable
         policy_args = {
             "adv_iteration": self.config.adv_iter,
             "replace_num": self.config.adv_replace_num,
-            "searcher": searcher,
+            "searcher": WordIndexSearcher(
+                            CachedWordSearcher(
+                                "external_data/ibp-nbrs.json",
+                                model_vocab.get_token_to_index_vocabulary("tokens")
+                            ),
+                            word2idx=model_vocab.get_token_index,
+                            idx2word=model_vocab.get_token_from_index,
+                        ),
             'adv_field': 'sent2' if is_sentence_pair(self.config.task_id) else 'sent'
         }
         # yapf: enable
@@ -232,8 +216,6 @@ class Task:
         )
         # Set callbacks
         epoch_callbacks = []
-        # if self.config.embed == 'd':
-        #     epoch_callbacks.append(AnnealingTemperature(anneal_epoch_num=5))
         batch_callbacks = []
         if self.config.embed == 'd':
             batch_callbacks.append(DirichletAnnealing(
@@ -263,9 +245,9 @@ class Task:
         trainer.train()
 
     def from_pretrained(self):
-        # ckpter = Checkpointer(f'saved/models/{self.config.model_name}')
-        # model_path = ckpter.find_latest_checkpoint()[0]
-        model_path = f'saved/models/{self.config.model_name}/best.th'
+        ckpter = Checkpointer(f'saved/models/{self.config.model_name}')
+        model_path = ckpter.find_latest_checkpoint()[0]
+        # model_path = f'saved/models/{self.config.model_name}/best.th'
         print(f'Load model from {model_path}')
         self.model.load_state_dict(torch.load(model_path))
         self.model.eval()
@@ -332,9 +314,7 @@ class Task:
         print(Counter(df["label"].tolist()))
         print(attack_metric)
 
-    def attack(self):
-        self.from_pretrained()
-
+    def downsample_data_to_attack(self):
         # Set up the data to attack
         if self.config.attack_data_split == 'train':
             data_to_attack = self.train_data
@@ -351,13 +331,30 @@ class Task:
                    data_to_attack))
 
         if self.config.attack_size != -1:
-            data_to_attack = random.sample(data_to_attack, k=self.config.attack_size)
+            with numpy_seed(19491001):
+                idxes = np.random.permutation(len(data_to_attack))
+                data_to_attack = [data_to_attack[i] for i in idxes[:self.config.attack_size]]
+        return data_to_attack
+
+    def attack(self):
+        self.from_pretrained()
+
+        data_to_attack = self.downsample_data_to_attack()
+        if is_sentence_pair(self.config.task_id):
+            field_to_change = 'sent2'
+        else:
+            field_to_change = 'sent'
 
         # Speed up the predictor
         self.predictor.set_max_tokens(360000)
             
         # Set up the attacker
-        spacy_vocab, spacy_weight = self.get_spacy_vocab_and_vec()
+        # Whatever bert/non-bert model, we use the spacy vocab
+        spacy_vocab = load_data(self.config.task_id, "spacy")['vocab']
+        searcher = CachedWordSearcher(
+            "external_data/ibp-nbrs.json",
+            spacy_vocab.get_token_to_index_vocabulary("tokens")
+        )
         forbidden_words = load_banned_words(self.config.task_id)
         # forbidden_words += stopwords.words("english")
         general_kwargs = {
@@ -367,12 +364,7 @@ class Task:
             "field_to_change": field_to_change,
             "field_to_attack": 'label',
             "use_bert": self.config.arch == 'bert',
-            "searcher": WrappedEmbeddingSearcher(
-                embed=spacy_weight, 
-                word2idx=spacy_vocab.get_token_index,
-                idx2word=spacy_vocab.get_token_from_index,
-                measure='euc', topk=10, rho=None
-            ),
+            "searcher": searcher
         }
         if self.config.attack_method == 'hotflip':
             attacker = HotFlip(self.predictor, **general_kwargs)
@@ -381,11 +373,11 @@ class Task:
         elif self.config.attack_method == 'pwws':
             attacker = PWWS(self.predictor, **general_kwargs)
         elif self.config.attack_method == 'genetic':
-            general_kwargs['searcher'] = CachedWordSearcher("external_data/counter_fitted_neighbors.json")
             attacker = Genetic(self.predictor,
                                num_generation=40,
                                num_population=60,
                                lm_topk=-1,
+                               lm_constraints=json.load(open(f"external_data/ibp-nbrs.{self.config.task_id}.lm.json")),
                                **general_kwargs)
         else:
             raise Exception()
@@ -400,6 +392,7 @@ class Task:
         raw_counter = Counter()
         adv_counter = Counter()
         for i in tqdm(range(len(data_to_attack))):
+            log(f"Attacking instance {i}...")
             raw_json = allenutil.as_json(data_to_attack[i])
             adv_json = raw_json.copy()
 
@@ -463,6 +456,7 @@ class Task:
                     f"[strict] {strict_metric}")
                 # yapf:enable
             else:
+                log("Skipping the current instance since the predicted label is wrong.")
                 loose_metric.escape()
                 strict_metric.escape()
 
@@ -487,17 +481,6 @@ class Task:
               "[strict] Accu.before%:", round(strict_metric.accuracy_before_attack, 2),
               "Accu.after%:", round(strict_metric.accuracy_after_attack, 2))
         # yapf:enable
-
-    def get_spacy_vocab_and_vec(self):
-        if self.config.tokenizer != 'spacy':
-            spacy_data = load_data(self.config.task_id, "spacy")
-            spacy_vocab: Vocabulary = spacy_data['vocab']
-        else:
-            spacy_vocab = self.vocab
-        spacy_weight = embed_util.read_weight(
-            spacy_vocab, self.config.attack_vectors,
-            f"{self.config.task_id}-{self.config.attack_vectors}.vec")
-        return spacy_vocab, spacy_weight
 
 #     def build_manifold(self):
 #         spacy_data = load_data(self.config.task_id, "spacy")

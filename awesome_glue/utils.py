@@ -1,6 +1,4 @@
 import os
-import pathlib
-from collections import defaultdict
 
 from allennlp.data import Vocabulary
 from tabulate import tabulate
@@ -12,6 +10,7 @@ from allennlpx.training.adv_trainer import EpochCallback, BatchCallback
 from typing import Dict, Any
 import logging
 import pandas
+from luna import batch_pad
 
 logger = logging.getLogger(__name__)
 
@@ -61,33 +60,24 @@ class DirichletAnnealing(BatchCallback):
             )
 
 
-class AnnealingTemperature(EpochCallback):
-    def __init__(self, anneal_epoch_num=5):
-        self.anneal_epoch_num = anneal_epoch_num
-
-    def __call__(self, trainer, metrics: Dict[str, Any], epoch: int) -> None:
-        next_epoch = epoch + 1
-        if hasattr(trainer.model, "word_embedders"):
-            dir_embed = trainer.model.word_embedders.token_embedder_tokens
-        elif hasattr(trainer.model, "bert_embedder"):
-            dir_embed = trainer.model.bert_embedder.transformer_model.embeddings.word_embeddings
-        if dir_embed.temperature < 0.01:
-            return
-        if next_epoch < self.anneal_epoch_num:
-            cur_temp = np.linspace(0.01,
-                                   dir_embed.temperature,
-                                   num=self.anneal_epoch_num)[next_epoch]
-        else:
-            cur_temp = dir_embed.temperature
-        dir_embed.current_temperature = cur_temp
-        logger.info(
-            f'Before epoch {next_epoch}, temperature is set to {cur_temp}/{dir_embed.temperature}'
-        )
+def get_neighbour_matrix(vocab, searcher):
+    vocab_size = vocab.get_vocab_size("tokens")
+    nbr_matrix = []
+    t2i = vocab.get_token_to_index_vocabulary("tokens")
+    for idx in range(vocab_size):
+        token = vocab.get_token_from_index(idx)
+        nbrs = [idx]
+        for nbr in searcher.search(token):
+            if nbr in t2i:
+                nbrs.append(t2i[nbr])
+        nbr_matrix.append(nbrs)
+    nbr_matrix = batch_pad(nbr_matrix)
+    return torch.tensor(nbr_matrix)
 
 
 def get_neighbours(vec, return_edges=False):
     """
-    Given an embedding matrix, find the closest 10 words in the space.
+    Given an embedding matrix, find the 10 closest words in the space.
     Normally, the first word is itself, but since some words may not be
     pretrained, thus the first found maybe zero. 
     """

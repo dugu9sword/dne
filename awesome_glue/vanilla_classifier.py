@@ -10,8 +10,9 @@ from allennlp.training.optimizers import DenseSparseAdam
 from allennlp.modules.seq2vec_encoders import PytorchSeq2VecWrapper
 
 from allennlp.modules.seq2vec_encoders import BagOfEmbeddingsEncoder
-from allennlp.modules.seq2vec_encoders import CnnEncoder
+from allennlpx.modules.seq2vec_encoders.cnn_encoder import CnnEncoder
 from allennlp.modules.token_embedders import TokenEmbedder
+from luna import ram_pop, ram_has, ram_read, LabelSmoothingLoss
 
 
 class EmbeddingDropout(torch.nn.Module):
@@ -32,6 +33,7 @@ class Classifier(Model):
         vocab: Vocabulary,
         token_embedder: TokenEmbedder,
         arch: str,
+        pool: str,
         num_labels: int,
     ):
         super().__init__(vocab)
@@ -50,11 +52,14 @@ class Classifier(Model):
             self.encoder = CnnEncoder(
                 embedding_dim=token_embedder.get_output_dim(),
                 num_filters=100,
-                ngram_filter_sizes=(3, 4, 5),
+                ngram_filter_sizes=(3, ),
+                pool=pool
             )
         elif arch == 'boe':
             self.encoder = BagOfEmbeddingsEncoder(
-                embedding_dim=token_embedder.get_output_dim(), averaged=True)
+                embedding_dim=token_embedder.get_output_dim(), 
+                averaged= pool == 'mean'
+            )
         else:
             raise Exception()
 
@@ -81,8 +86,17 @@ class Classifier(Model):
         output = {"logits": logits, "probs": F.softmax(logits, dim=1)}
         if label is not None:
             self.accuracy(logits, label)
-            output["loss"] = self.loss_function(logits, label)
+            if ram_has("dist_reg"):
+                dist_reg = ram_read("dist_reg")
+            else:
+                dist_reg = 0
+            output["loss"] = self.loss_function(logits, label) # + 0.1 * dist_reg
         return output
 
     def get_metrics(self, reset=False):
-        return {'accuracy': self.accuracy.get_metric(reset)}
+        metric = {
+            'accuracy': self.accuracy.get_metric(reset),
+        }
+        if ram_has('dist_reg'):
+            metric['dist_reg'] = ram_read("dist_reg").item()
+        return metric

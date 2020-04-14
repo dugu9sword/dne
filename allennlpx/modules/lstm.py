@@ -1,8 +1,8 @@
 """Implementation of batch-normalized LSTM."""
 import torch
 from torch import nn
-from torch.nn import functional, init
-from luna.ram import ram_write, ram_append, ram_reset
+from torch.nn import init
+from luna.ram import ram_append, ram_reset
 
 
 class LSTMCell(nn.Module):

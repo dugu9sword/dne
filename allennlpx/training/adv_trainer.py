@@ -28,7 +28,7 @@ from allennlp.training.trainer_base import TrainerBase
 from torch.nn.parallel import DistributedDataParallel
 from allennlp.nn import util
 from allennlpx.training import adv_utils
-from luna import ram_write, ram_pop, ram_append, ram_reset, ram_read
+from luna import ram_append, ram_read, ram_reset
 
 try:
     from apex import amp
@@ -456,13 +456,15 @@ class AdvTrainer(TrainerBase):
 
             # adversarial samples
             if self.adv_policy.adv_iteration > 0:
+                adv_fields = batch[self.adv_policy.adv_field]
+                token_key = adv_utils.guess_token_key_from_field(adv_fields)
+                raw_tokens = adv_fields['tokens'][token_key].cuda()
+                adv_tokens = raw_tokens.clone()
                 for adv_idx in range(self.adv_policy.adv_iteration):
-                    adv_fields = batch[self.adv_policy.adv_field]
-                    token_key = adv_utils.guess_token_key_from_field(adv_fields)
-                    raw_tokens = adv_fields['tokens'][token_key].cuda()
                     if isinstance(self.adv_policy, adv_utils.HotFlipPolicy):
                         adv_tokens = adv_utils.hotflip(
-                            src_tokens=raw_tokens,
+                            raw_tokens=raw_tokens,
+                            adv_tokens=adv_tokens,
                             embeds=ram_read('fw')[self.adv_policy.forward_order],
                             grads=ram_read('bw')[-(self.adv_policy.forward_order + 1)],
                             embedding_matrix=embedding_matrix,
@@ -471,12 +473,13 @@ class AdvTrainer(TrainerBase):
                         )
                     elif isinstance(self.adv_policy, adv_utils.RandomNeighbourPolicy):
                         adv_tokens = adv_utils.random_swap(
-                            src_tokens=raw_tokens,
+                            raw_tokens=raw_tokens,
+                            adv_tokens=adv_tokens,
                             searcher=self.adv_policy.searcher,
                             replace_num=self.adv_policy.replace_num,
                         )
                     else:
-                        raise Exception('You must specify a policy')
+                        raise Exception
                     adv_fields['tokens'][token_key] = adv_tokens
                     loss = self.batch_loss(batch, for_training=True)
                     if torch.isnan(loss):

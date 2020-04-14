@@ -1,6 +1,6 @@
 import csv
 import logging
-from typing import Dict, Optional, List
+from typing import Dict, Optional
 
 # from allennlp.data.tokenizers.sentence_splitter import SpacySentenceSplitter
 import pandas
@@ -11,8 +11,6 @@ from allennlp.data.instance import Instance
 from allennlp.data.token_indexers import SingleIdTokenIndexer
 from allennlp.data.tokenizers import SpacyTokenizer
 from overrides import overrides
-from typing import Callable
-from copy import deepcopy
 from allennlpx import allenutil
 
 logger = logging.getLogger(__name__)
@@ -25,6 +23,7 @@ class SpacyTSVReader(DatasetReader):
                  label_col: str = 'label',
                  max_sequence_length: int = 512,
                  skip_label_indexing: bool = False,
+                 lower: bool = True,
                  lazy: bool = False) -> None:
         super().__init__(lazy=lazy)
         self._sent1_col = sent1_col
@@ -33,7 +32,7 @@ class SpacyTSVReader(DatasetReader):
         self._tokenizer = SpacyTokenizer()
         self._max_sequence_length = max_sequence_length
         self._skip_label_indexing = skip_label_indexing
-
+        self._lower = lower
         self._token_indexers = {"tokens": SingleIdTokenIndexer()}
 
     @overrides
@@ -44,9 +43,13 @@ class SpacyTSVReader(DatasetReader):
             has_label = self._label_col in df.columns
             for rid in range(1, df.shape[0]):
                 sent1 = df.iloc[rid][self._sent1_col]
+                if self._lower:
+                    sent1 = sent1.lower()
 
                 if self._sent2_col:
                     sent2 = df.iloc[rid][self._sent2_col]
+                    if self._lower:
+                        sent2 = sent2.lower()
                 else:
                     sent2 = None
 

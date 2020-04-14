@@ -1,7 +1,6 @@
 from functools import lru_cache
 from typing import Union, Callable, Dict
 
-import numpy as np
 import torch
 from tabulate import tabulate
 
@@ -9,7 +8,7 @@ from luna import cast_list, show_mean_std
 from .searcher import Searcher
 
 
-class WrappedEmbeddingSearcher(Searcher):
+class EmbeddingSearcher(Searcher):
     def __init__(
         self,
         embed: torch.Tensor,
@@ -19,7 +18,7 @@ class WrappedEmbeddingSearcher(Searcher):
         topk,
         rho
     ):
-        self._searcher = EmbeddingSearcher(embed, word2idx, idx2word)
+        self._searcher = EmbeddingNbrUtil(embed, word2idx, idx2word)
         self._measure = measure
         self._topk = topk
         self._rho = rho
@@ -27,15 +26,16 @@ class WrappedEmbeddingSearcher(Searcher):
     def is_pretrained(self, word):
         return self._searcher.is_pretrained(word)
     
+    @lru_cache(maxsize=None)
     def search(self, word):
-        return self._searcher.find_neighbours(word, 
-                                         self._measure, 
-                                         self._topk, 
-                                         self._rho,
-                                         return_words=True)
+        ret = self._searcher.find_neighbours(
+            word, self._measure, self._topk, self._rho, return_words=True)
+        if word in ret:
+            ret.remove(word)
+        return ret
 
 
-class EmbeddingSearcher:
+class EmbeddingNbrUtil:
     """
         When loading a pretrained embedding matrix, some words may not
         occur in the pretrained vectors, thus they may be filled with random

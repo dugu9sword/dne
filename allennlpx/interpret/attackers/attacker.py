@@ -14,9 +14,6 @@ from allennlp.modules.text_field_embedders.text_field_embedder import \
 from allennlp.data.tokenizers import SpacyTokenizer, Token
 
 from allennlpx.predictors.predictor import Predictor
-from luna import cast_list, lazy_property
-from allennlpx.interpret.attackers.searchers import SynonymSearcher, EmbeddingSearcher
-from allennlp.nn.util import find_embedding_layer
 
 DEFAULT_IGNORE_TOKENS = [
     "@@NULL@@", "@@PADDING@@", "@@UNKNOWN@@", ".", ",", ";", "!", "?", "[MASK]", "[SEP]", "[CLS]",

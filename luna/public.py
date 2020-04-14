@@ -34,6 +34,16 @@ def shutdown_logging(repo_name):
             logging.getLogger(key).setLevel(logging.ERROR)
 
 
+@contextmanager
+def numpy_seed(seed):
+    state = np.random.get_state()
+    np.random.seed(seed)
+    try:
+        yield
+    finally:
+        np.random.set_state(state)
+
+
 def lazy_property(func):
     attr_name = "_lazy_" + func.__name__
 

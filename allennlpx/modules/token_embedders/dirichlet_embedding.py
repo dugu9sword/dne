@@ -5,7 +5,7 @@ from torch.nn.functional import embedding
 
 from allennlp.modules.time_distributed import TimeDistributed
 from allennlp.modules.token_embedders.embedding import Embedding
-from allennlp.nn import util
+from luna import ram_write
 
 
 class DirichletEmbedding(Embedding):
@@ -13,28 +13,18 @@ class DirichletEmbedding(Embedding):
         self,
         temperature,
         neighbours,
-        nbr_mask,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)        
         self.neighbours = neighbours
         self.temperature = temperature
         self.current_temperature = temperature
-        self.nbr_mask = nbr_mask
 
     @overrides
     def forward(self, tokens: torch.Tensor) -> torch.Tensor:
         neighbour_num = self.neighbours.size(1)
         neighbour_tokens = self.neighbours[tokens]
-        neighbour_mask = self.nbr_mask[tokens]
         
-#         if tokens.size(1) > 1:
-#             import pdb; pdb.set_trace()
-            
-        # tokens may have extra dimensions (batch_size, d1, ..., dn, sequence_length),
-        # but embedding expects (batch_size, sequence_length), so pass tokens to
-        # util.combine_initial_dims (which is a no-op if there are no extra dimensions).
-        # Remember the original size.
         tmp_tokens = neighbour_tokens.view(-1, neighbour_num)
 
         # embedded = embedding(tmp_tokens, self.weight)
@@ -48,7 +38,12 @@ class DirichletEmbedding(Embedding):
             sparse=self.sparse,
         )
         
-        # Now (if necessary) add back in the extra dimensions.
+        if self._projection:
+            projection = self._projection
+            for _ in range(embedded.dim() - 2):
+                projection = TimeDistributed(projection)
+            embedded = projection(embedded)
+        
         alphas = np.ones(neighbour_num) / neighbour_num
         if self.current_temperature != 0.0:
             alphas = alphas / self.current_temperature
@@ -56,18 +51,42 @@ class DirichletEmbedding(Embedding):
             coeff = torch.from_numpy(coeff).to(self.weight.device)
         else:
             # sanity checks, this degrades to "mean"
-            coeff = torch.from_numpy(alphas.astype(np.float32)).to(self.weight.device)
-        embedded = (embedded * coeff.unsqueeze(-1)).sum(-2, keepdim=True)
+            coeff = torch.from_numpy(alphas.astype(np.float32)).expand_as(tmp_tokens).to(self.weight.device)
+        
+        zero_mask = tmp_tokens == 0
+
+        coeff.masked_fill_(zero_mask, 0.)
+        coeff[:, 0] += 1e-6
+        coeff = coeff / coeff.sum(dim=1, keepdims=True)
+
+        dist = (embedded[:, 0:1, :] - embedded).norm(dim=-1)
+        regularization = dist.masked_fill(zero_mask, 0.).sum() / torch.sum(~zero_mask)
+        ram_write("dist_reg", regularization)
+        
+#         embedded = embedded[:, 0, :]
+        embedded = (embedded * coeff.unsqueeze(-1)).sum(-2)
         # embedded = embedded[:, 0, :] + embedded[:, 1:, :].sum(-2).detach()
 
         embedded = embedded.view(*tokens.size(), embedded.size(-1))
-
-        if self._projection:
-            projection = self._projection
-            for _ in range(embedded.dim() - 2):
-                projection = TimeDistributed(projection)
-            embedded = projection(embedded)
+        
         return embedded
 
     
 
+# zero_mask = tmp_tokens == 0
+# nonzero_num = (~zero_mask).sum(dim=1).tolist()
+# cnter = Counter(nonzero_num)
+# coeffs_dct = {}
+# for k in cnter:
+#     alphas = np.ones(k) / k
+#     alphas = alphas / current_temperature
+#     coeff = np.random.dirichlet(alphas, cnter[k]).astype(np.float32).tolist()
+#     coeffs_dct[k] = coeff
+# coeffs = []
+# for n in nonzero_num:
+#     if n == 0:
+#         coeffs.append([1])
+#     else:
+#         coeffs.append(coeffs_dct[n].pop())
+# coeffs = batch_pad(coeffs, 0, pad_len=neighbour_num)
+# coeffs = torch.tensor(coeffs)

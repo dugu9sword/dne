@@ -23,7 +23,7 @@ TASK_SPECS = {
         "sent2_col": None,
         "label_col": "label",
         "skip_label_indexing": True,
-        "banned_words": "external_data/sentiment.txt",
+#         "banned_words": "external_data/sentiment.txt",
         "num_labels": 2,
     },
     "SNLI": {

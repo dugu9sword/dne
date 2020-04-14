@@ -5,7 +5,6 @@ import numpy
 from allennlp.common.util import JsonDict
 from allennlp.data import Instance
 from allennlp.data.fields import LabelField
-from allennlp.data.tokenizers import SpacyTokenizer
 from overrides import overrides
 
 from allennlpx.predictors.predictor import Predictor

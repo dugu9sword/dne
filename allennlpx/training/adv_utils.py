@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from allennlpx.interpret.attackers.searchers import EmbeddingSearcher
+from allennlpx.interpret.attackers.searchers import WordIndexSearcher
 import torch
 from luna import batch_pad
 import random
@@ -29,8 +29,7 @@ class HotFlipPolicy(AdvTrainingPolicy):
         1; if sent_a, set it to 0. 
     """
     forward_order: int = 0
-    # searcher: CachedIndexSearcher = None
-    searcher: EmbeddingSearcher = None
+    searcher: WordIndexSearcher = None
     replace_num: Union[int, float] = None
 
 
@@ -39,7 +38,7 @@ class RandomNeighbourPolicy(AdvTrainingPolicy):
     """
         Randomly change some words during training.
     """
-    searcher: EmbeddingSearcher = None
+    searcher: WordIndexSearcher = None
     replace_num: Union[int, float] = None
 
 
@@ -54,11 +53,8 @@ def apply_constraint_(searcher, src_tokens, scores):
             if src_tokens_lst[bid][sid] == 0:
                 idxes_to_mask.append([])
                 continue
-            _, idxs = searcher.find_neighbours(src_tokens_lst[bid][sid], 'euc', 10, None)
-            if idxs is None:
-                idxes_to_mask.append([src_tokens_lst[bid][sid]])
-            else:
-                idxes_to_mask.append(idxs.cpu().numpy().tolist())
+            idxs = searcher.search(src_tokens_lst[bid][sid])
+            idxes_to_mask.append([src_tokens_lst[bid][sid]] + idxs)
     idxes_to_mask = src_tokens.new_tensor(batch_pad(idxes_to_mask, 0))
     idxes_to_mask = idxes_to_mask.view(*src_tokens.size(), -1)
 
@@ -84,22 +80,24 @@ def get_replace_num(replace_num, length):
 
 
 def hotflip(*,
-            src_tokens,
+            raw_tokens,
+            adv_tokens,
             embeds,
             grads,
             embedding_matrix,
             replace_num,
             searcher=None):
-    replace_num = get_replace_num(replace_num, src_tokens.size(1))
+    replace_num = get_replace_num(replace_num, adv_tokens.size(1))
 
     # compute the direction vector dot the gradient
     prev_embed_dot_grad = torch.einsum("bij,bij->bi", grads, embeds)
     new_embed_dot_grad = torch.einsum("bij,kj->bik", grads, embedding_matrix)
     dir_dot_grad = new_embed_dot_grad - prev_embed_dot_grad.unsqueeze(-1)
 
-    # maybe some constraints
+    # apply some constraints based on the original tokens  
+    # to avoid semantic drift.
     if searcher is not None:
-        apply_constraint_(searcher, src_tokens, dir_dot_grad)
+        apply_constraint_(searcher, raw_tokens, dir_dot_grad)
 
     # supposing that vocab[0]=<pad>, vocab[1]=<unk>.
     # we set value of <pad> to be smaller than the <unk>.
@@ -115,28 +113,27 @@ def hotflip(*,
     _, best_positions = score_at_each_step.topk(replace_num)
 
     # use the selected token index to replace the original one
-    adv_tokens = src_tokens.clone()
+    adv_tokens = adv_tokens.clone()
     src = best_at_each_step.gather(dim=1, index=best_positions)
     adv_tokens.scatter_(dim=1, index=best_positions, src=src)
-    adv_tokens[src_tokens == 0] = 0
+    adv_tokens[adv_tokens == 0] = 0
     return adv_tokens
 
 
-def random_swap(*, src_tokens, replace_num, searcher):
-    adv_tokens_lst = src_tokens.tolist()
-    for bid in range(src_tokens.size(0)):
+def random_swap(*, raw_tokens, adv_tokens, replace_num, searcher):
+    raw_tokens_lst = raw_tokens.tolist()
+    adv_tokens_lst = adv_tokens.tolist()
+    for bid in range(adv_tokens.size(0)):
         sids = [
-            sid for sid in range(src_tokens.size(1))
-            if adv_tokens_lst[bid][sid] != 0
+            sid for sid in range(adv_tokens.size(1))
+            if raw_tokens_lst[bid][sid] != 0
         ]
         sids = random.sample(sids, k=get_replace_num(replace_num, len(sids)))
         for sid in sids:
-            _, idxs = searcher.search(adv_tokens_lst[bid][sid], 'euc', 10,
-                                      None)
+            idxs = [raw_tokens_lst[bid][sid]] + searcher.search(raw_tokens_lst[bid][sid])
             if idxs is not None:
-                adv_tokens_lst[bid][sid] = random.choice(
-                    idxs.cpu().numpy().tolist())
-    return torch.tensor(adv_tokens_lst, device=src_tokens.device)
+                adv_tokens_lst[bid][sid] = random.choice(idxs)
+    return torch.tensor(adv_tokens_lst, device=adv_tokens.device)
 
 
 def guess_token_key_from_field(batch_fields):

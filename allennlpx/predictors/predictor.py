@@ -1,17 +1,14 @@
 import re
 import torch
 from contextlib import contextmanager
-from copy import deepcopy
 from typing import Callable, Iterator, List, Union
 
 from allennlp.data import Instance
 from allennlp.modules.text_field_embedders import TextFieldEmbedder
 from allennlp.predictors.predictor import Predictor as Predictor_
 from allennlp.common.util import JsonDict, sanitize, lazy_groups_of
-from allennlpx import allenutil
 import logging
 from functools import lru_cache
-import random
 from collections import defaultdict
 
 logger = logging.getLogger(__name__)

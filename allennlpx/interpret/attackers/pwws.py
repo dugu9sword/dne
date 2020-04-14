@@ -11,7 +11,6 @@ from allennlp.modules.text_field_embedders.text_field_embedder import \
     TextFieldEmbedder
 
 from allennlpx.interpret.attackers.attacker import (DEFAULT_IGNORE_TOKENS, Attacker)
-from allennlpx import allenutil
 
 class PWWS(Attacker):
     """

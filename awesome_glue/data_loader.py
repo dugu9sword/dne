@@ -22,7 +22,9 @@ def load_data(task_id: str, tokenizer: str):
     }[tokenizer](sent1_col=spec['sent1_col'],
                  sent2_col=spec['sent2_col'],
                  label_col=spec['label_col'],
-                 skip_label_indexing=spec['skip_label_indexing'])
+                 skip_label_indexing=spec['skip_label_indexing'],
+                 lower=True
+                )
 
     def __load_data():
         train_data = reader.read(f'{spec["path"]}/train.tsv')

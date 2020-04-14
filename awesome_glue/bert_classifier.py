@@ -1,10 +1,8 @@
 import torch
 import torch.nn.functional as F
 from allennlp.models import Model
-from allennlp.modules.text_field_embedders.basic_text_field_embedder import \
-    BasicTextFieldEmbedder
 from allennlp.training.metrics import CategoricalAccuracy
-from transformers import AdamW, get_linear_schedule_with_warmup
+from transformers import AdamW
 
 from allennlp.modules.token_embedders import PretrainedTransformerEmbedder
 from allennlp.modules.seq2vec_encoders import ClsPooler
