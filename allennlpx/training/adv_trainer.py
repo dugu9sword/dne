@@ -340,8 +340,7 @@ class AdvTrainer(TrainerBase):
         Does a forward pass on the given batches and returns the `loss` value in the result.
         If `for_training` is `True` also applies regularization penalty.
         """
-        ram_reset('fw')
-        ram_reset('bw')
+        adv_utils.reset_hooks()
 
         batch = nn_util.move_to_device(batch, self.cuda_device)
         output_dict = self._pytorch_model(**batch)
@@ -357,20 +356,6 @@ class AdvTrainer(TrainerBase):
             loss = None
 
         return loss
-
-    def _register_embedding_hooks(self):
-        embedding_layer = util.find_embedding_layer(self.model)
-
-        # grad_in/grad_out/inputs are tuples, outputs is a tensor
-        def fw_hook_layers(module, inputs, outputs):
-            ram_append('fw', outputs)
-
-        def bw_hook_layers(module, grad_in, grad_out):
-            ram_append('bw', grad_out[0])
-
-        fw_hook = embedding_layer.register_forward_hook(fw_hook_layers)
-        bw_hook = embedding_layer.register_backward_hook(bw_hook_layers)
-        return [fw_hook, bw_hook]
 
     def _train_epoch(self, epoch: int) -> Dict[str, float]:
         """
@@ -389,7 +374,7 @@ class AdvTrainer(TrainerBase):
         self._pytorch_model.train()
 
         if self.adv_policy.adv_iteration > 0:
-            hooks = self._register_embedding_hooks()
+            hooks = adv_utils.register_embedding_hooks(self.model)
             embedding_matrix = util.find_embedding_layer(self.model).weight
 
         # Get tqdm for the training batches
@@ -443,7 +428,6 @@ class AdvTrainer(TrainerBase):
             self.optimizer.zero_grad()
 
             # normal samples
-#             print(batch['sent']['tokens']['token_ids'].size(), common_util.gpu_memory_mb().items())
             loss = self.batch_loss(batch, for_training=True)
             if torch.isnan(loss):
                 raise ValueError("nan loss encountered")
@@ -456,6 +440,7 @@ class AdvTrainer(TrainerBase):
 
             # adversarial samples
             if self.adv_policy.adv_iteration > 0:
+                adv_utils.set_adv_mode(True)
                 adv_fields = batch[self.adv_policy.adv_field]
                 token_key = adv_utils.guess_token_key_from_field(adv_fields)
                 raw_tokens = adv_fields['tokens'][token_key].cuda()
@@ -465,8 +450,8 @@ class AdvTrainer(TrainerBase):
                         adv_tokens = adv_utils.hotflip(
                             raw_tokens=raw_tokens,
                             adv_tokens=adv_tokens,
-                            embeds=ram_read('fw')[self.adv_policy.forward_order],
-                            grads=ram_read('bw')[-(self.adv_policy.forward_order + 1)],
+                            embeds=adv_utils.capture_fw(self.adv_policy.forward_order),
+                            grads=adv_utils.capture_bw(self.adv_policy.forward_order),
                             embedding_matrix=embedding_matrix,
                             searcher=self.adv_policy.searcher,
                             replace_num=self.adv_policy.replace_num,
@@ -478,6 +463,12 @@ class AdvTrainer(TrainerBase):
                             searcher=self.adv_policy.searcher,
                             replace_num=self.adv_policy.replace_num,
                         )
+                    elif isinstance(self.adv_policy, adv_utils.PassGradientPolicy):
+                        adv_utils.set_gradient_info(adv_utils.GradientInfo(
+                            grd_step=self.adv_policy.grd_step,
+                            last_fw=adv_utils.capture_fw(self.adv_policy.forward_order),
+                            last_bw=adv_utils.capture_bw(self.adv_policy.forward_order)
+                        ))
                     else:
                         raise Exception
                     adv_fields['tokens'][token_key] = adv_tokens
@@ -490,7 +481,7 @@ class AdvTrainer(TrainerBase):
                     else:
                         loss.backward()
                     train_loss += loss.item()
-
+                adv_utils.set_adv_mode(False)
             batch_grad_norm = self.rescale_gradients()
 
             torch.cuda.empty_cache()
@@ -588,7 +579,7 @@ class AdvTrainer(TrainerBase):
         if self._distributed:
             dist.barrier()
 
-        if self.adv_policy.adv_iteration>0:
+        if self.adv_policy.adv_iteration > 0:
             for hook in hooks:
                 hook.remove()
 

@@ -40,7 +40,7 @@ from allennlp.training.checkpointer import Checkpointer
 from allennlpx.training import adv_utils
 import logging
 from awesome_glue.data_loader import load_banned_words, load_data
-from allennlpx.modules.token_embedders.dirichlet_embedding import DirichletEmbedding
+from awesome_glue.dirichlet_embedding import DirichletEmbedding
 
 logging.getLogger('transformers').setLevel(logging.CRITICAL)
 
@@ -70,13 +70,13 @@ class Task:
                 token_embedder = embed_util.build_embedding(**embed_args)
             elif config.embed == "d":
                 counter_searcher = CachedWordSearcher(
-                    "external_data/IMDB-euc-top8.json",
+                    "external_data/ibp-nbrs.json",
                     self.vocab.get_token_to_index_vocabulary("tokens")
                 )
                 neighbours = get_neighbour_matrix(self.vocab, counter_searcher)
                 token_embedder = embed_util.build_dirichlet_embedding(
                     **embed_args,
-                    temperature=config.dir_temp,
+                    alphas=config.dir_alpha,
                     neighbours=neighbours.cuda())
             elif config.embed == "g":
                 pass
@@ -117,7 +117,7 @@ class Task:
                     num_embeddings=bert_vocab.get_vocab_size('tokens'),
                     embedding_dim=768,
                     weight=bert_embeddings.word_embeddings.weight,
-                    temperature=config.dir_temp,
+                    alpha=config.dir_temp,
                     neighbours=neighbours.cuda(),
                     sparse=False,
                     trainable=True)
@@ -162,6 +162,9 @@ class Task:
             num_epochs = 8
         logger.info(f"num_epochs: {num_epochs}, batch_size: {batch_size}")
 
+        if self.config.task_id == 'SST':
+            self.train_data = self.dev_data
+
         if self.config.model_name == 'tmp':
             p = pathlib.Path('saved/models/tmp')
             if p.exists():
@@ -202,6 +205,12 @@ class Task:
             adv_policy = adv_utils.HotFlipPolicy(**policy_args)
         elif self.config.adv_policy == 'rad':
             adv_policy = adv_utils.RandomNeighbourPolicy(**policy_args)
+        elif self.config.adv_policy == 'grd':
+            adv_policy = adv_utils.PassGradientPolicy(
+                adv_iteration=1,
+                adv_field='sent',
+                grd_step=self.config.adv_grd_step
+            )
         else:
             adv_policy = adv_utils.NoPolicy
 
@@ -217,9 +226,9 @@ class Task:
         # Set callbacks
         epoch_callbacks = []
         batch_callbacks = []
-        if self.config.embed == 'd':
-            batch_callbacks.append(DirichletAnnealing(
-                anneal_epoch_num=4, batch_per_epoch=len(train_data_sampler)))
+        # if self.config.embed == 'd':
+        #     batch_callbacks.append(DirichletAnnealing(
+        #         anneal_epoch_num=4, batch_per_epoch=len(train_data_sampler)))
         trainer = AdvTrainer(
             model=self.model,
             optimizer=self.model.get_optimizer(),

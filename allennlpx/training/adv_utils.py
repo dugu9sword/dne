@@ -1,15 +1,20 @@
 from dataclasses import dataclass
 from allennlpx.interpret.attackers.searchers import WordIndexSearcher
 import torch
-from luna import batch_pad
+from luna import batch_pad, ram_read, ram_append, ram_reset, ram_write, ram_has
 import random
 from typing import Union
+from allennlp.nn import util
 
 
 @dataclass
 class AdvTrainingPolicy:
     adv_iteration: int = 1
     adv_field: str = 'sent'
+
+@dataclass
+class PassGradientPolicy(AdvTrainingPolicy):
+    grd_step: float = 1.0
 
 
 @dataclass
@@ -40,6 +45,72 @@ class RandomNeighbourPolicy(AdvTrainingPolicy):
     """
     searcher: WordIndexSearcher = None
     replace_num: Union[int, float] = None
+
+
+def register_embedding_hooks(model):
+    embedding_layer = util.find_embedding_layer(model)
+
+    # grad_in/grad_out/inputs are tuples, outputs is a tensor
+    def fw_hook_layers(module, inputs, outputs):
+        ram_append('fw', outputs)
+
+    def bw_hook_layers(module, grad_in, grad_out):
+        ram_append('bw', grad_out[0])
+
+    fw_hook = embedding_layer.register_forward_hook(fw_hook_layers)
+    bw_hook = embedding_layer.register_backward_hook(bw_hook_layers)
+    return [fw_hook, bw_hook]
+
+
+def reset_hooks():
+    ram_reset('fw')
+    ram_reset('bw')
+
+
+def capture_fw(order):
+    return ram_read('fw')[order]
+
+
+def capture_bw(order):
+    return ram_read('bw')[-(order + 1)]
+
+
+@dataclass
+class GradientInfo:
+    grd_step: float = None
+    last_fw: torch.Tensor = None
+    last_bw: torch.Tensor = None
+
+
+def reset_gradient_info():
+    ram_reset("gradient_info")
+
+
+def set_gradient_info(status: GradientInfo):
+    ram_write("gradient_info", status)
+
+
+def has_gradient_info():
+    if ram_has("gradient_info"):
+        assert is_adv_mode()
+        return True
+    return False
+
+
+def get_gradient_info():
+    return ram_read("gradient_info")
+
+
+def set_adv_mode(flag):
+    ram_write("adv_flag", flag)
+    if flag is False:
+        reset_gradient_info()
+        
+
+def is_adv_mode():
+    if ram_has("adv_flag") and ram_read("adv_flag") == True:
+        return True
+    return False
 
 
 def apply_constraint_(searcher, src_tokens, scores):

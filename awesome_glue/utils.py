@@ -11,6 +11,8 @@ from typing import Dict, Any
 import logging
 import pandas
 from luna import batch_pad
+from collections import Counter
+
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +37,7 @@ class DirichletAnnealing(BatchCallback):
         self.anneal_epoch_num = anneal_epoch_num
         self.batch_per_epoch = batch_per_epoch
         self.total_steps = anneal_epoch_num * batch_per_epoch
-        self.start_temp = 0.01
+        self.start_alpha = 10.0
 
     def __call__(self, trainer, epoch: int, batch_number: int,
                  is_training: bool):
@@ -43,20 +45,20 @@ class DirichletAnnealing(BatchCallback):
             dir_embed = trainer.model.word_embedders.token_embedder_tokens
         elif hasattr(trainer.model, "bert_embedder"):
             dir_embed = trainer.model.bert_embedder.transformer_model.embeddings.word_embeddings
-        if dir_embed.temperature < self.start_temp:
+        if dir_embed.alpha > self.start_alpha:
             return
         cur_step = epoch * self.batch_per_epoch + batch_number
         if epoch >= self.anneal_epoch_num:
-            cur_temp = dir_embed.temperature
+            cur_alpha = dir_embed.alpha
         else:
             cur_ratio = cur_step / self.total_steps
-            cur_temp = cur_ratio * dir_embed.temperature + (
-                1 - cur_ratio) * self.start_temp
-        dir_embed.current_temperature = cur_temp
+            cur_alpha = cur_ratio * dir_embed.alpha + (
+                1 - cur_ratio) * self.start_alpha
+        dir_embed.current_alpha = cur_alpha
         if batch_number % (self.batch_per_epoch // 4) == 0: 
             logger.info(
                 f'At epoch-{epoch} batch-{batch_number},' + 
-                f'temperature is set to {cur_temp}({dir_embed.temperature})'
+                f'alpha is set to {cur_alpha}({dir_embed.alpha})'
             )
 
 
@@ -108,6 +110,25 @@ def get_neighbours(vec, return_edges=False):
             some_idx = random.choice(range(I.shape[0]))
             assert I[some_idx][0] == some_idx
         return I, mask
+
+
+def dirichlet_sampling(sample_sizes, alpha, max_sample_size=None):
+    if max_sample_size is None:
+        max_sample_size = max(sample_sizes)
+
+    cnter = Counter(sample_sizes)
+    dir_dct = {}
+    for k in cnter:
+        dir_dct[k] = np.random.dirichlet([alpha] * k, cnter[k]).astype(np.float32).tolist()
+    ret = []
+    for n in sample_sizes:
+        if n == 0:
+            ret.append([1])
+        else:
+            ret.append(dir_dct[n].pop())
+    ret = batch_pad(ret, 0, pad_len=max_sample_size)
+    return np.array(ret, dtype=np.float32)
+
 
 
 class FreqUtil:

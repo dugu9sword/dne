@@ -114,10 +114,17 @@ class Genetic(Attacker):
             final_tokens[sid] = nbr_dct[sid][cand_idx]
             
             if success:
-                print('DETECTED SUCCESS')
-                print('PROBS', results[cand_idx])
-                print('RUNNING AGAIN', self.predictor.predict_json({"sent": " ".join(final_tokens)}))
-
+                print('DETECTED SUCCESS with PROBS', results[cand_idx])
+                pass_validation = 0 
+                for _ in range(5):
+                    validation = self.predictor.predict_json({"sent": " ".join(final_tokens)})
+                    print("validation:", validation)
+                    if np.argmax(validation['probs']) != true_idx:
+                        pass_validation += 1
+                if not pass_validation >= 3:
+                    print("Validation not pass")
+                    success = 0
+                
             next_gen =  {
                 "result": results[cand_idx],
                 "individual": final_tokens,

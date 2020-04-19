@@ -6,6 +6,7 @@ from allennlp.data import TextFieldTensors, Vocabulary
 from allennlp.nn.util import get_text_field_mask
 from allennlp.training.metrics import CategoricalAccuracy
 from allennlp.training.optimizers import DenseSparseAdam
+from allennlpx.training import adv_utils
 
 from allennlp.modules.seq2vec_encoders import PytorchSeq2VecWrapper
 
@@ -67,6 +68,7 @@ class Classifier(Model):
             in_features=self.encoder.get_output_dim(), out_features=num_labels)
 
         self.accuracy = CategoricalAccuracy()
+        self.adv_accuracy = CategoricalAccuracy()
         self.loss_function = torch.nn.CrossEntropyLoss()
 
 
@@ -85,11 +87,10 @@ class Classifier(Model):
         logits = self.linear(encoder_out)
         output = {"logits": logits, "probs": F.softmax(logits, dim=1)}
         if label is not None:
-            self.accuracy(logits, label)
-            if ram_has("dist_reg"):
-                dist_reg = ram_read("dist_reg")
+            if adv_utils.is_adv_mode():
+                self.adv_accuracy(logits, label)
             else:
-                dist_reg = 0
+                self.accuracy(logits, label)
             output["loss"] = self.loss_function(logits, label) # + 0.1 * dist_reg
         return output
 
@@ -97,6 +98,8 @@ class Classifier(Model):
         metric = {
             'accuracy': self.accuracy.get_metric(reset),
         }
+        if self.adv_accuracy.total_count > 1e-12:
+            metric['adv_accu'] = self.adv_accuracy.get_metric(reset)
         if ram_has('dist_reg'):
             metric['dist_reg'] = ram_read("dist_reg").item()
         return metric

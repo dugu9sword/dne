@@ -6,18 +6,17 @@ class Config(ProgramArgs):
         super().__init__()
 
         # basic settings
-        self.task_id = "IMDB"
-        self.embed = 'd'   # d/g/_
+        self.task_id = "SST"
+        self.embed = 'w'   # d/g/_
         self.arch = 'cnn'
         self.pool = 'max'
-        self.pretrain = 'counter'
+        self.pretrain = 'glove'
 #         self._model_name = "AGNEWS-lstm-hot.1.5.con"
         self._model_name = "tmp"   # if set to tmp, existing models will be overrided
         self.mode = 'train'
         
         # dirichlet settings
-        self.dir_temp = 1.0
-        self.dist_reg = False
+        self.dir_alpha = 1.0
     
         # graph settings
         self.gnn_type = 'mean'
@@ -26,9 +25,11 @@ class Config(ProgramArgs):
         # training settings
         # self.aug_data = 'nogit/AGNEWS-lstm.pwws.aug.tsv'
         self.aug_data = ''
-        self.adv_iter = 0
-        self.adv_policy = 'hot'    # hot -> hotflip, rdm -> random
-        self.adv_replace_num = 0.15
+        self.adv_iter = 2
+        # hot -> hotflip, rdm -> random, grd -> gradient
+        self.adv_policy = 'grd'
+        self.adv_grd_step = 0.1
+        self.adv_replace_num = 0.6
 
         # predictor settings
         self.pred_ensemble = 16
