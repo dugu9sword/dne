@@ -7,7 +7,7 @@ class Config(ProgramArgs):
 
         # basic settings
         self.task_id = "SST"
-        self.embed = 'w'   # d/g/_
+        self.embed = 'w'   # d/g/w/_
         self.arch = 'cnn'
         self.pool = 'max'
         self.pretrain = 'glove'
@@ -26,9 +26,9 @@ class Config(ProgramArgs):
         # self.aug_data = 'nogit/AGNEWS-lstm.pwws.aug.tsv'
         self.aug_data = ''
         self.adv_iter = 2
-        # hot -> hotflip, rdm -> random, grd -> gradient
-        self.adv_policy = 'grd'
-        self.adv_grd_step = 0.1
+        # hot -> hotflip, rdm -> random, grd -> gradient, diy -> model do it itself
+        self.adv_policy = 'diy'
+        self.adv_step = 0.1
         self.adv_replace_num = 0.6
 
         # predictor settings

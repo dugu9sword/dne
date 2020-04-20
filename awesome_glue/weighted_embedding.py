@@ -19,20 +19,17 @@ class WeightedEmbedding(Embedding):
     ) -> None:
         super().__init__(**kwargs)        
         self.neighbours = neighbours
-        self.alphas = alpha
+        self.alpha = alpha
 
     @overrides
     def forward(self, tokens: torch.Tensor) -> torch.Tensor:
-        max_neighbour_num = self.neighbours.size(1)
-        neighbour_tokens = self.neighbours[tokens]
-        
-        # n_words x n_samples
-        tmp_tokens = neighbour_tokens.view(-1, max_neighbour_num)
-        neighbour_num_lst = (tmp_tokens == 0).sum(dim=1).tolist()
+        max_nbr_num = self.neighbours.size(1)        
+        nbr_tokens = self.neighbours[tokens].view(-1, max_nbr_num)
+        nbr_num_lst = (nbr_tokens != 0).sum(dim=1).tolist()
 
         # n_words x n_nbrs x dim
         embedded = embedding(
-            tmp_tokens,
+            nbr_tokens,
             self.weight,
             padding_idx=self.padding_index,
             max_norm=self.max_norm,
@@ -40,52 +37,19 @@ class WeightedEmbedding(Embedding):
             scale_grad_by_freq=self.scale_grad_by_freq,
             sparse=self.sparse,
         )
-
-        coeff = dirichlet_sampling(neighbour_num_lst, self._current_alpha)
-        coeff = torch.from_numpy(coeff).to(self.weight.device)
-        # n_words x n_samples x n_nbrs
-        coeff = coeff.view(embedded.size(0), n_samples, -1)
         
-        # n_words x n_samples x 1
-        zero_mask = (tmp_tokens == 0).unsqueeze(1)
-        coeff.masked_fill_(zero_mask, 0.)
-
-        coeff[:, :, 0] += 1e-6
-        coeff = coeff / coeff.sum(dim=2, keepdims=True)
-
-        # n_words x n_samples x dim
-        cand_embedded = (embedded.unsqueeze(1) * coeff.unsqueeze(-1)).sum(-2)
-            
-        if not adv_utils.has_gradient_info():
-            embedded = cand_embedded[:, 0, :]
-            embedded = embedded.view(*tokens.size(), self.weight.size(1))
-            return embedded
+        if not adv_utils.is_adv_mode():
+            _coeff = dirichlet_sampling(nbr_num_lst, self.alpha, max_nbr_num)
+            _coeff = torch.from_numpy(_coeff).to(self.weight.device)        
+            coeff_logit = (_coeff + 1e-6).log()
         else:
-            info = adv_utils.get_gradient_info()
-            grad_norm = torch.norm(info.last_bw, dim=-1, keepdim=True) + 1e-6
-            # n_words x dim
-            last_embedded = info.last_fw.view(-1, self.weight.size(1))
-            new_embedded = info.last_fw + 1 * info.last_bw / grad_norm
-            # n_words x dim
-            new_embedded = new_embedded.view(-1, self.weight.size(1))
-            
-            # avg_dist = (cand_embedded - last_embedded.unsqueeze(1)).norm(dim=2)
-            # print("|cand-last|", avg_dist.mean().item(), avg_dist.min().item())
-            # avg_dist = (cand_embedded[:, 1:, :] - cand_embedded[:, 0:1 ,:]).norm(dim=2)
-            # print("|inner_cand|", avg_dist.mean().item(), avg_dist.min().item())
-            
-            # n_words x n_samples
-            distance = (cand_embedded - new_embedded.unsqueeze(1)).norm(dim=2)
-            # n_words x 1 x 1 -> n_words x 1 x dim
-            dummy = distance.min(1)[1].unsqueeze(-1).unsqueeze(-1)
-            dummy = dummy.expand(dummy.shape[0], dummy.shape[1], self.weight.size(1))
-            embedded = cand_embedded.gather(1, dummy).squeeze(1)
-            
-            # rdm_delta = cand_embedded[:, 0, :] - new_embedded
-            # rdm_delta = rdm_delta.norm(dim=1).mean()
-            # delta = embedded - new_embedded
-            # delta = delta.norm(dim=1).mean()
-            # print("rdm_δ ", rdm_delta.item(), "min_δ ",  delta.item())
-            embedded = embedded.view(*tokens.size(), embedded.size(-1))
-            return embedded
-
+            last_fw, last_bw = adv_utils.read_var_hook("coeff_logit")
+            grad_norm = torch.norm(last_bw, dim=-1, keepdim=True) + 1e-6
+            coeff_logit = last_fw + adv_utils.recieve("step") * last_bw / grad_norm
+        
+        coeff_logit.requires_grad_()
+        adv_utils.register_var_hook("coeff_logit", coeff_logit)
+        coeff = F.softmax(coeff_logit, dim=1)
+        embedded = (embedded * coeff.unsqueeze(-1)).sum(-2)
+        embedded = embedded.view(*tokens.size(), self.weight.size(1))
+        return embedded

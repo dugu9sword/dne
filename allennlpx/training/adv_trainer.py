@@ -340,8 +340,6 @@ class AdvTrainer(TrainerBase):
         Does a forward pass on the given batches and returns the `loss` value in the result.
         If `for_training` is `True` also applies regularization penalty.
         """
-        adv_utils.reset_hooks()
-
         batch = nn_util.move_to_device(batch, self.cuda_device)
         output_dict = self._pytorch_model(**batch)
 
@@ -374,7 +372,7 @@ class AdvTrainer(TrainerBase):
         self._pytorch_model.train()
 
         if self.adv_policy.adv_iteration > 0:
-            hooks = adv_utils.register_embedding_hooks(self.model)
+            hooks = adv_utils.register_embedding_hook(self.model)
             embedding_matrix = util.find_embedding_layer(self.model).weight
 
         # Get tqdm for the training batches
@@ -447,11 +445,12 @@ class AdvTrainer(TrainerBase):
                 adv_tokens = raw_tokens.clone()
                 for adv_idx in range(self.adv_policy.adv_iteration):
                     if isinstance(self.adv_policy, adv_utils.HotFlipPolicy):
+                        fw, bw = adv_utils.read_embedding_hook(self.adv_policy.forward_order)
                         adv_tokens = adv_utils.hotflip(
                             raw_tokens=raw_tokens,
                             adv_tokens=adv_tokens,
-                            embeds=adv_utils.capture_fw(self.adv_policy.forward_order),
-                            grads=adv_utils.capture_bw(self.adv_policy.forward_order),
+                            embeds=fw,
+                            grads=bw,
                             embedding_matrix=embedding_matrix,
                             searcher=self.adv_policy.searcher,
                             replace_num=self.adv_policy.replace_num,
@@ -463,12 +462,8 @@ class AdvTrainer(TrainerBase):
                             searcher=self.adv_policy.searcher,
                             replace_num=self.adv_policy.replace_num,
                         )
-                    elif isinstance(self.adv_policy, adv_utils.PassGradientPolicy):
-                        adv_utils.set_gradient_info(adv_utils.GradientInfo(
-                            grd_step=self.adv_policy.grd_step,
-                            last_fw=adv_utils.capture_fw(self.adv_policy.forward_order),
-                            last_bw=adv_utils.capture_bw(self.adv_policy.forward_order)
-                        ))
+                    elif isinstance(self.adv_policy, adv_utils.DoItYourselfPolicy):
+                        adv_utils.send("step", self.adv_policy.step)
                     else:
                         raise Exception
                     adv_fields['tokens'][token_key] = adv_tokens

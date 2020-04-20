@@ -12,14 +12,15 @@ class AdvTrainingPolicy:
     adv_iteration: int = 1
     adv_field: str = 'sent'
 
-@dataclass
-class PassGradientPolicy(AdvTrainingPolicy):
-    grd_step: float = 1.0
-
 
 @dataclass
 class NoPolicy(AdvTrainingPolicy):
     adv_iteration: int = 0
+
+
+@dataclass
+class DoItYourselfPolicy(AdvTrainingPolicy):
+    step: float = 1.0
 
 
 @dataclass
@@ -47,68 +48,52 @@ class RandomNeighbourPolicy(AdvTrainingPolicy):
     replace_num: Union[int, float] = None
 
 
-def register_embedding_hooks(model):
+def register_embedding_hook(model):
     embedding_layer = util.find_embedding_layer(model)
 
     # grad_in/grad_out/inputs are tuples, outputs is a tensor
-    def fw_hook_layers(module, inputs, outputs):
-        ram_append('fw', outputs)
+    def fw_hook_layers(EMBEDDING, inputs, outputs):
+        ram_append('EMBEDDING_HOOK.fw', outputs)
 
-    def bw_hook_layers(module, grad_in, grad_out):
-        ram_append('bw', grad_out[0])
+    def bw_hook_layers(EMBEDDING, grad_in, grad_out):
+        ram_append('EMBEDDING_HOOK.bw', grad_out[0])
 
     fw_hook = embedding_layer.register_forward_hook(fw_hook_layers)
     bw_hook = embedding_layer.register_backward_hook(bw_hook_layers)
     return [fw_hook, bw_hook]
 
 
-def reset_hooks():
-    ram_reset('fw')
-    ram_reset('bw')
+def read_embedding_hook(order):
+    fw = ram_read('EMBEDDING_HOOK.fw')[order]
+    bw = ram_read('EMBEDDING_HOOK.bw')[-(order + 1)]
+    return fw, bw
 
 
-def capture_fw(order):
-    return ram_read('fw')[order]
+def register_var_hook(name, variable):
+    ram_write(f"VAR_HOOK.{name}.fw", variable.detach())
+
+    def hook(grad):
+        ram_write(f"VAR_HOOK.{name}.bw", grad)
+
+    variable.register_hook(hook)
+
+def send(key, value):
+    ram_write(f"MESSAGE.{key}", value)
+
+def recieve(key):
+    return ram_read(f"MESSAGE.{key}")
 
 
-def capture_bw(order):
-    return ram_read('bw')[-(order + 1)]
-
-
-@dataclass
-class GradientInfo:
-    grd_step: float = None
-    last_fw: torch.Tensor = None
-    last_bw: torch.Tensor = None
-
-
-def reset_gradient_info():
-    ram_reset("gradient_info")
-
-
-def set_gradient_info(status: GradientInfo):
-    ram_write("gradient_info", status)
-
-
-def has_gradient_info():
-    if ram_has("gradient_info"):
-        assert is_adv_mode()
-        return True
-    return False
-
-
-def get_gradient_info():
-    return ram_read("gradient_info")
+def read_var_hook(name):
+    return ram_read(f"VAR_HOOK.{name}.fw"), ram_read(f"VAR_HOOK.{name}.bw")
 
 
 def set_adv_mode(flag):
-    ram_write("adv_flag", flag)
-    if flag is False:
-        reset_gradient_info()
-        
+    ram_write("ADV_FLAG", flag)
+
 
 def is_adv_mode():
-    if ram_has("adv_flag") and ram_read("adv_flag") == True:
+    if ram_has("ADV_FLAG") and ram_read("ADV_FLAG") == True:
         return True
     return False
 
@@ -165,7 +150,7 @@ def hotflip(*,
     new_embed_dot_grad = torch.einsum("bij,kj->bik", grads, embedding_matrix)
     dir_dot_grad = new_embed_dot_grad - prev_embed_dot_grad.unsqueeze(-1)
 
-    # apply some constraints based on the original tokens  
+    # apply some constraints based on the original tokens
     # to avoid semantic drift.
     if searcher is not None:
         apply_constraint_(searcher, raw_tokens, dir_dot_grad)
@@ -201,7 +186,8 @@ def random_swap(*, raw_tokens, adv_tokens, replace_num, searcher):
         ]
         sids = random.sample(sids, k=get_replace_num(replace_num, len(sids)))
         for sid in sids:
-            idxs = [raw_tokens_lst[bid][sid]] + searcher.search(raw_tokens_lst[bid][sid])
+            idxs = [raw_tokens_lst[bid][sid]] + searcher.search(
+                raw_tokens_lst[bid][sid])
             if idxs is not None:
                 adv_tokens_lst[bid][sid] = random.choice(idxs)
     return torch.tensor(adv_tokens_lst, device=adv_tokens.device)
@@ -219,7 +205,7 @@ def guess_token_key_from_field(batch_fields):
     #    { "tokens": {"token_ids": tensor, "offsets": tensor, "mask": tensor}}
     if "tokens" not in batch_fields:
         raise Exception("The name of the token indexer is not `tokens`")
-    if 'tokens' in batch_fields['tokens']: 
+    if 'tokens' in batch_fields['tokens']:
         return 'tokens'
     elif 'token_ids' in batch_fields['tokens']:
         return 'token_ids'

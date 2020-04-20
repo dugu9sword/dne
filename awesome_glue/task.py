@@ -78,6 +78,16 @@ class Task:
                     **embed_args,
                     alphas=config.dir_alpha,
                     neighbours=neighbours.cuda())
+            elif config.embed == "w":
+                counter_searcher = CachedWordSearcher(
+                    "external_data/ibp-nbrs.json",
+                    self.vocab.get_token_to_index_vocabulary("tokens")
+                )
+                neighbours = get_neighbour_matrix(self.vocab, counter_searcher)
+                token_embedder = embed_util.build_weighted_embedding(
+                    **embed_args,
+                    alphas=config.dir_alpha,
+                    neighbours=neighbours.cuda())
             elif config.embed == "g":
                 pass
 #                 edges = get_neighbours(spacy_vec, return_edges=True)
@@ -205,12 +215,9 @@ class Task:
             adv_policy = adv_utils.HotFlipPolicy(**policy_args)
         elif self.config.adv_policy == 'rad':
             adv_policy = adv_utils.RandomNeighbourPolicy(**policy_args)
-        elif self.config.adv_policy == 'grd':
-            adv_policy = adv_utils.PassGradientPolicy(
-                adv_iteration=1,
-                adv_field='sent',
-                grd_step=self.config.adv_grd_step
-            )
+        elif self.config.adv_policy == 'diy':
+            adv_policy = adv_utils.DoItYourselfPolicy(
+                self.config.adv_iter, 'sent', self.config.adv_step)
         else:
             adv_policy = adv_utils.NoPolicy
 

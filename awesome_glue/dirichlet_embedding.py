@@ -29,7 +29,7 @@ class DirichletEmbedding(Embedding):
         
         # n_words x n_samples
         tmp_tokens = neighbour_tokens.view(-1, max_neighbour_num)
-        neighbour_num_lst = (tmp_tokens == 0).sum(dim=1).tolist()
+        neighbour_num_lst = (tmp_tokens != 0).sum(dim=1).tolist()
 
         # n_words x n_nbrs x dim
         embedded = embedding(
@@ -42,12 +42,12 @@ class DirichletEmbedding(Embedding):
             sparse=self.sparse,
         )
 
-        if not adv_utils.has_gradient_info():
+        if not adv_utils.is_adv_mode():
             n_samples = 1
         else:
             n_samples = 100
 
-        coeff = dirichlet_sampling(neighbour_num_lst * n_samples, self._current_alpha)
+        coeff = dirichlet_sampling(neighbour_num_lst * n_samples, self._current_alpha, max_neighbour_num)
         coeff = torch.from_numpy(coeff).to(self.weight.device)
         # n_words x n_samples x n_nbrs
         coeff = coeff.view(embedded.size(0), n_samples, -1)
@@ -62,16 +62,15 @@ class DirichletEmbedding(Embedding):
         # n_words x n_samples x dim
         cand_embedded = (embedded.unsqueeze(1) * coeff.unsqueeze(-1)).sum(-2)
             
-        if not adv_utils.has_gradient_info():
+        if not adv_utils.is_adv_mode():
             embedded = cand_embedded[:, 0, :]
             embedded = embedded.view(*tokens.size(), self.weight.size(1))
-            return embedded
         else:
-            info = adv_utils.get_gradient_info()
-            grad_norm = torch.norm(info.last_bw, dim=-1, keepdim=True) + 1e-6
+            last_fw, last_bw = adv_utils.read_var_hook("embedding")
+            grad_norm = torch.norm(last_bw, dim=-1, keepdim=True) + 1e-6
             # n_words x dim
-            last_embedded = info.last_fw.view(-1, self.weight.size(1))
-            new_embedded = info.last_fw + info.grd_step * info.last_bw / grad_norm
+            last_embedded = last_fw.view(-1, self.weight.size(1))
+            new_embedded = last_fw + adv_utils.recieve("step") * last_bw / grad_norm
             # n_words x dim
             new_embedded = new_embedded.view(-1, self.weight.size(1))
             
@@ -93,5 +92,7 @@ class DirichletEmbedding(Embedding):
             # delta = delta.norm(dim=1).mean()
             # print("rdm_δ ", rdm_delta.item(), "min_δ ",  delta.item())
             embedded = embedded.view(*tokens.size(), embedded.size(-1))
-            return embedded
+        
+        adv_utils.register_var_hook("embedding", embedded)
+        return embedded
 
