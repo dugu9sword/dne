@@ -25,8 +25,8 @@ class Config(ProgramArgs):
         # training settings
         # self.aug_data = 'nogit/AGNEWS-lstm.pwws.aug.tsv'
         self.aug_data = ''
-        self.adv_iter = 2
-        # hot -> hotflip, rdm -> random, grd -> gradient, diy -> model do it itself
+        self.adv_iter = 10
+        # hot -> hotflip, rdm -> random, diy -> model do it itself
         self.adv_policy = 'diy'
         self.adv_step = 0.1
         self.adv_replace_num = 0.6
@@ -45,7 +45,7 @@ class Config(ProgramArgs):
         self.attack_gen_adv = False
 
         # transfer settings
-        self.adv_data = 'nogit/AGNEWS-lstm.hotflip.adv.tsv'
+        self.adv_data = ''
 
         # other settings
         self.alchemist = False
@@ -67,13 +67,14 @@ class Config(ProgramArgs):
             if self.aug_data != '':
                 model_name += '-aug'
             if self.embed == 'd':
-                model_name += f'-{self.dir_temp}'
-                if self.dist_reg:
-                    model_name += '-reg'
+                model_name += f'-{self.dir_alpha}'
             if self.embed == 'g':
                 model_name += f'-{self.gnn_type}-{self.gnn_hop}'
             if self.adv_iter != 0:
-                model_name += f'-{self.adv_policy}.{self.adv_iter}.{self.adv_replace_num}'
+                if self.adv_policy in ['hot', 'rdm']:
+                    model_name += f'-{self.adv_policy}.{self.adv_iter}.{self.adv_replace_num}'
+                elif self.adv_policy == 'diy':
+                    model_name += f'-{self.adv_policy}.{self.adv_iter}.{self.adv_step}'
             return model_name
         else:
             return self._model_name

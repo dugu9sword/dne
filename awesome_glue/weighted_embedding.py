@@ -44,12 +44,15 @@ class WeightedEmbedding(Embedding):
             coeff_logit = (_coeff + 1e-6).log()
         else:
             last_fw, last_bw = adv_utils.read_var_hook("coeff_logit")
-            grad_norm = torch.norm(last_bw, dim=-1, keepdim=True) + 1e-6
-            coeff_logit = last_fw + adv_utils.recieve("step") * last_bw / grad_norm
+            coeff_logit = last_fw + adv_utils.recieve("step") * last_bw
+#             grad_norm = torch.norm(last_bw, dim=-1, keepdim=True) + 1e-6
+#             coeff_logit = last_fw + adv_utils.recieve("step") * last_bw / grad_norm
         
         coeff_logit.requires_grad_()
         adv_utils.register_var_hook("coeff_logit", coeff_logit)
         coeff = F.softmax(coeff_logit, dim=1)
+        torch.set_printoptions(sci_mode=False, precision=4)
+#         print(coeff[0, :])
         embedded = (embedded * coeff.unsqueeze(-1)).sum(-2)
         embedded = embedded.view(*tokens.size(), self.weight.size(1))
         return embedded

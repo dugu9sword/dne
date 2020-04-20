@@ -371,7 +371,7 @@ class AdvTrainer(TrainerBase):
         # Set the model to "train" mode.
         self._pytorch_model.train()
 
-        if self.adv_policy.adv_iteration > 0:
+        if isinstance(self.adv_policy, (adv_utils.HotFlipPolicy, adv_utils.RandomNeighbourPolicy)):
             hooks = adv_utils.register_embedding_hook(self.model)
             embedding_matrix = util.find_embedding_layer(self.model).weight
 
@@ -574,7 +574,7 @@ class AdvTrainer(TrainerBase):
         if self._distributed:
             dist.barrier()
 
-        if self.adv_policy.adv_iteration > 0:
+        if isinstance(self.adv_policy, (adv_utils.HotFlipPolicy, adv_utils.RandomNeighbourPolicy)):
             for hook in hooks:
                 hook.remove()
 

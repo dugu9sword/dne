@@ -53,11 +53,10 @@ class DirichletEmbedding(Embedding):
         coeff = coeff.view(embedded.size(0), n_samples, -1)
         
         # n_words x n_samples x 1
-        zero_mask = (tmp_tokens == 0).unsqueeze(1)
-        coeff.masked_fill_(zero_mask, 0.)
-
-        coeff[:, :, 0] += 1e-6
-        coeff = coeff / coeff.sum(dim=2, keepdims=True)
+        # zero_mask = (tmp_tokens == 0).unsqueeze(1)
+        # coeff.masked_fill_(zero_mask, 0.)
+        # coeff[:, :, 0] += 1e-6
+        # coeff = coeff / coeff.sum(dim=2, keepdims=True)
 
         # n_words x n_samples x dim
         cand_embedded = (embedded.unsqueeze(1) * coeff.unsqueeze(-1)).sum(-2)
@@ -67,10 +66,10 @@ class DirichletEmbedding(Embedding):
             embedded = embedded.view(*tokens.size(), self.weight.size(1))
         else:
             last_fw, last_bw = adv_utils.read_var_hook("embedding")
-            grad_norm = torch.norm(last_bw, dim=-1, keepdim=True) + 1e-6
+            # grad_norm = torch.norm(last_bw, dim=-1, keepdim=True) + 1e-6
             # n_words x dim
             last_embedded = last_fw.view(-1, self.weight.size(1))
-            new_embedded = last_fw + adv_utils.recieve("step") * last_bw / grad_norm
+            new_embedded = last_fw + adv_utils.recieve("step") * last_bw
             # n_words x dim
             new_embedded = new_embedded.view(-1, self.weight.size(1))
             
