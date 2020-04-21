@@ -71,7 +71,9 @@ class Task:
             elif config.embed == "d":
                 counter_searcher = CachedWordSearcher(
                     "external_data/ibp-nbrs.json",
-                    self.vocab.get_token_to_index_vocabulary("tokens")
+                    # "external_data/IMDB-euc-top8.json",
+                    self.vocab.get_token_to_index_vocabulary("tokens"),
+                    second_order=config.mode == 'train' and config.second_order
                 )
                 neighbours = get_neighbour_matrix(self.vocab, counter_searcher)
                 token_embedder = embed_util.build_dirichlet_embedding(
@@ -201,7 +203,8 @@ class Task:
             "searcher": WordIndexSearcher(
                             CachedWordSearcher(
                                 "external_data/ibp-nbrs.json",
-                                model_vocab.get_token_to_index_vocabulary("tokens")
+                                model_vocab.get_token_to_index_vocabulary("tokens"),
+                                second_order=False
                             ),
                             word2idx=model_vocab.get_token_index,
                             idx2word=model_vocab.get_token_from_index,

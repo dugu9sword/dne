@@ -15,6 +15,7 @@ class CachedWordSearcher(Searcher):
         self,
         file_name: str,
         vocab_list,
+        second_order: bool = False,
         verbose: bool = False,
     ):
         super().__init__()
@@ -36,6 +37,18 @@ class CachedWordSearcher(Searcher):
                             self.nbrs[k].append(v)
         else:
             self.nbrs = loaded
+        if second_order:
+            nbrs = dict(self.nbrs)
+            ex_nbrs = defaultdict(lambda: [], {})
+            for k in nbrs:
+                for v in nbrs[k]:
+                    ex_nbrs[k].append(v)
+                    if v in nbrs:
+                        for vv in nbrs[v]:
+                            if vv not in ex_nbrs[k]:
+                                if vv != k:
+                                    ex_nbrs[k].append(vv)
+            self.nbrs = ex_nbrs
 
         if verbose:
             nbrs = dict(self.nbrs)

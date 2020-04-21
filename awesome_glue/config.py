@@ -16,7 +16,8 @@ class Config(ProgramArgs):
         self.mode = 'train'
         
         # dirichlet settings
-        self.dir_alpha = 1.0
+        self.dir_alpha = 0.1
+        self.dir_second_order = True
     
         # graph settings
         self.gnn_type = 'mean'
@@ -28,7 +29,7 @@ class Config(ProgramArgs):
         self.adv_iter = 10
         # hot -> hotflip, rdm -> random, diy -> model do it itself
         self.adv_policy = 'diy'
-        self.adv_step = 0.1
+        self.adv_step = 10.0
         self.adv_replace_num = 0.6
 
         # predictor settings
@@ -39,7 +40,7 @@ class Config(ProgramArgs):
         # attack settings
         self.attack_method = 'genetic'
         self.attack_data_split = 'test'
-        self.attack_size = 100
+        self.attack_size = 200
         # self.attack_data_split = 'train'
         # self.attack_size = -1
         self.attack_gen_adv = False
@@ -66,8 +67,10 @@ class Config(ProgramArgs):
             assert not (self.aug_data != '' and self.adv_iter != 0)
             if self.aug_data != '':
                 model_name += '-aug'
-            if self.embed == 'd':
+            if self.embed in ['d', 'w']:
                 model_name += f'-{self.dir_alpha}'
+                if self.dir_second_order:
+                    model_name += '-2nd'
             if self.embed == 'g':
                 model_name += f'-{self.gnn_type}-{self.gnn_hop}'
             if self.adv_iter != 0:

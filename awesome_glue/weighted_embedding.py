@@ -39,20 +39,33 @@ class WeightedEmbedding(Embedding):
         )
         
         if not adv_utils.is_adv_mode():
-            _coeff = dirichlet_sampling(nbr_num_lst, self.alpha, max_nbr_num)
+            if self.alpha == -1:
+                alpha = np.random.uniform(0.1, 1.0)
+            else:
+                alpha = self.alpha
+            _coeff = dirichlet_sampling(nbr_num_lst, alpha, max_nbr_num)
             _coeff = torch.from_numpy(_coeff).to(self.weight.device)        
             coeff_logit = (_coeff + 1e-6).log()
+            # print('normal')
         else:
             last_fw, last_bw = adv_utils.read_var_hook("coeff_logit")
-            coeff_logit = last_fw + adv_utils.recieve("step") * last_bw
-#             grad_norm = torch.norm(last_bw, dim=-1, keepdim=True) + 1e-6
-#             coeff_logit = last_fw + adv_utils.recieve("step") * last_bw / grad_norm
+            # coeff_logit = last_fw + adv_utils.recieve("step") * last_bw
+            norm_last_bw = last_bw / (torch.norm(last_bw, dim=-1, keepdim=True) + 1e-6)
+            coeff_logit = last_fw + adv_utils.recieve("step") * norm_last_bw
         
+        coeff_logit = coeff_logit - coeff_logit.max(1, keepdim=True)[0]
+
         coeff_logit.requires_grad_()
         adv_utils.register_var_hook("coeff_logit", coeff_logit)
         coeff = F.softmax(coeff_logit, dim=1)
-        torch.set_printoptions(sci_mode=False, precision=4)
-#         print(coeff[0, :])
+
+        # if adv_utils.is_adv_mode():
+        #     last_coeff = F.softmax(last_fw, dim=1)
+        #     new_points = (embedded[:20] * coeff[:20].unsqueeze(-1)).sum(-2)
+        #     old_points = (embedded[:20] * last_coeff[:20].unsqueeze(-1)).sum(-2)
+        #     step_size = (new_points - old_points).norm(dim=-1).mean()
+        #     inner_size = (embedded[:20, 1:] - embedded[:20, :1]).norm(dim=-1).mean()
+        #     print(round(inner_size.item(), 3), round(step_size.item(), 3))
         embedded = (embedded * coeff.unsqueeze(-1)).sum(-2)
         embedded = embedded.view(*tokens.size(), self.weight.size(1))
         return embedded
