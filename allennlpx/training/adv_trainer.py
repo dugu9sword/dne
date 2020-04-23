@@ -340,6 +340,8 @@ class AdvTrainer(TrainerBase):
         Does a forward pass on the given batches and returns the `loss` value in the result.
         If `for_training` is `True` also applies regularization penalty.
         """
+        adv_utils.reset_embedding_hook()
+        
         batch = nn_util.move_to_device(batch, self.cuda_device)
         output_dict = self._pytorch_model(**batch)
 

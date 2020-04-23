@@ -68,6 +68,8 @@ def read_embedding_hook(order):
     bw = ram_read('EMBEDDING_HOOK.bw')[-(order + 1)]
     return fw, bw
 
+def reset_embedding_hook():
+    ram_reset("EMBEDDING_HOOK")
 
 def register_var_hook(name, variable):
     ram_write(f"VAR_HOOK.{name}.fw", variable.detach())

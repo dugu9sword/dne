@@ -138,8 +138,8 @@ class Predictor(Predictor_):
                     ret.append(en_output)
         return sanitize(ret)
 
-    def predict_json(self, json_dict: JsonDict):
-        return self.predict_batch_json([json_dict])[0]
+    def predict_json(self, json_dict: JsonDict, fast=False):
+        return self.predict_batch_json([json_dict], fast)[0]
 
     def predict_batch_instance(self, instances: List[Instance]):
         if self._ensemble_num == 1 and self._transform_fn is None:

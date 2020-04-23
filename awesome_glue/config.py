@@ -6,18 +6,19 @@ class Config(ProgramArgs):
         super().__init__()
 
         # basic settings
-        self.task_id = "SST"
-        self.embed = 'w'   # d/g/w/_
-        self.arch = 'cnn'
-        self.pool = 'max'
+        self.task_id = "IMDB"
+        self.embed = ''   # d/g/w/_
+        self.arch = 'boe'
+        self._pool = 'max'
         self.pretrain = 'glove'
 #         self._model_name = "AGNEWS-lstm-hot.1.5.con"
-        self._model_name = "tmp"   # if set to tmp, existing models will be overrided
-        self.mode = 'train'
+        self._model_name = ""   # if set to tmp, existing models will be overrided
+        self.mode = 'attack'
         
         # dirichlet settings
         self.dir_alpha = 0.1
-        self.dir_second_order = True
+        self.nbr_num = 24
+        self.nbr_2nd = '11'
     
         # graph settings
         self.gnn_type = 'mean'
@@ -26,11 +27,11 @@ class Config(ProgramArgs):
         # training settings
         # self.aug_data = 'nogit/AGNEWS-lstm.pwws.aug.tsv'
         self.aug_data = ''
-        self.adv_iter = 10
+        self.adv_iter = 1
         # hot -> hotflip, rdm -> random, diy -> model do it itself
-        self.adv_policy = 'diy'
+        self.adv_policy = 'hot'
         self.adv_step = 10.0
-        self.adv_replace_num = 0.6
+        self.adv_replace_num = 0.15
 
         # predictor settings
         self.pred_ensemble = 16
@@ -39,6 +40,7 @@ class Config(ProgramArgs):
 
         # attack settings
         self.attack_method = 'genetic'
+        self.attack_use_lm = False
         self.attack_data_split = 'test'
         self.attack_size = 200
         # self.attack_data_split = 'train'
@@ -52,6 +54,16 @@ class Config(ProgramArgs):
         self.alchemist = False
         self.seed = 2
         self.cuda = 0
+
+    @property
+    def pool(self):
+        if not self._pool:
+            if self.arch == 'cnn':
+                return 'max'
+            elif self.arch == 'boe':
+                return 'mean'
+        else:
+            return self._pool
 
     @property
     def tokenizer(self):
@@ -69,7 +81,7 @@ class Config(ProgramArgs):
                 model_name += '-aug'
             if self.embed in ['d', 'w']:
                 model_name += f'-{self.dir_alpha}'
-                if self.dir_second_order:
+                if self.nbr_2nd[0] == '2':
                     model_name += '-2nd'
             if self.embed == 'g':
                 model_name += f'-{self.gnn_type}-{self.gnn_hop}'

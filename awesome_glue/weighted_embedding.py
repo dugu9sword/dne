@@ -26,6 +26,8 @@ class WeightedEmbedding(Embedding):
         max_nbr_num = self.neighbours.size(1)        
         nbr_tokens = self.neighbours[tokens].view(-1, max_nbr_num)
         nbr_num_lst = (nbr_tokens != 0).sum(dim=1).tolist()
+        max_nbr_num = max(nbr_num_lst)
+        nbr_tokens = nbr_tokens[:, :max_nbr_num]
 
         # n_words x n_nbrs x dim
         embedded = embedding(

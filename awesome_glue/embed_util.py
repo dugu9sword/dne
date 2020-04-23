@@ -48,7 +48,7 @@ def build_embedding(vocab: Vocabulary, pretrain: str, cache_embed_path: str):
         embedding_dim=EMBED_DIM[pretrain],
         weight=read_weight(vocab, pretrain, cache_embed_path),
         #  projection_dim=100,
-        sparse=True,
+        sparse=False,
         trainable=True)
 
 

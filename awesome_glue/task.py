@@ -69,23 +69,37 @@ class Task:
             if config.embed == "":
                 token_embedder = embed_util.build_embedding(**embed_args)
             elif config.embed == "d":
-                counter_searcher = CachedWordSearcher(
-                    "external_data/ibp-nbrs.json",
-                    # "external_data/IMDB-euc-top8.json",
-                    self.vocab.get_token_to_index_vocabulary("tokens"),
-                    second_order=config.mode == 'train' and config.second_order
-                )
-                neighbours = get_neighbour_matrix(self.vocab, counter_searcher)
-                token_embedder = embed_util.build_dirichlet_embedding(
-                    **embed_args,
-                    alphas=config.dir_alpha,
-                    neighbours=neighbours.cuda())
+                pass
+                # counter_searcher = CachedWordSearcher(
+                #     "external_data/ibp-nbrs.json",
+                #     # "external_data/IMDB-euc-top8.json",
+                #     self.vocab.get_token_to_index_vocabulary("tokens"),
+                #     second_order=config.mode == 'train' and config.second_order
+                # )
+                # neighbours = get_neighbour_matrix(self.vocab, counter_searcher)
+                # token_embedder = embed_util.build_dirichlet_embedding(
+                #     **embed_args,
+                #     alphas=config.dir_alpha,
+                #     neighbours=neighbours.cuda())
             elif config.embed == "w":
+                if config.mode == 'train':
+                    if config.nbr_2nd[0] == '2':
+                        second_order = True
+                    elif config.nbr_2nd[0] == '1':
+                        second_order = False
+                elif config.mode == 'attack':
+                    if config.nbr_2nd[1] == '2':
+                        second_order = True
+                    elif config.nbr_2nd[1] == '1':
+                        second_order = False
+                log(f'However model is trained, the second-order = {second_order}')
                 counter_searcher = CachedWordSearcher(
                     "external_data/ibp-nbrs.json",
-                    self.vocab.get_token_to_index_vocabulary("tokens")
+                    self.vocab.get_token_to_index_vocabulary("tokens"),
+                    second_order=second_order
                 )
                 neighbours = get_neighbour_matrix(self.vocab, counter_searcher)
+                neighbours = neighbours[:, :self.config.nbr_num]
                 token_embedder = embed_util.build_weighted_embedding(
                     **embed_args,
                     alphas=config.dir_alpha,
@@ -366,6 +380,8 @@ class Task:
 
         # Speed up the predictor
         self.predictor.set_max_tokens(360000)
+        if self.config.nbr_2nd[1] == '2':
+            self.predictor.set_max_tokens(90000)
             
         # Set up the attacker
         # Whatever bert/non-bert model, we use the spacy vocab

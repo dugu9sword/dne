@@ -117,7 +117,7 @@ class Genetic(Attacker):
                 print('DETECTED SUCCESS with PROBS', results[cand_idx])
                 pass_validation = 0 
                 for _ in range(5):
-                    validation = self.predictor.predict_json({"sent": " ".join(final_tokens)})
+                    validation = self.predictor.predict_json({"sent": " ".join(final_tokens)}, fast=True)
                     print("validation:", validation)
                     if np.argmax(validation['probs']) != true_idx:
                         pass_validation += 1

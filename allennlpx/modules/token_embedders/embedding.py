@@ -52,11 +52,11 @@ class VanillaEmbedding(Embedding):
                 projection = TimeDistributed(projection)
             embedded = projection(embedded)
 
-        if adv_utils.has_gradient_info():
-            info = adv_utils.get_gradient_info()
-            grad_norm = torch.norm(info.last_bw, dim=-1, keepdim=True) + 1e-6
-            delta = info.last_bw / grad_norm
-            embedded += info.grd_step * delta
+        # if adv_utils.is_adv_mode():
+        #     info = adv_utils.get_gradient_info()
+        #     grad_norm = torch.norm(info.last_bw, dim=-1, keepdim=True) + 1e-6
+        #     delta = info.last_bw / grad_norm
+        #     embedded += info.grd_step * delta
         return embedded
 
 
