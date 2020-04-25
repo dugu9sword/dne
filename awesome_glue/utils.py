@@ -12,6 +12,7 @@ import logging
 import pandas
 from luna import batch_pad
 from collections import Counter
+from functools import lru_cache
 
 
 logger = logging.getLogger(__name__)
@@ -133,6 +134,37 @@ def dirichlet_sampling(sample_sizes, alpha, max_sample_size=None):
             dir_offset[n] += 1
             ret.append(dir_dct[n][dir_offset[n]])
     return ret
+
+
+_cache_dirichlet_size = 100000
+
+@lru_cache(maxsize=None)
+def _cache_dirichlet(alpha, sample_size, max_sample_size):
+    if sample_size == 0:
+        return None
+    diri = np.random.dirichlet([alpha] * sample_size, _cache_dirichlet_size).astype(np.float32)
+    zero = np.zeros((_cache_dirichlet_size, max_sample_size - sample_size), dtype=np.float32)
+    ret = np.concatenate((diri, zero), axis=1).tolist()
+    return ret
+
+def dirichlet_sampling_fast(sample_sizes, alpha, max_sample_size=None):
+    if max_sample_size is None:
+        max_sample_size = max(sample_sizes)
+    ret = []
+    default_prob = [1.0] + [0.0] * (max_sample_size - 1)
+    cache_probs = []
+    cache_offsets = []
+    for s in range(max_sample_size + 1):
+        cache_probs.append(_cache_dirichlet(alpha, s, max_sample_size))
+        cache_offsets.append(random.randint(0, _cache_dirichlet_size))
+    for i, n in enumerate(sample_sizes):
+        if n == 0:
+            ret.append(default_prob)
+        else:
+            cache_offsets[n] = (cache_offsets[n] + 1) % _cache_dirichlet_size
+            ret.append(cache_probs[n][cache_offsets[n]])
+    return ret
+
 
 
 

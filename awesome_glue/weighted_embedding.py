@@ -8,7 +8,7 @@ from allennlp.modules.token_embedders.embedding import Embedding
 from luna import ram_write
 from allennlpx.training import adv_utils
 import torch.nn.functional as F
-from awesome_glue.utils import dirichlet_sampling
+from awesome_glue.utils import dirichlet_sampling, dirichlet_sampling_fast
 
 class WeightedEmbedding(Embedding):
     def __init__(
@@ -45,7 +45,7 @@ class WeightedEmbedding(Embedding):
                 alpha = np.random.uniform(0.1, 1.0)
             else:
                 alpha = self.alpha
-            _coeff = dirichlet_sampling(nbr_num_lst, alpha, max_nbr_num)
+            _coeff = dirichlet_sampling_fast(nbr_num_lst, alpha, max_nbr_num)
             _coeff = torch.Tensor(_coeff).to(self.weight.device)        
             coeff_logit = (_coeff + 1e-6).log()
             # print('normal')
