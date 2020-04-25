@@ -118,16 +118,21 @@ def dirichlet_sampling(sample_sizes, alpha, max_sample_size=None):
 
     cnter = Counter(sample_sizes)
     dir_dct = {}
+    dir_offset = {}
     for k in cnter:
-        dir_dct[k] = np.random.dirichlet([alpha] * k, cnter[k]).astype(np.float32).tolist()
+        diri = np.random.dirichlet([alpha] * k, cnter[k]).astype(np.float32)
+        zero = np.zeros((cnter[k], max_sample_size - k), dtype=np.float32)
+        dir_dct[k] = np.concatenate((diri, zero), axis=1).tolist()
+        dir_offset[k] = -1
     ret = []
+    default_prob = [1] + [0] * (max_sample_size - 1)
     for n in sample_sizes:
         if n == 0:
-            ret.append([1])
+            ret.append(default_prob)
         else:
-            ret.append(dir_dct[n].pop())
-    ret = batch_pad(ret, 0, pad_len=max_sample_size)
-    return np.array(ret, dtype=np.float32)
+            dir_offset[n] += 1
+            ret.append(dir_dct[n][dir_offset[n]])
+    return ret
 
 
 

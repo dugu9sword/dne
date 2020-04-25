@@ -469,7 +469,7 @@ class AdvTrainer(TrainerBase):
                     else:
                         raise Exception
                     adv_fields['tokens'][token_key] = adv_tokens
-                    loss = self.batch_loss(batch, for_training=True)
+                    loss = self.batch_loss(batch, for_training=True) / self.adv_policy.adv_iteration
                     if torch.isnan(loss):
                         raise ValueError("nan loss encountered")
                     if self._opt_level is not None:

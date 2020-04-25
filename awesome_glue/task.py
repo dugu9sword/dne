@@ -36,7 +36,7 @@ from luna.logging import log
 from luna.public import Aggregator, auto_create, numpy_seed
 from luna.pytorch import set_seed
 from allennlp.training.metrics.categorical_accuracy import CategoricalAccuracy
-from allennlp.training.checkpointer import Checkpointer
+from allennlpx.training.checkpointer import CheckpointerX
 from allennlpx.training import adv_utils
 import logging
 from awesome_glue.data_loader import load_banned_words, load_data
@@ -278,8 +278,8 @@ class Task:
         trainer.train()
 
     def from_pretrained(self):
-        ckpter = Checkpointer(f'saved/models/{self.config.model_name}')
-        model_path = ckpter.find_latest_checkpoint()[0]
+        ckpter = CheckpointerX(f'saved/models/{self.config.model_name}')
+        model_path = ckpter.find_latest_best_checkpoint(10, 'validation_accuracy')[0]
         # model_path = f'saved/models/{self.config.model_name}/best.th'
         print(f'Load model from {model_path}')
         self.model.load_state_dict(torch.load(model_path))
@@ -381,7 +381,12 @@ class Task:
         # Speed up the predictor
         self.predictor.set_max_tokens(360000)
         if self.config.nbr_2nd[1] == '2':
-            self.predictor.set_max_tokens(90000)
+            if self.config.nbr_num <= 12:
+                self.predictor.set_max_tokens(360000)
+            elif self.config.nbr_num <= 24:
+                self.predictor.set_max_tokens(120000)
+            else:
+                self.predictor.set_max_tokens(90000)
             
         # Set up the attacker
         # Whatever bert/non-bert model, we use the spacy vocab
@@ -443,11 +448,11 @@ class Task:
                 result = attacker.attack_from_json(raw_json)
                 adv_json[field_to_change] = allenutil.as_sentence(result['adv'])
                 
+                if "generation" in result:
+                    print("stop at generation", result['generation'])
                 # sanity check: in case of failure, the changed num should be close to
                 # the max change num.
                 if not result['success']:
-                    if "generation" in result:
-                        print(result['generation'])
                     diff = text_diff(result['raw'], result['adv'])
                     print('[Fail statistics]', diff)
 

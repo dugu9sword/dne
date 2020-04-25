@@ -7,9 +7,9 @@ class Config(ProgramArgs):
 
         # basic settings
         self.task_id = "IMDB"
-        self.embed = ''   # d/g/w/_
-        self.arch = 'boe'
-        self._pool = 'max'
+        self.embed = 'w'   # d/g/w/_
+        self.arch = 'cnn'
+        self._pool = ''
         self.pretrain = 'glove'
 #         self._model_name = "AGNEWS-lstm-hot.1.5.con"
         self._model_name = ""   # if set to tmp, existing models will be overrided
@@ -17,8 +17,8 @@ class Config(ProgramArgs):
         
         # dirichlet settings
         self.dir_alpha = 0.1
-        self.nbr_num = 24
-        self.nbr_2nd = '11'
+        self.nbr_num = 12
+        self.nbr_2nd = '22'
     
         # graph settings
         self.gnn_type = 'mean'
@@ -27,9 +27,9 @@ class Config(ProgramArgs):
         # training settings
         # self.aug_data = 'nogit/AGNEWS-lstm.pwws.aug.tsv'
         self.aug_data = ''
-        self.adv_iter = 1
+        self.adv_iter = 10
         # hot -> hotflip, rdm -> random, diy -> model do it itself
-        self.adv_policy = 'hot'
+        self.adv_policy = 'diy'
         self.adv_step = 10.0
         self.adv_replace_num = 0.15
 
@@ -75,12 +75,13 @@ class Config(ProgramArgs):
     @property
     def model_name(self):
         if not self._model_name:
-            model_name = f"{self.task_id}-{self.embed + self.arch}-{self.pretrain}-{self.pool}"
+            model_name = f"{self.task_id}-{self.embed + self.arch}"
             assert not (self.aug_data != '' and self.adv_iter != 0)
             if self.aug_data != '':
                 model_name += '-aug'
             if self.embed in ['d', 'w']:
                 model_name += f'-{self.dir_alpha}'
+                model_name += f'-{self.nbr_num}'
                 if self.nbr_2nd[0] == '2':
                     model_name += '-2nd'
             if self.embed == 'g':

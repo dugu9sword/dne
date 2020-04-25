@@ -1,5 +1,5 @@
 task,    arch,  num_epochs, batch_size
-*,       *,     11,         32
+*,       *,     20,         32
 *,       bert,  3,          16
 SST,     bert,  3,          32
 SNLI,    bert,  3,          32

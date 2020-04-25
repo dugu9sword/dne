@@ -46,7 +46,7 @@ class WeightedEmbedding(Embedding):
             else:
                 alpha = self.alpha
             _coeff = dirichlet_sampling(nbr_num_lst, alpha, max_nbr_num)
-            _coeff = torch.from_numpy(_coeff).to(self.weight.device)        
+            _coeff = torch.Tensor(_coeff).to(self.weight.device)        
             coeff_logit = (_coeff + 1e-6).log()
             # print('normal')
         else:
