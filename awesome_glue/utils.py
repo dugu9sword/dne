@@ -136,7 +136,7 @@ def dirichlet_sampling(sample_sizes, alpha, max_sample_size=None):
     return ret
 
 
-_cache_dirichlet_size = 100000
+_cache_dirichlet_size = 10000
 
 @lru_cache(maxsize=None)
 def _cache_dirichlet(alpha, sample_size, max_sample_size):
@@ -161,7 +161,7 @@ def dirichlet_sampling_fast(sample_sizes, alpha, max_sample_size=None):
         if n == 0:
             ret.append(default_prob)
         else:
-            cache_offsets[n] = (cache_offsets[n] + 1) % _cache_dirichlet_size
+            cache_offsets[n] = (cache_offsets[n] + i) % _cache_dirichlet_size
             ret.append(cache_probs[n][cache_offsets[n]])
     return ret
 

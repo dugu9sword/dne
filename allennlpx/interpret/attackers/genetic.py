@@ -146,7 +146,8 @@ class Genetic(Attacker):
         
 #         print(list(self.lm_constraints.keys())[1])
 #         print(allenutil.as_sentence(raw_tokens))
-        lm_filters = self.lm_constraints[allenutil.as_sentence(raw_tokens)]
+        if self.lm_constraints:
+            lm_filters = self.lm_constraints[allenutil.as_sentence(raw_tokens)]
 #         print(lm_filters)
         # pre-compute some variables for later operations
         self.ram_pool.clear()
@@ -159,15 +160,17 @@ class Genetic(Attacker):
                 cands = [
                     ele for ele in cands if ele not in self.forbidden_tokens
                 ]
-                ram_append("before_lm", len(cands))
-                cands = [
-                    ele for ele in cands if ele in lm_filters[str(i)]
-                ]
-                ram_append("after_lm", len(cands))
+                if self.lm_constraints:
+                    ram_append("before_lm", len(cands))
+                    cands = [
+                        ele for ele in cands if ele in lm_filters[str(i)]
+                    ]
+                    ram_append("after_lm", len(cands))
                 if len(cands) > 0:
                     legal_sids.append(i)
                     nbr_dct[i] = cands
-        print("LM constraints:", round(100 * sum(ram_read("after_lm")) /sum(ram_read("before_lm")), 2))
+        if self.lm_constraints:
+            print("LM constraints:", round(100 * sum(ram_read("after_lm")) /sum(ram_read("before_lm")), 2))
         self.ram_pool['legal_sids'] = legal_sids
         self.ram_pool['nbr_dct'] = nbr_dct
         self.ram_pool['volatile_json'] = _volatile_json_

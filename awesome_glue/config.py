@@ -40,7 +40,6 @@ class Config(ProgramArgs):
 
         # attack settings
         self.attack_method = 'genetic'
-        self.attack_use_lm = False
         self.attack_data_split = 'test'
         self.attack_size = 200
         # self.attack_data_split = 'train'

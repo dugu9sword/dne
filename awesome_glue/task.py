@@ -419,6 +419,13 @@ class Task:
                                lm_topk=-1,
                                lm_constraints=json.load(open(f"external_data/ibp-nbrs.{self.config.task_id}.lm.json")),
                                **general_kwargs)
+        elif self.config.attack_method == 'genetic_nolm':
+            attacker = Genetic(self.predictor,
+                               num_generation=40,
+                               num_population=60,
+                               lm_topk=-1,
+                               lm_constraints=None,
+                               **general_kwargs)
         else:
             raise Exception()
 
