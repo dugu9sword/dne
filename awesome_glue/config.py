@@ -6,13 +6,13 @@ class Config(ProgramArgs):
         super().__init__()
 
         # basic settings
-        self.task_id = "SNLI"
-        self.embed = ''   # g/w/_
-        self.arch = 'biboe'
+        self.task_id = "SST"
+        self.embed = 'w'   # g/w/_
+        self.arch = 'boe'
         self._pool = ''
         self.pretrain = 'glove'
 #         self._model_name = "AGNEWS-lstm-hot.1.5.con"
-        self._model_name = "tmp"   # if set to tmp, existing models will be overrided
+        self._model_name = ""   # if set to tmp, existing models will be overrided
         self.mode = 'train'
         
         # dirichlet settings
@@ -28,7 +28,7 @@ class Config(ProgramArgs):
         # training settings
         # self.aug_data = 'nogit/AGNEWS-lstm.pwws.aug.tsv'
         self.aug_data = ''
-        self.adv_iter = 0
+        self.adv_iter = 10
         # hot -> hotflip, rdm -> random, diy -> model do it itself
         self.adv_policy = 'diy'
         self.adv_step = 10.0
@@ -89,6 +89,8 @@ class Config(ProgramArgs):
     def model_name(self):
         if not self._model_name:
             model_name = f"{self.task_id}-{self.embed + self.arch}"
+            if self.pool:
+                model_name += f"-{self.pool}"
             assert not (self.aug_data != '' and self.adv_iter != 0)
             if self.aug_data != '':
                 model_name += '-aug'

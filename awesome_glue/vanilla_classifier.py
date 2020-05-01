@@ -10,7 +10,7 @@ from allennlpx.training import adv_utils
 
 from allennlp.modules.seq2vec_encoders import PytorchSeq2VecWrapper
 
-from allennlp.modules.seq2vec_encoders import BagOfEmbeddingsEncoder
+from allennlpx.modules.seq2vec_encoders.boe_encoder import BagOfEmbeddingsEncoder
 from allennlpx.modules.seq2vec_encoders.cnn_encoder import CnnEncoder
 from allennlp.modules.token_embedders import TokenEmbedder
 from luna import ram_pop, ram_has, ram_read, LabelSmoothingLoss
@@ -59,7 +59,7 @@ class Classifier(Model):
         elif arch == 'boe':
             self.encoder = BagOfEmbeddingsEncoder(
                 embedding_dim=token_embedder.get_output_dim(), 
-                averaged= pool == 'mean'
+                pool = pool
             )
         else:
             raise Exception()
