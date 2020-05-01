@@ -6,19 +6,20 @@ class Config(ProgramArgs):
         super().__init__()
 
         # basic settings
-        self.task_id = "IMDB"
-        self.embed = 'w'   # d/g/w/_
-        self.arch = 'cnn'
+        self.task_id = "SNLI"
+        self.embed = ''   # g/w/_
+        self.arch = 'biboe'
         self._pool = ''
         self.pretrain = 'glove'
 #         self._model_name = "AGNEWS-lstm-hot.1.5.con"
-        self._model_name = ""   # if set to tmp, existing models will be overrided
-        self.mode = 'attack'
+        self._model_name = "tmp"   # if set to tmp, existing models will be overrided
+        self.mode = 'train'
         
         # dirichlet settings
         self.dir_alpha = 0.1
-        self.nbr_num = 12
-        self.nbr_2nd = '22'
+        self.dir_decay = 0.99
+        self.nbr_num = 64
+        self.nbr_2nd = '21'
     
         # graph settings
         self.gnn_type = 'mean'
@@ -27,7 +28,7 @@ class Config(ProgramArgs):
         # training settings
         # self.aug_data = 'nogit/AGNEWS-lstm.pwws.aug.tsv'
         self.aug_data = ''
-        self.adv_iter = 10
+        self.adv_iter = 0
         # hot -> hotflip, rdm -> random, diy -> model do it itself
         self.adv_policy = 'diy'
         self.adv_step = 10.0
@@ -55,6 +56,19 @@ class Config(ProgramArgs):
         self.cuda = 0
 
     @property
+    def second_order(self):
+        if self.mode == 'train':
+            if self.nbr_2nd[0] == '2':
+                return True
+            elif self.nbr_2nd[0] == '1':
+                return False
+        elif self.mode == 'attack':
+            if self.nbr_2nd[1] == '2':
+                return True
+            elif self.nbr_2nd[1] == '1':
+                return False
+
+    @property
     def pool(self):
         if not self._pool:
             if self.arch == 'cnn':
@@ -78,11 +92,13 @@ class Config(ProgramArgs):
             assert not (self.aug_data != '' and self.adv_iter != 0)
             if self.aug_data != '':
                 model_name += '-aug'
-            if self.embed in ['d', 'w']:
+            if self.embed in ['w']:
                 model_name += f'-{self.dir_alpha}'
                 model_name += f'-{self.nbr_num}'
                 if self.nbr_2nd[0] == '2':
                     model_name += '-2nd'
+                if 0.0 < self.dir_decay < 1.0:
+                    model_name += f'-{self.dir_decay}'
             if self.embed == 'g':
                 model_name += f'-{self.gnn_type}-{self.gnn_hop}'
             if self.adv_iter != 0:

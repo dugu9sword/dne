@@ -4,7 +4,6 @@ from luna import (LabelSmoothingLoss, auto_create)
 from allennlp.data.vocabulary import Vocabulary
 from allennlpx.modules.token_embedders.embedding import VanillaEmbedding
 from allennlpx.modules.token_embedders.graph_embedding import GraphEmbedding
-from awesome_glue.dirichlet_embedding import DirichletEmbedding
 from awesome_glue.weighted_embedding import WeightedEmbedding
 from collections import defaultdict
 import pathlib
@@ -66,27 +65,13 @@ def build_graph_embedding(vocab: Vocabulary, pretrain: str,
         trainable=True)
 
 
-def build_dirichlet_embedding(vocab: Vocabulary, pretrain: str,
-                              cache_embed_path: str, alphas, neighbours):
-    return DirichletEmbedding(
-        num_embeddings=vocab.get_vocab_size('tokens'),
-        embedding_dim=EMBED_DIM[pretrain],
-        weight=read_weight(vocab, pretrain, cache_embed_path),
-        alpha=alphas,
-        neighbours=neighbours,
-        #   projection_dim=100,
-        sparse=False,
-        trainable=True)
-
-
 def build_weighted_embedding(vocab: Vocabulary, pretrain: str,
-                             cache_embed_path: str, alphas, neighbours):
+                             cache_embed_path: str, hull):
     return WeightedEmbedding(
         num_embeddings=vocab.get_vocab_size('tokens'),
         embedding_dim=EMBED_DIM[pretrain],
         weight=read_weight(vocab, pretrain, cache_embed_path),
-        alpha=alphas,
-        neighbours=neighbours,
+        hull=hull,
         #   projection_dim=100,
         sparse=False,
         trainable=True)

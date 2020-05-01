@@ -16,54 +16,48 @@ class CachedWordSearcher(Searcher):
         file_name: str,
         vocab_list,
         second_order: bool = False,
-        verbose: bool = False,
     ):
         super().__init__()
         loaded = json.load(open(file_name))
-        if verbose:
-            print('Before: ')
-            nbr_num = list(map(len, list(loaded.values())))
-            print(f"total word: {len(loaded)}, ",
-                  f"mean: {round(np.mean(nbr_num), 2)}, ",
-                  f"median: {round(np.median(nbr_num), 2)}, "
-                  f"max: {np.max(nbr_num)}, ")
-            print(Counter(nbr_num))
+        # filter by a given vocabulary
         if vocab_list:
-            self.nbrs = defaultdict(lambda: [], {})
+            filtered = defaultdict(lambda: [], {})
             for k in loaded:
                 if k in vocab_list:
                     for v in loaded[k]:
                         if v in vocab_list:
-                            self.nbrs[k].append(v)
+                            filtered[k].append(v)
+            filtered = dict(filtered)
         else:
-            self.nbrs = loaded
+            filtered = loaded
+        # add second order words
         if second_order:
-            nbrs = dict(self.nbrs)
-            ex_nbrs = defaultdict(lambda: [], {})
-            for k in nbrs:
-                for v in nbrs[k]:
-                    ex_nbrs[k].append(v)
-                    if v in nbrs:
-                        for vv in nbrs[v]:
-                            if vv not in ex_nbrs[k]:
-                                if vv != k:
-                                    ex_nbrs[k].append(vv)
-            self.nbrs = ex_nbrs
-
-        if verbose:
-            nbrs = dict(self.nbrs)
-            print('After: ')
-            nbr_num = list(map(len, list(nbrs.values())))
-            print(f"total word: {len(nbrs)}, ",
-                  f"mean: {round(np.mean(nbr_num), 2)}, ",
-                  f"median: {round(np.median(nbr_num), 2)}, "
-                  f"max: {np.max(nbr_num)}, ")
-            print(Counter(nbr_num))
+            nbrs = defaultdict(lambda: [], {})
+            for k in filtered:
+                for v in filtered[k]:
+                    nbrs[k].append(v)
+                    # some neighbours have no neighbours
+                    if v not in filtered:
+                        continue
+                    for vv in filtered[v]:
+                        if vv != k and vv not in nbrs[k]:
+                            nbrs[k].append(vv)
+            nbrs = dict(nbrs)
+        else:
+            nbrs = filtered
+        self.nbrs = nbrs
+            
+    def show_verbose(self):
+        nbr_num = list(map(len, list(self.nbrs.values())))
+        print(f"total word: {len(self.nbrs)}, ",
+              f"mean: {round(np.mean(nbr_num), 2)}, ",
+              f"median: {round(np.median(nbr_num), 2)}, "
+              f"max: {np.max(nbr_num)}, ")
+        print(Counter(nbr_num))
 
     def search(self, word):
         if word in self.nbrs:
             return self.nbrs[word]
         else:
             return []
-
 

@@ -30,7 +30,7 @@ from awesome_glue.task_specs import TASK_SPECS, is_sentence_pair
 from awesome_glue.transforms import (transform_collate,
                                      parse_transform_fn_from_args)
 from awesome_glue.utils import (AttackMetric, FreqUtil, set_environments,
-                                text_diff, get_neighbours, get_neighbour_matrix,DirichletAnnealing, read_hyper)
+                                text_diff, get_neighbour_matrix, read_hyper)
 from luna import flt2str, ram_write
 from luna.logging import log
 from luna.public import Aggregator, auto_create, numpy_seed
@@ -40,7 +40,8 @@ from allennlpx.training.checkpointer import CheckpointerX
 from allennlpx.training import adv_utils
 import logging
 from awesome_glue.data_loader import load_banned_words, load_data
-from awesome_glue.dirichlet_embedding import DirichletEmbedding
+from awesome_glue.weighted_util import WeightedHull, SameAlphaHull, DecayAlphaHull
+from awesome_glue.biboe import BiBOE
 
 logging.getLogger('transformers').setLevel(logging.CRITICAL)
 
@@ -68,53 +69,38 @@ class Task:
         if config.arch != 'bert':
             if config.embed == "":
                 token_embedder = embed_util.build_embedding(**embed_args)
-            elif config.embed == "d":
-                pass
-                # counter_searcher = CachedWordSearcher(
-                #     "external_data/ibp-nbrs.json",
-                #     # "external_data/IMDB-euc-top8.json",
-                #     self.vocab.get_token_to_index_vocabulary("tokens"),
-                #     second_order=config.mode == 'train' and config.second_order
-                # )
-                # neighbours = get_neighbour_matrix(self.vocab, counter_searcher)
-                # token_embedder = embed_util.build_dirichlet_embedding(
-                #     **embed_args,
-                #     alphas=config.dir_alpha,
-                #     neighbours=neighbours.cuda())
             elif config.embed == "w":
-                if config.mode == 'train':
-                    if config.nbr_2nd[0] == '2':
-                        second_order = True
-                    elif config.nbr_2nd[0] == '1':
-                        second_order = False
-                elif config.mode == 'attack':
-                    if config.nbr_2nd[1] == '2':
-                        second_order = True
-                    elif config.nbr_2nd[1] == '1':
-                        second_order = False
-                log(f'However model is trained, the second-order = {second_order}')
-                counter_searcher = CachedWordSearcher(
-                    "external_data/ibp-nbrs.json",
-                    self.vocab.get_token_to_index_vocabulary("tokens"),
-                    second_order=second_order
-                )
-                neighbours = get_neighbour_matrix(self.vocab, counter_searcher)
-                neighbours = neighbours[:, :self.config.nbr_num]
+                hull_args = {
+                    "alpha": config.dir_alpha,
+                    "nbr_file": "external_data/ibp-nbrs.json",
+                    "vocab": self.vocab,
+                    "nbr_num": config.nbr_num,
+                    "second_order": config.second_order
+                }
+                if config.second_order and 0.0 < config.dir_decay < 1.0:
+                    hull = DecayAlphaHull.build(
+                        **hull_args,
+                        decay=config.dir_decay,
+                    )
+                else:
+                    hull = SameAlphaHull.build(**hull_args)
+                print(f'Using {type(hull)} with second_order={config.second_order}')             
+                    
                 token_embedder = embed_util.build_weighted_embedding(
                     **embed_args,
-                    alphas=config.dir_alpha,
-                    neighbours=neighbours.cuda())
-            elif config.embed == "g":
-                pass
-#                 edges = get_neighbours(spacy_vec, return_edges=True)
-#                 token_embedder = embed_util.build_graph_embedding(
-#                     **embed_args,
-#                     gnn={
-#                         "mean": MeanAggregator(300),
-#                         "pool": PoolingAggregator(300)
-#                     }[config.gnn_type],
-#                     edges=edges.cuda(),
-#                     hop=config.gnn_hop)
+                    hull=hull
+                )
+            # elif config.embed == "g":
+            #     pass
+            #     edges = get_neighbours(spacy_vec, return_edges=True)
+            #     token_embedder = embed_util.build_graph_embedding(
+            #         **embed_args,
+            #         gnn={
+            #             "mean": MeanAggregator(300),
+            #             "pool": PoolingAggregator(300)
+            #         }[config.gnn_type],
+            #         edges=edges.cuda(),
+            #         hop=config.gnn_hop)
             else:
                 raise Exception()
 
@@ -124,6 +110,11 @@ class Task:
                 token_embedder=token_embedder,
                 arch=config.arch,
                 pool=config.pool,
+                num_labels=TASK_SPECS[config.task_id]['num_labels'])
+        elif config.arch == 'biboe':
+            self.model = BiBOE(
+                vocab=self.vocab,
+                token_embedder=token_embedder,
                 num_labels=TASK_SPECS[config.task_id]['num_labels'])
         elif config.arch == 'esim':
             self.model = ESIM(
@@ -139,14 +130,7 @@ class Task:
                 bert_vocab = embed_util.get_bert_vocab()
                 neighbours, nbr_mask = get_neighbours(bert_vec,
                                                       return_edges=False)
-                token_embedder = DirichletEmbedding(
-                    num_embeddings=bert_vocab.get_vocab_size('tokens'),
-                    embedding_dim=768,
-                    weight=bert_embeddings.word_embeddings.weight,
-                    alpha=config.dir_temp,
-                    neighbours=neighbours.cuda(),
-                    sparse=False,
-                    trainable=True)
+                token_embedder = None
                 bert_embeddings.word_embeddings = token_embedder
         self.model.cuda()
 
@@ -211,6 +195,7 @@ class Task:
         else:
             model_vocab = self.vocab
         # yapf: disable
+        adv_field = 'sent2' if is_sentence_pair(self.config.task_id) else 'sent'
         policy_args = {
             "adv_iteration": self.config.adv_iter,
             "replace_num": self.config.adv_replace_num,
@@ -223,7 +208,7 @@ class Task:
                             word2idx=model_vocab.get_token_index,
                             idx2word=model_vocab.get_token_from_index,
                         ),
-            'adv_field': 'sent2' if is_sentence_pair(self.config.task_id) else 'sent'
+            'adv_field': adv_field
         }
         # yapf: enable
         if self.config.adv_policy == 'hot':
@@ -234,7 +219,7 @@ class Task:
             adv_policy = adv_utils.RandomNeighbourPolicy(**policy_args)
         elif self.config.adv_policy == 'diy':
             adv_policy = adv_utils.DoItYourselfPolicy(
-                self.config.adv_iter, 'sent', self.config.adv_step)
+                self.config.adv_iter, adv_field, self.config.adv_step)
         else:
             adv_policy = adv_utils.NoPolicy
 
@@ -250,9 +235,6 @@ class Task:
         # Set callbacks
         epoch_callbacks = []
         batch_callbacks = []
-        # if self.config.embed == 'd':
-        #     batch_callbacks.append(DirichletAnnealing(
-        #         anneal_epoch_num=4, batch_per_epoch=len(train_data_sampler)))
         trainer = AdvTrainer(
             model=self.model,
             optimizer=self.model.get_optimizer(),

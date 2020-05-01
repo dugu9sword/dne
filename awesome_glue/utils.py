@@ -14,7 +14,6 @@ from luna import batch_pad
 from collections import Counter
 from functools import lru_cache
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -23,7 +22,7 @@ class set_environments():
 
 
 def read_hyper(task_id, arch, key):
-    df = pandas.read_csv("hyper_params.csv", delimiter=',\s+' ,engine='python')
+    df = pandas.read_csv("hyper_params.csv", delimiter=',\s+', engine='python')
     df.columns = df.columns.str.strip()
     for t in [task_id, '*']:
         for a in [arch, '*']:
@@ -31,36 +30,6 @@ def read_hyper(task_id, arch, key):
             if x.shape[0] == 1:
                 return x[key].values[0]
     raise Exception()
-
-
-class DirichletAnnealing(BatchCallback):
-    def __init__(self, anneal_epoch_num=3, batch_per_epoch=None):
-        self.anneal_epoch_num = anneal_epoch_num
-        self.batch_per_epoch = batch_per_epoch
-        self.total_steps = anneal_epoch_num * batch_per_epoch
-        self.start_alpha = 10.0
-
-    def __call__(self, trainer, epoch: int, batch_number: int,
-                 is_training: bool):
-        if hasattr(trainer.model, "word_embedders"):
-            dir_embed = trainer.model.word_embedders.token_embedder_tokens
-        elif hasattr(trainer.model, "bert_embedder"):
-            dir_embed = trainer.model.bert_embedder.transformer_model.embeddings.word_embeddings
-        if dir_embed.alpha > self.start_alpha:
-            return
-        cur_step = epoch * self.batch_per_epoch + batch_number
-        if epoch >= self.anneal_epoch_num:
-            cur_alpha = dir_embed.alpha
-        else:
-            cur_ratio = cur_step / self.total_steps
-            cur_alpha = cur_ratio * dir_embed.alpha + (
-                1 - cur_ratio) * self.start_alpha
-        dir_embed.current_alpha = cur_alpha
-        if batch_number % (self.batch_per_epoch // 4) == 0: 
-            logger.info(
-                f'At epoch-{epoch} batch-{batch_number},' + 
-                f'alpha is set to {cur_alpha}({dir_embed.alpha})'
-            )
 
 
 def get_neighbour_matrix(vocab, searcher):
@@ -76,96 +45,6 @@ def get_neighbour_matrix(vocab, searcher):
         nbr_matrix.append(nbrs)
     nbr_matrix = batch_pad(nbr_matrix)
     return torch.tensor(nbr_matrix)
-
-
-def get_neighbours(vec, return_edges=False):
-    """
-    Given an embedding matrix, find the 10 closest words in the space.
-    Normally, the first word is itself, but since some words may not be
-    pretrained, thus the first found maybe zero. 
-    """
-    index = faiss.IndexFlatL2(vec.shape[1])
-    res = faiss.StandardGpuResources()  # use a single GPU
-    index = faiss.index_cpu_to_gpu(res, 0, index)
-    embed = vec.cpu().numpy()
-    index.add(embed)
-    _, I = index.search(embed, k=10)
-
-    if return_edges:
-        edges = []
-        for idx in range(len(I)):
-            if I[idx][0] == 0:
-                edges.append([idx, idx])
-                continue
-            else:
-                edges.extend([[idx, ele] for ele in I[idx]])
-        edges = torch.tensor(edges)
-        return edges
-    else:
-        I = torch.tensor(I)
-        mask = vec.sum(1) != 0.0
-        I = torch.arange(I.shape[0]).masked_fill(
-            mask, 0).unsqueeze(1) + I.masked_fill(~mask.unsqueeze(1), 0)
-        # test code
-        for _ in range(10):
-            some_idx = random.choice(range(I.shape[0]))
-            assert I[some_idx][0] == some_idx
-        return I, mask
-
-
-def dirichlet_sampling(sample_sizes, alpha, max_sample_size=None):
-    if max_sample_size is None:
-        max_sample_size = max(sample_sizes)
-
-    cnter = Counter(sample_sizes)
-    dir_dct = {}
-    dir_offset = {}
-    for k in cnter:
-        diri = np.random.dirichlet([alpha] * k, cnter[k]).astype(np.float32)
-        zero = np.zeros((cnter[k], max_sample_size - k), dtype=np.float32)
-        dir_dct[k] = np.concatenate((diri, zero), axis=1).tolist()
-        dir_offset[k] = -1
-    ret = []
-    default_prob = [1] + [0] * (max_sample_size - 1)
-    for n in sample_sizes:
-        if n == 0:
-            ret.append(default_prob)
-        else:
-            dir_offset[n] += 1
-            ret.append(dir_dct[n][dir_offset[n]])
-    return ret
-
-
-_cache_dirichlet_size = 10000
-
-@lru_cache(maxsize=None)
-def _cache_dirichlet(alpha, sample_size, max_sample_size):
-    if sample_size == 0:
-        return None
-    diri = np.random.dirichlet([alpha] * sample_size, _cache_dirichlet_size).astype(np.float32)
-    zero = np.zeros((_cache_dirichlet_size, max_sample_size - sample_size), dtype=np.float32)
-    ret = np.concatenate((diri, zero), axis=1).tolist()
-    return ret
-
-def dirichlet_sampling_fast(sample_sizes, alpha, max_sample_size=None):
-    if max_sample_size is None:
-        max_sample_size = max(sample_sizes)
-    ret = []
-    default_prob = [1.0] + [0.0] * (max_sample_size - 1)
-    cache_probs = []
-    cache_offsets = []
-    for s in range(max_sample_size + 1):
-        cache_probs.append(_cache_dirichlet(alpha, s, max_sample_size))
-        cache_offsets.append(random.randint(0, _cache_dirichlet_size))
-    for i, n in enumerate(sample_sizes):
-        if n == 0:
-            ret.append(default_prob)
-        else:
-            cache_offsets[n] = (cache_offsets[n] + i) % _cache_dirichlet_size
-            ret.append(cache_probs[n][cache_offsets[n]])
-    return ret
-
-
 
 
 class FreqUtil:
@@ -274,3 +153,66 @@ def text_diff(a_text, b_text):
         "change_ratio": len(a_changes) / len(a_lst)
     }
 
+
+# class DirichletAnnealing(BatchCallback):
+#     def __init__(self, anneal_epoch_num=3, batch_per_epoch=None):
+#         self.anneal_epoch_num = anneal_epoch_num
+#         self.batch_per_epoch = batch_per_epoch
+#         self.total_steps = anneal_epoch_num * batch_per_epoch
+#         self.start_alpha = 10.0
+
+#     def __call__(self, trainer, epoch: int, batch_number: int,
+#                  is_training: bool):
+#         if hasattr(trainer.model, "word_embedders"):
+#             dir_embed = trainer.model.word_embedders.token_embedder_tokens
+#         elif hasattr(trainer.model, "bert_embedder"):
+#             dir_embed = trainer.model.bert_embedder.transformer_model.embeddings.word_embeddings
+#         if dir_embed.alpha > self.start_alpha:
+#             return
+#         cur_step = epoch * self.batch_per_epoch + batch_number
+#         if epoch >= self.anneal_epoch_num:
+#             cur_alpha = dir_embed.alpha
+#         else:
+#             cur_ratio = cur_step / self.total_steps
+#             cur_alpha = cur_ratio * dir_embed.alpha + (
+#                 1 - cur_ratio) * self.start_alpha
+#         dir_embed.current_alpha = cur_alpha
+#         if batch_number % (self.batch_per_epoch // 4) == 0:
+#             logger.info(
+#                 f'At epoch-{epoch} batch-{batch_number},' +
+#                 f'alpha is set to {cur_alpha}({dir_embed.alpha})'
+#             )
+
+# def get_neighbours(vec, return_edges=False):
+#     """
+#     Given an embedding matrix, find the 10 closest words in the space.
+#     Normally, the first word is itself, but since some words may not be
+#     pretrained, thus the first found maybe zero.
+#     """
+#     index = faiss.IndexFlatL2(vec.shape[1])
+#     res = faiss.StandardGpuResources()  # use a single GPU
+#     index = faiss.index_cpu_to_gpu(res, 0, index)
+#     embed = vec.cpu().numpy()
+#     index.add(embed)
+#     _, I = index.search(embed, k=10)
+
+#     if return_edges:
+#         edges = []
+#         for idx in range(len(I)):
+#             if I[idx][0] == 0:
+#                 edges.append([idx, idx])
+#                 continue
+#             else:
+#                 edges.extend([[idx, ele] for ele in I[idx]])
+#         edges = torch.tensor(edges)
+#         return edges
+#     else:
+#         I = torch.tensor(I)
+#         mask = vec.sum(1) != 0.0
+#         I = torch.arange(I.shape[0]).masked_fill(
+#             mask, 0).unsqueeze(1) + I.masked_fill(~mask.unsqueeze(1), 0)
+#         # test code
+#         for _ in range(10):
+#             some_idx = random.choice(range(I.shape[0]))
+#             assert I[some_idx][0] == some_idx
+#         return I, mask

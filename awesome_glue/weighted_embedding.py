@@ -8,26 +8,21 @@ from allennlp.modules.token_embedders.embedding import Embedding
 from luna import ram_write
 from allennlpx.training import adv_utils
 import torch.nn.functional as F
-from awesome_glue.utils import dirichlet_sampling, dirichlet_sampling_fast
+from .weighted_util import WeightedHull, SameAlphaHull, DecayAlphaHull
+
 
 class WeightedEmbedding(Embedding):
     def __init__(
         self,
-        alpha,
-        neighbours,
+        hull,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)        
-        self.neighbours = neighbours
-        self.alpha = alpha
+        self.hull: WeightedHull = hull
 
     @overrides
     def forward(self, tokens: torch.Tensor) -> torch.Tensor:
-        max_nbr_num = self.neighbours.size(1)        
-        nbr_tokens = self.neighbours[tokens].view(-1, max_nbr_num)
-        nbr_num_lst = (nbr_tokens != 0).sum(dim=1).tolist()
-        max_nbr_num = max(nbr_num_lst)
-        nbr_tokens = nbr_tokens[:, :max_nbr_num]
+        nbr_tokens, _coeff = self.hull.get_nbr_and_coeff(tokens.view(-1))
 
         # n_words x n_nbrs x dim
         embedded = embedding(
@@ -40,15 +35,8 @@ class WeightedEmbedding(Embedding):
             sparse=self.sparse,
         )
         
-        if not adv_utils.is_adv_mode():
-            if self.alpha == -1:
-                alpha = np.random.uniform(0.1, 1.0)
-            else:
-                alpha = self.alpha
-            _coeff = dirichlet_sampling_fast(nbr_num_lst, alpha, max_nbr_num)
-            _coeff = torch.Tensor(_coeff).to(self.weight.device)        
+        if not adv_utils.is_adv_mode():     
             coeff_logit = (_coeff + 1e-6).log()
-            # print('normal')
         else:
             last_fw, last_bw = adv_utils.read_var_hook("coeff_logit")
             # coeff_logit = last_fw + adv_utils.recieve("step") * last_bw

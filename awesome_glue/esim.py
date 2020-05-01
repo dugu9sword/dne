@@ -43,7 +43,7 @@ class ESIM(Model):
         self.rnn_input_dropout = InputVariationalDropout(0.3)
 
         self._output_feedforward = FeedForward(1200, 1, 300, torch.nn.ReLU(), 0.2)
-        self._output_logit = FeedForward(300, 1, 3, lambda x: x)
+        self._output_logit = FeedForward(300, 1, num_labels, lambda x: x)
 
         self._num_labels = num_labels
 

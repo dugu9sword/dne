@@ -3,5 +3,6 @@ task,    arch,  num_epochs, batch_size
 *,       bert,  3,          16
 SST,     bert,  3,          32
 SNLI,    bert,  3,          32
-SNLI,    *,     11,         128
+SNLI,    *,     20,         128
+SNLI,    biboe, 20,         32
 IMDB,    bert,  3,          8
