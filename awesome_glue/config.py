@@ -12,14 +12,15 @@ class Config(ProgramArgs):
         self._pool = ''
         self.pretrain = 'glove'
 #         self._model_name = "AGNEWS-lstm-hot.1.5.con"
-        self._model_name = ""   # if set to tmp, existing models will be overrided
+        self._model_name = "tmp"   # if set to tmp, existing models will be overrided
         self.mode = 'train'
         
         # dirichlet settings
         self.dir_alpha = 0.1
-        self.dir_decay = 0.99
+        self.dir_decay = 0.5
         self.nbr_num = 64
         self.nbr_2nd = '21'
+        self.adjust_point = False
     
         # graph settings
         self.gnn_type = 'mean'
@@ -72,7 +73,7 @@ class Config(ProgramArgs):
     def pool(self):
         if not self._pool:
             if self.arch == 'cnn':
-                return 'max'
+                return 'mean'
             elif self.arch == 'boe':
                 return 'mean'
         else:
@@ -108,6 +109,8 @@ class Config(ProgramArgs):
                     model_name += f'-{self.adv_policy}.{self.adv_iter}.{self.adv_replace_num}'
                 elif self.adv_policy == 'diy':
                     model_name += f'-{self.adv_policy}.{self.adv_iter}.{self.adv_step}'
+            if self.adjust_point:
+                model_name += '-single'
             return model_name
         else:
             return self._model_name

@@ -154,8 +154,9 @@ class EmbedAug(WordTransform):
         #             model_path = '/home/zhouyi/counter-fitting/word_vectors/counter-fitted-vectors.txt',
         #         )
         self.searcher = CachedWordSearcher(
-            "external_data/euc-top8.json",
-            None
+            "external_data/ibp-nbrs.json",
+            None,
+            second_order=False
         )
 
     @overrides

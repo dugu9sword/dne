@@ -17,8 +17,8 @@ from functools import lru_cache
 logger = logging.getLogger(__name__)
 
 
-class set_environments():
-    os.environ["TORCH_HOME"] == '/disks/sdb/torch_home'
+def set_environments():
+    os.environ["TORCH_HOME"] = '/disks/sdb/torch_home'
 
 
 def read_hyper(task_id, arch, key):

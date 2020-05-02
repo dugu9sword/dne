@@ -5,7 +5,7 @@ from torch.nn.functional import embedding
 
 from allennlp.modules.time_distributed import TimeDistributed
 from allennlp.modules.token_embedders.embedding import Embedding
-from luna import ram_write
+from luna import ram_write, ram_read
 from allennlpx.training import adv_utils
 import torch.nn.functional as F
 from .weighted_util import WeightedHull, SameAlphaHull, DecayAlphaHull
@@ -58,4 +58,17 @@ class WeightedEmbedding(Embedding):
         #     print(round(inner_size.item(), 3), round(step_size.item(), 3))
         embedded = (embedded * coeff.unsqueeze(-1)).sum(-2)
         embedded = embedded.view(*tokens.size(), self.weight.size(1))
+        if adv_utils.is_adv_mode():
+            if ram_read("adjust_point"):
+                raw_embedded = embedding(
+                    tokens,
+                    self.weight,
+                    padding_idx=self.padding_index,
+                    max_norm=self.max_norm,
+                    norm_type=self.norm_type,
+                    scale_grad_by_freq=self.scale_grad_by_freq,
+                    sparse=self.sparse,
+                )
+                delta = embedded.detach() - raw_embedded.detach()
+                embedded = raw_embedded + delta
         return embedded

@@ -8,7 +8,6 @@ datasets/*
 *.pt
 nogit/*
 .idea/
-*.json
 *.hjson
 .vscode/*
 **/__pycache__/*
@@ -19,7 +18,6 @@ nogit/*
 *.tgz
 *.zip
 *.rar
-*.txt
 saved/*
 universal-triggers-master/
 .ipynb_checkpoints

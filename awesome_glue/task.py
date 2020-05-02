@@ -164,6 +164,7 @@ class Task:
             self.predictor.set_transform_field("sent")
 
     def train(self):
+        ram_write("adjust_point", self.config.adjust_point)
         # ram_write('dist_reg', self.config.dist_reg)
         read_hyper_ = partial(read_hyper, self.config.task_id, self.config.arch)
         num_epochs = int(read_hyper_("num_epochs"))
