@@ -128,10 +128,41 @@ class Predictor(Predictor_):
                 t2i = self._model.vocab.get_token_to_index_vocabulary()
                 oov = self._model.vocab.get_token_index("苟利国家生死以岂因祸福避趋之")
                 t2i = defaultdict(lambda: oov, t2i)
-                sents = []
-                for json_dict in b_en_jsons:
-                    sents.append([t2i[x] for x in json_dict['sent'].split(' ')])
-                outputs = self._model({"tokens": {"tokens": torch.tensor(sents).cuda()}})
+
+                if 'sent' in b_en_jsons[0]:
+                    sents = []
+                    for json_dict in b_en_jsons:
+                        sents.append([t2i[x] for x in json_dict['sent'].split(' ')])
+                    tokens = torch.tensor(sents).cuda()
+                    if not guess_bert(self._model):
+                        input_sent = {
+                            "tokens": {"tokens": tokens}
+                        }
+                    else:
+                        input_sent = {
+                            "tokens": { 
+                                "token_ids": tokens,
+                                "type_ids": tokens.new_zeros(tokens.size()),
+                                "mask": (tokens != 0).byte()
+                            }
+                        }
+                    model_input = {
+                        'sent': input_sent
+                    }
+                elif 'sent1' in b_en_jsons[0]:
+                    sents1 = []
+                    sents2 = []
+                    for json_dict in b_en_jsons:
+                        sents1.append([t2i[x] for x in json_dict['sent1'].split(' ')])
+                        sents2.append([t2i[x] for x in json_dict['sent2'].split(' ')])
+                    tokens1 = torch.tensor(sents1).cuda()
+                    tokens2 = torch.tensor(sents2).cuda()
+                    model_input = {
+                        'sent1': {'tokens': {'tokens': tokens1}},
+                        'sent2': {'tokens': {'tokens': tokens2}},
+                    }
+
+                outputs = self._model(**model_input)
                 for bid in range(bsz):
                     offset = bid * self._ensemble_num
                     probs_to_ensemble = outputs['probs'][offset: offset + self._ensemble_num]

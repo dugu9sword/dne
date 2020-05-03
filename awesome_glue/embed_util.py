@@ -3,7 +3,7 @@ from allennlpx.modules.token_embedders.embedding import \
 from luna import (LabelSmoothingLoss, auto_create)
 from allennlp.data.vocabulary import Vocabulary
 from allennlpx.modules.token_embedders.embedding import VanillaEmbedding
-from allennlpx.modules.token_embedders.graph_embedding import GraphEmbedding
+# from allennlpx.modules.token_embedders.graph_embedding import GraphEmbedding
 from awesome_glue.weighted_embedding import WeightedEmbedding
 from collections import defaultdict
 import pathlib
@@ -17,6 +17,8 @@ import random
 
 
 def read_weight(vocab: Vocabulary, pretrain: str, cache_embed_path: str):
+    if pretrain == 'random':
+        return None
     embedding_path = WORD2VECS[pretrain]
 
     def __read_fn():
@@ -51,18 +53,18 @@ def build_embedding(vocab: Vocabulary, pretrain: str, cache_embed_path: str):
         trainable=True)
 
 
-def build_graph_embedding(vocab: Vocabulary, pretrain: str,
-                          cache_embed_path: str, gnn, edges, hop):
-    return GraphEmbedding(
-        num_embeddings=vocab.get_vocab_size('tokens'),
-        embedding_dim=EMBED_DIM[pretrain],
-        weight=read_weight(vocab, pretrain, cache_embed_path),
-        #   projection_dim=100,
-        gnn=gnn,
-        edges=edges,
-        hop=hop,
-        sparse=False,
-        trainable=True)
+# def build_graph_embedding(vocab: Vocabulary, pretrain: str,
+#                           cache_embed_path: str, gnn, edges, hop):
+#     return GraphEmbedding(
+#         num_embeddings=vocab.get_vocab_size('tokens'),
+#         embedding_dim=EMBED_DIM[pretrain],
+#         weight=read_weight(vocab, pretrain, cache_embed_path),
+#         #   projection_dim=100,
+#         gnn=gnn,
+#         edges=edges,
+#         hop=hop,
+#         sparse=False,
+#         trainable=True)
 
 
 def build_weighted_embedding(vocab: Vocabulary, pretrain: str,
@@ -131,7 +133,8 @@ WORD2VECS = {
     maybe_path(
         "/disks/sdb/zjiehang/embeddings/counter/counter.txt",
         "https://raw.githubusercontent.com/nmrksic/counter-fitting/master/word_vectors/counter-fitted-vectors.txt.zip"
-    )
+    ),
+    "random": None
 }
 
 EMBED_DIM = defaultdict(lambda: 300, {"elmo": 256, "bert": 768})

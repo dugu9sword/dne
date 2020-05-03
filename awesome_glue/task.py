@@ -19,7 +19,6 @@ import shutil
 from allennlpx import allenutil
 from allennlpx.interpret.attackers import BruteForce, Genetic, HotFlip, PWWS
 from allennlpx.interpret.attackers.searchers import EmbeddingSearcher, CachedWordSearcher, EmbeddingNbrUtil, WordIndexSearcher
-from allennlpx.modules.token_embedders.graph_funcs import MeanAggregator, PoolingAggregator
 from allennlpx.predictors import TextClassifierPredictor, BiTextClassifierPredictor
 from awesome_glue.config import Config
 from awesome_glue.vanilla_classifier import Classifier
@@ -161,6 +160,10 @@ class Task:
         else:
             self.predictor.set_transform_field("sent")
 
+        if self.config.task_id == 'SST':
+            self.train_data = self.dev_data
+            self.config.attack_data_split = 'dev'
+
     def train(self):
         ram_write("adjust_point", self.config.adjust_point)
         # ram_write('dist_reg', self.config.dist_reg)
@@ -170,9 +173,6 @@ class Task:
         if self.config.arch == 'bert' and self.config.embed == 'w':
             num_epochs = 8
         logger.info(f"num_epochs: {num_epochs}, batch_size: {batch_size}")
-
-        if self.config.task_id == 'SST':
-            self.train_data = self.dev_data
 
         if self.config.model_name == 'tmp':
             p = pathlib.Path('saved/models/tmp')
@@ -351,7 +351,7 @@ class Task:
         return data_to_attack
 
     def attack(self):
-        self.from_pretrained()
+        # self.from_pretrained()
 
         data_to_attack = self.downsample_data_to_attack()
         if is_sentence_pair(self.config.task_id):

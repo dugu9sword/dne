@@ -2,9 +2,7 @@ import os
 
 from allennlp.data import Vocabulary
 from tabulate import tabulate
-import faiss
 import torch
-import random
 import numpy as np
 from allennlpx.training.adv_trainer import EpochCallback, BatchCallback
 from typing import Dict, Any
