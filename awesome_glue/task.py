@@ -42,6 +42,7 @@ import logging
 from awesome_glue.data_loader import load_banned_words, load_data
 from awesome_glue.weighted_util import WeightedHull, SameAlphaHull, DecayAlphaHull
 from awesome_glue.biboe import BiBOE
+from awesome_glue.weighted_embedding import WeightedEmbedding
 
 logging.getLogger('transformers').setLevel(logging.CRITICAL)
 
@@ -59,6 +60,9 @@ class Task:
         self.reader = loaded_data['reader']
         self.train_data, self.dev_data, self.test_data = loaded_data['data']
         self.vocab: Vocabulary = loaded_data['vocab']
+            
+        if self.config.arch == "bert":
+            self.vocab = embed_util.get_bert_vocab()
 
         # Build the model
         embed_args = {
@@ -66,43 +70,34 @@ class Task:
             "pretrain": config.pretrain,
             "cache_embed_path": f"{config.task_id}-{config.pretrain}.vec"
         }
-        if config.arch != 'bert':
-            if config.embed == "":
+        
+        if config.embed == "":
+            if self.config.arch != "bert":
                 token_embedder = embed_util.build_embedding(**embed_args)
-            elif config.embed == "w":
-                hull_args = {
-                    "alpha": config.dir_alpha,
-                    "nbr_file": "external_data/ibp-nbrs.json",
-                    "vocab": self.vocab,
-                    "nbr_num": config.nbr_num,
-                    "second_order": config.second_order
-                }
-                if config.second_order and 0.0 < config.dir_decay < 1.0:
-                    hull = DecayAlphaHull.build(
-                        **hull_args,
-                        decay=config.dir_decay,
-                    )
-                else:
-                    hull = SameAlphaHull.build(**hull_args)
-                print(f'Using {type(hull)} with second_order={config.second_order}')             
-                    
+        elif config.embed == "w":
+            hull_args = {
+                "alpha": config.dir_alpha,
+                "nbr_file": "external_data/ibp-nbrs.json",
+                "vocab": self.vocab,
+                "nbr_num": config.nbr_num,
+                "second_order": config.second_order
+            }
+            if config.second_order and 0.0 < config.dir_decay < 1.0:
+                hull = DecayAlphaHull.build(
+                    **hull_args,
+                    decay=config.dir_decay,
+                )
+            else:
+                hull = SameAlphaHull.build(**hull_args)
+            print(f'Using {type(hull)} with second_order={config.second_order}')             
+            
+            if self.config.arch != "bert":
                 token_embedder = embed_util.build_weighted_embedding(
                     **embed_args,
                     hull=hull
                 )
-            # elif config.embed == "g":
-            #     pass
-            #     edges = get_neighbours(spacy_vec, return_edges=True)
-            #     token_embedder = embed_util.build_graph_embedding(
-            #         **embed_args,
-            #         gnn={
-            #             "mean": MeanAggregator(300),
-            #             "pool": PoolingAggregator(300)
-            #         }[config.gnn_type],
-            #         edges=edges.cuda(),
-            #         hop=config.gnn_hop)
-            else:
-                raise Exception()
+        else:
+            raise Exception()
 
         if config.arch in ['boe', 'cnn', 'lstm']:
             self.model = Classifier(
@@ -125,13 +120,16 @@ class Task:
             self.model = BertClassifier(
                 self.vocab,
                 num_labels=TASK_SPECS[config.task_id]['num_labels'])
-            if config.embed == "d":
-                bert_embeddings = self.model.bert_embedder.transformer_model.embeddings
-                bert_vocab = embed_util.get_bert_vocab()
-                neighbours, nbr_mask = get_neighbours(bert_vec,
-                                                      return_edges=False)
-                token_embedder = None
-                bert_embeddings.word_embeddings = token_embedder
+            if config.embed == "w":
+                bert_embeddings = self.model.bert_embedder.transformer_model.embeddings.word_embeddings
+                bert_embeddings.word_embeddings = WeightedEmbedding(
+                    num_embeddings=self.vocab.get_vocab_size('tokens'),
+                    embedding_dim=768,
+                    weight=bert_embeddings.weight,
+                    hull=hull,
+                    sparse=False,
+                    trainable=True
+                )
         self.model.cuda()
 
         # The predictor is a wrapper of the model.
@@ -169,7 +167,7 @@ class Task:
         read_hyper_ = partial(read_hyper, self.config.task_id, self.config.arch)
         num_epochs = int(read_hyper_("num_epochs"))
         batch_size = int(read_hyper_("batch_size"))
-        if self.config.arch == 'bert' and self.config.embed == 'd':
+        if self.config.arch == 'bert' and self.config.embed == 'w':
             num_epochs = 8
         logger.info(f"num_epochs: {num_epochs}, batch_size: {batch_size}")
 

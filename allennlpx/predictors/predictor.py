@@ -126,7 +126,8 @@ class Predictor(Predictor_):
                     ret.append(en_output)
             else:
                 t2i = self._model.vocab.get_token_to_index_vocabulary()
-                t2i = defaultdict(lambda: t2i['@@UNKNOWN@@'], t2i)
+                oov = self._model.vocab.get_token_index("苟利国家生死以岂因祸福避趋之")
+                t2i = defaultdict(lambda: oov, t2i)
                 sents = []
                 for json_dict in b_en_jsons:
                     sents.append([t2i[x] for x in json_dict['sent'].split(' ')])

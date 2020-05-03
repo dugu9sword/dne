@@ -7,8 +7,10 @@ from copy import copy
 from luna import auto_create
 import json
 from collections import defaultdict
+from functools import lru_cache
 
 
+@lru_cache(maxsize=None)
 def load_data(task_id: str, tokenizer: str):
     """
         Load data by the task_id and the tokenizer. 

@@ -6,14 +6,14 @@ class Config(ProgramArgs):
         super().__init__()
 
         # basic settings
-        self.task_id = "SST"
+        self.task_id = "IMDB"
         self.embed = 'w'   # g/w/_
-        self.arch = 'boe'
+        self.arch = 'bert'
         self._pool = ''
         self.pretrain = 'glove'
 #         self._model_name = "AGNEWS-lstm-hot.1.5.con"
         self._model_name = "tmp"   # if set to tmp, existing models will be overrided
-        self.mode = 'train'
+        self.mode = 'attack'
         
         # dirichlet settings
         self.dir_alpha = 0.1
@@ -29,7 +29,7 @@ class Config(ProgramArgs):
         # training settings
         # self.aug_data = 'nogit/AGNEWS-lstm.pwws.aug.tsv'
         self.aug_data = ''
-        self.adv_iter = 10
+        self.adv_iter = 1
         # hot -> hotflip, rdm -> random, diy -> model do it itself
         self.adv_policy = 'diy'
         self.adv_step = 10.0
@@ -41,7 +41,7 @@ class Config(ProgramArgs):
         self.pred_transform_args = ""
 
         # attack settings
-        self.attack_method = 'genetic'
+        self.attack_method = 'genetic_nolm'
         self.attack_data_split = 'test'
         self.attack_size = 200
         # self.attack_data_split = 'train'
