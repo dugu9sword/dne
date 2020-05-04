@@ -5,6 +5,7 @@ from luna import batch_pad, ram_read, ram_append, ram_reset, ram_write, ram_has
 import random
 from typing import Union
 from allennlp.nn import util
+from contextlib import contextmanager
 
 
 @dataclass
@@ -68,10 +69,23 @@ def read_embedding_hook(order):
     bw = ram_read('EMBEDDING_HOOK.bw')[-(order + 1)]
     return fw, bw
 
+
 def reset_embedding_hook():
     ram_reset("EMBEDDING_HOOK")
 
+
+@contextmanager
+def forward_context(name: str):
+    ram_write("FORWARD_CONTEXT", name)
+    yield
+    ram_reset("FORWARD_CONTEXT")
+
+
 def register_var_hook(name, variable):
+    if ram_has("FORWARD_CONTEXT"):
+        context = ram_read("FORWARD_CONTEXT")
+        name = f"{context}.{name}"
+
     ram_write(f"VAR_HOOK.{name}.fw", variable.detach())
 
     def hook(grad):
@@ -79,14 +93,19 @@ def register_var_hook(name, variable):
 
     variable.register_hook(hook)
 
+
 def send(key, value):
     ram_write(f"MESSAGE.{key}", value)
+
 
 def recieve(key):
     return ram_read(f"MESSAGE.{key}")
 
 
 def read_var_hook(name):
+    if ram_has("FORWARD_CONTEXT"):
+        context = ram_read("FORWARD_CONTEXT")
+        name = f"{context}.{name}"
     return ram_read(f"VAR_HOOK.{name}.fw"), ram_read(f"VAR_HOOK.{name}.bw")
 
 

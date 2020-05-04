@@ -18,6 +18,7 @@ from allennlp.modules.text_field_embedders import BasicTextFieldEmbedder
 from allennlp.training.optimizers import DenseSparseAdam
 from allennlp.modules.seq2seq_encoders.pytorch_seq2seq_wrapper import LstmSeq2SeqEncoder
 from allennlp.modules.seq2vec_encoders import BagOfEmbeddingsEncoder
+from allennlpx.training import adv_utils
 
 
 class BiBOE(Model):
@@ -52,14 +53,16 @@ class BiBOE(Model):
         sent2: TextFieldTensors,
         label: torch.IntTensor = None,
     ) -> Dict[str, torch.Tensor]:
-        encoded_sent1 = self.encoder(
-            self.word_embedders(sent1), 
-            get_text_field_mask(sent1)
-        )
-        encoded_sent2 = self.encoder(
-            self.word_embedders(sent2), 
-            get_text_field_mask(sent2)
-        )
+        with adv_utils.forward_context("sent1"):
+            encoded_sent1 = self.encoder(
+                self.word_embedders(sent1), 
+                get_text_field_mask(sent1)
+            )
+        with adv_utils.forward_context("sent2"):
+            encoded_sent2 = self.encoder(
+                self.word_embedders(sent2), 
+                get_text_field_mask(sent2)
+            )
 
         encoded = torch.cat([encoded_sent1, encoded_sent2], dim=1)
 

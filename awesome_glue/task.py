@@ -171,7 +171,7 @@ class Task:
         num_epochs = int(read_hyper_("num_epochs"))
         batch_size = int(read_hyper_("batch_size"))
         if self.config.arch == 'bert' and self.config.embed == 'w':
-            num_epochs = 8
+            num_epochs = 6
         logger.info(f"num_epochs: {num_epochs}, batch_size: {batch_size}")
 
         if self.config.model_name == 'tmp':
@@ -351,7 +351,7 @@ class Task:
         return data_to_attack
 
     def attack(self):
-        # self.from_pretrained()
+        self.from_pretrained()
 
         data_to_attack = self.downsample_data_to_attack()
         if is_sentence_pair(self.config.task_id):

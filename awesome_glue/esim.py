@@ -17,6 +17,7 @@ from allennlp.modules.token_embedders import TokenEmbedder
 from allennlp.modules.text_field_embedders import BasicTextFieldEmbedder
 from allennlp.training.optimizers import DenseSparseAdam
 from allennlp.modules.seq2seq_encoders.pytorch_seq2seq_wrapper import LstmSeq2SeqEncoder
+from allennlpx.training import adv_utils
 
 
 class ESIM(Model):
@@ -56,8 +57,10 @@ class ESIM(Model):
         sent2: TextFieldTensors,
         label: torch.IntTensor = None,
     ) -> Dict[str, torch.Tensor]:
-        embedded_sent1 = self.word_embedders(sent1)
-        embedded_sent2 = self.word_embedders(sent2)
+        with adv_utils.forward_context("sent1"):
+            embedded_sent1 = self.word_embedders(sent1)
+        with adv_utils.forward_context("sent2"):
+            embedded_sent2 = self.word_embedders(sent2)
         sent1_mask = get_text_field_mask(sent1)
         sent2_mask = get_text_field_mask(sent2)
 
