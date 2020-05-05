@@ -4,5 +4,5 @@ task,    arch,  num_epochs, batch_size
 SST,     bert,  3,          32
 SNLI,    bert,  3,          32
 SNLI,    *,     20,         128
-SNLI,    biboe, 20,         32
+SNLI,    biboe, 50,         32
 IMDB,    bert,  3,          8

@@ -55,6 +55,7 @@ class Config(ProgramArgs):
         self.alchemist = False
         self.seed = 2
         self.cuda = 0
+        self.poor_gpu = False
 
     @property
     def second_order(self):

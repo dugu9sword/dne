@@ -260,7 +260,8 @@ class Task:
 
     def from_pretrained(self):
         ckpter = CheckpointerX(f'saved/models/{self.config.model_name}')
-        model_path = ckpter.find_latest_best_checkpoint(10, 'validation_accuracy')[0]
+        latest_epoch = 3 if self.config.arch == 'bert' else 10
+        model_path = ckpter.find_latest_best_checkpoint(latest_epoch, 'validation_accuracy')[0]
         # model_path = f'saved/models/{self.config.model_name}/best.th'
         print(f'Load model from {model_path}')
         self.model.load_state_dict(torch.load(model_path))
@@ -360,14 +361,19 @@ class Task:
             field_to_change = 'sent'
 
         # Speed up the predictor
-        self.predictor.set_max_tokens(360000)
-        if self.config.nbr_2nd[1] == '2':
-            if self.config.nbr_num <= 12:
-                self.predictor.set_max_tokens(360000)
-            elif self.config.nbr_num <= 24:
-                self.predictor.set_max_tokens(120000)
-            else:
-                self.predictor.set_max_tokens(90000)
+        if self.config.arch != 'bert':
+            self.predictor.set_max_tokens(360000)
+            if self.config.nbr_2nd[1] == '2':
+                if self.config.nbr_num <= 12:
+                    self.predictor.set_max_tokens(360000)
+                elif self.config.nbr_num <= 24:
+                    self.predictor.set_max_tokens(120000)
+                else:
+                    self.predictor.set_max_tokens(90000)
+            if self.config.poor_gpu:
+                self.predictor.set_max_tokens(30000)
+        else:
+            self.predictor.set_max_tokens(60000)
             
         # Set up the attacker
         # Whatever bert/non-bert model, we use the spacy vocab
