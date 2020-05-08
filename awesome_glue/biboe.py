@@ -15,10 +15,11 @@ from allennlp.training.metrics import CategoricalAccuracy
 from allennlp.modules.matrix_attention.dot_product_matrix_attention import DotProductMatrixAttention
 from allennlp.modules.token_embedders import TokenEmbedder
 from allennlp.modules.text_field_embedders import BasicTextFieldEmbedder
-from allennlp.training.optimizers import DenseSparseAdam
+from allennlp.training.optimizers import AdamWOptimizer, DenseSparseAdam
 from allennlp.modules.seq2seq_encoders.pytorch_seq2seq_wrapper import LstmSeq2SeqEncoder
-from allennlp.modules.seq2vec_encoders import BagOfEmbeddingsEncoder
+from allennlpx.modules.seq2vec_encoders.boe_encoder import BagOfEmbeddingsEncoder
 from allennlpx.training import adv_utils
+from luna import ram_read
 
 
 class BiBOE(Model):
@@ -26,7 +27,8 @@ class BiBOE(Model):
         self,
         vocab: Vocabulary,
         token_embedder: TokenEmbedder,
-        num_labels: int
+        num_labels: int,
+        pool: str = 'sum',
     ) -> None:
         super().__init__(vocab)
 
@@ -34,9 +36,12 @@ class BiBOE(Model):
             {"tokens": token_embedder}
         )
         dim = token_embedder.get_output_dim()
+        self.rotation = FeedForward(dim, 1, dim, torch.nn.ReLU())
+
         self.encoder = BagOfEmbeddingsEncoder(
             embedding_dim=dim, 
-            averaged=False
+            pool=pool,
+            dropout=0.1
         )
 
         self.feedforward = FeedForward(dim * 2, 2, dim * 2, torch.nn.ReLU(), 0.1)
@@ -55,12 +60,12 @@ class BiBOE(Model):
     ) -> Dict[str, torch.Tensor]:
         with adv_utils.forward_context("sent1"):
             encoded_sent1 = self.encoder(
-                self.word_embedders(sent1), 
+                self.rotation(self.word_embedders(sent1)), 
                 get_text_field_mask(sent1)
             )
         with adv_utils.forward_context("sent2"):
             encoded_sent2 = self.encoder(
-                self.word_embedders(sent2), 
+                self.rotation(self.word_embedders(sent2)), 
                 get_text_field_mask(sent2)
             )
 
@@ -83,4 +88,5 @@ class BiBOE(Model):
         return {"accuracy": self._accuracy.get_metric(reset)}
 
     def get_optimizer(self):
+        # return AdamWOptimizer(self.named_parameters(), lr=5e-4, weight_decay=0.0001)
         return DenseSparseAdam(self.named_parameters(), lr=5e-4)

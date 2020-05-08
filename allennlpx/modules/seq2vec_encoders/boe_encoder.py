@@ -20,10 +20,18 @@ class BagOfEmbeddingsEncoder(Seq2VecEncoder):
         (ie. we will divide the summed embeddings by the length of the sentence).
     """
 
-    def __init__(self, embedding_dim: int, pool: str = 'mean') -> None:
+    def __init__(self, 
+                 embedding_dim: int, 
+                 pool: str = 'mean',
+                 dropout: float = None,
+                 ) -> None:
         super().__init__()
         self._embedding_dim = embedding_dim
         self._pool = pool
+        if dropout is not None:
+            self._dropout = torch.nn.Dropout(dropout)
+        else:
+            self._dropout = None
 
     @overrides
     def get_input_dim(self) -> int:
@@ -34,7 +42,8 @@ class BagOfEmbeddingsEncoder(Seq2VecEncoder):
         return self._embedding_dim
 
     def forward(self, tokens: torch.Tensor, mask: torch.BoolTensor = None):
-        
+        if self._dropout:
+            tokens = self._dropout(tokens)
 
         # Our input has shape `(batch_size, num_tokens, embedding_dim)`, so we sum out the `num_tokens`
         # dimension.

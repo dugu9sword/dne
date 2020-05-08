@@ -40,6 +40,19 @@ def ram_has(k):
     return k in __global_ram
 
 
+def ram_set_flag(k):
+    ram_write(f"RAM_FLAG_{k}", True)
+
+
+def ram_reset_flag(k):
+    if ram_has(f"RAM_FLAG_{k}"):
+        ram_pop(f"RAM_FLAG_{k}")
+
+
+def ram_has_flag(k):
+    return ram_has(f"RAM_FLAG_{k}") and ram_read(f"RAM_FLAG_{k}") is True
+
+
 def ram_globalize(name=None):
     if name is None:
         def wrapper(fun):
