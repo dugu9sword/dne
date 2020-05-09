@@ -425,7 +425,7 @@ class Task:
             attacker = PWWS(self.predictor, **general_kwargs)
         elif self.config.attack_method in ['genetic', 'genetic_nolm']:
             if self.config.attack_method == "genetic":
-                lm_constraints = json.load(open(f"external_data/ibp-nbrs.{self.config.task_id}.lm.json"))
+                lm_constraints = json.load(open(f"external_data/ibp-nbrs.{self.config.task_id}.{self.config.attack_data_split}.lm.json"))
             else:
                 lm_constraints = None
             attacker = Genetic(self.predictor,

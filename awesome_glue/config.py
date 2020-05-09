@@ -11,7 +11,7 @@ class Config(ProgramArgs):
         self.arch = 'datt'
         self._pool = ''
         self.pretrain = 'glove'
-        self.finetune = False
+        self.finetune = True
 #         self._model_name = "AGNEWS-lstm-hot.1.5.con"
         self._model_name = ""   # if set to tmp, existing models will be overrided
         self.model_pretrain = ""

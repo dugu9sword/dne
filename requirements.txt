@@ -1,0 +1,4 @@
+nlpaug
+fastnumbers
+matplotlib
+pandas
