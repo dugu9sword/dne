@@ -6,18 +6,21 @@ class Config(ProgramArgs):
         super().__init__()
 
         # basic settings
-        self.task_id = "IMDB"
-        self.embed = 'w'   # g/w/_
-        self.arch = 'bert'
+        self.task_id = "SNLI"
+        self.embed = ''   # g/w/_
+        self.arch = 'datt'
         self._pool = ''
         self.pretrain = 'glove'
+        self.finetune = False
 #         self._model_name = "AGNEWS-lstm-hot.1.5.con"
-        self._model_name = "tmp"   # if set to tmp, existing models will be overrided
-        self.mode = 'attack'
+        self._model_name = ""   # if set to tmp, existing models will be overrided
+        self.model_pretrain = ""
+        # self.model_pretrain = "SNLI-fix-biboe-sum"
+        self.mode = 'train'
         
         # dirichlet settings
         self.dir_alpha = 0.1
-        self.dir_decay = 0.5
+        self.dir_decay = 0.05
         self.nbr_num = 64
         self.nbr_2nd = '21'
         self.adjust_point = False
@@ -29,7 +32,7 @@ class Config(ProgramArgs):
         # training settings
         # self.aug_data = 'nogit/AGNEWS-lstm.pwws.aug.tsv'
         self.aug_data = ''
-        self.adv_iter = 1
+        self.adv_iter = 0
         # hot -> hotflip, rdm -> random, diy -> model do it itself
         self.adv_policy = 'diy'
         self.adv_step = 10.0
@@ -77,6 +80,8 @@ class Config(ProgramArgs):
                 return 'mean'
             elif self.arch == 'boe':
                 return 'mean'
+            elif self.arch == 'biboe':
+                return 'sum'
         else:
             return self._pool
 
@@ -90,7 +95,10 @@ class Config(ProgramArgs):
     @property
     def model_name(self):
         if not self._model_name:
-            model_name = f"{self.task_id}-{self.embed + self.arch}"
+            model_name = f"{self.task_id}"
+            if not self.finetune:
+                model_name += "-fix"
+            model_name += f"-{self.embed + self.arch}"
             if self.pool:
                 model_name += f"-{self.pool}"
             assert not (self.aug_data != '' and self.adv_iter != 0)

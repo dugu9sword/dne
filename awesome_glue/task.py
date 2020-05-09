@@ -28,9 +28,9 @@ from awesome_glue.bert_classifier import BertClassifier
 from awesome_glue.task_specs import TASK_SPECS, is_sentence_pair
 from awesome_glue.transforms import (transform_collate,
                                      parse_transform_fn_from_args)
-from awesome_glue.utils import (AttackMetric, FreqUtil, set_environments,
+from awesome_glue.utils import (AttackMetric, FreqUtil, set_environments, WarmupCallback,
                                 text_diff, get_neighbour_matrix, read_hyper)
-from luna import flt2str, ram_write
+from luna import flt2str, ram_write, ram_set_flag, ram_reset_flag
 from luna.logging import log
 from luna.public import Aggregator, auto_create, numpy_seed
 from luna.pytorch import set_seed
@@ -41,7 +41,11 @@ import logging
 from awesome_glue.data_loader import load_banned_words, load_data
 from awesome_glue.weighted_util import WeightedHull, SameAlphaHull, DecayAlphaHull
 from awesome_glue.biboe import BiBOE
+from awesome_glue.decom_att import DecomposableAttention
 from awesome_glue.weighted_embedding import WeightedEmbedding
+from typing import Dict, Any
+from allennlpx.training.adv_trainer import EpochCallback
+
 
 logging.getLogger('transformers').setLevel(logging.CRITICAL)
 
@@ -67,6 +71,7 @@ class Task:
         embed_args = {
             "vocab": self.vocab,
             "pretrain": config.pretrain,
+            "finetune": config.finetune,
             "cache_embed_path": f"{config.task_id}-{config.pretrain}.vec"
         }
         
@@ -97,24 +102,20 @@ class Task:
                 )
         else:
             raise Exception()
-
+        
+        arch_args = {
+            "vocab": self.vocab,
+            "token_embedder": token_embedder,
+            "num_labels": TASK_SPECS[config.task_id]['num_labels']
+        }
         if config.arch in ['boe', 'cnn', 'lstm']:
-            self.model = Classifier(
-                vocab=self.vocab,
-                token_embedder=token_embedder,
-                arch=config.arch,
-                pool=config.pool,
-                num_labels=TASK_SPECS[config.task_id]['num_labels'])
+            self.model = Classifier(arch=config.arch, pool=config.pool, **arch_args)
         elif config.arch == 'biboe':
-            self.model = BiBOE(
-                vocab=self.vocab,
-                token_embedder=token_embedder,
-                num_labels=TASK_SPECS[config.task_id]['num_labels'])
+            self.model = BiBOE(**arch_args, pool=config.pool)
+        elif config.arch == 'datt':
+            self.model = DecomposableAttention(**arch_args)
         elif config.arch == 'esim':
-            self.model = ESIM(
-                vocab=self.vocab,
-                token_embedder=token_embedder,
-                num_labels=TASK_SPECS[config.task_id]['num_labels'])
+            self.model = ESIM(**arch_args)
         elif config.arch == 'bert':
             self.model = BertClassifier(
                 self.vocab,
@@ -199,14 +200,14 @@ class Task:
             "adv_iteration": self.config.adv_iter,
             "replace_num": self.config.adv_replace_num,
             "searcher": WordIndexSearcher(
-                            CachedWordSearcher(
-                                "external_data/ibp-nbrs.json",
-                                model_vocab.get_token_to_index_vocabulary("tokens"),
-                                second_order=False
-                            ),
-                            word2idx=model_vocab.get_token_index,
-                            idx2word=model_vocab.get_token_from_index,
-                        ),
+                CachedWordSearcher(
+                    "external_data/ibp-nbrs.json",
+                    model_vocab.get_token_to_index_vocabulary("tokens"),
+                    second_order=False
+                ),
+                word2idx=model_vocab.get_token_index,
+                idx2word=model_vocab.get_token_from_index,
+            ),
             'adv_field': adv_field
         }
         # yapf: enable
@@ -232,11 +233,33 @@ class Task:
             batch_size=batch_size,
         )
         # Set callbacks
-        epoch_callbacks = []
+        
+
+        if self.config.task_id == 'SNLI':
+            epoch_callbacks = [WarmupCallback(2)]
+            # epoch_callbacks = []
+            if self.config.model_pretrain != "":
+                if self.config.model_pretrain == 'auto':
+                    self.config.model_pretrain = {
+                        "biboe": "SNLI-fix-biboe-sum",
+                        "datt": "SNLI-fix-datt"
+                    }[self.config.arch]
+                logger.warning(f"Try loading weights from pretrained model {self.config.model_pretrain}")
+                pretrain_ckpter = CheckpointerX(f"saved/models/{self.config.model_pretrain}")
+                self.model.load_state_dict(pretrain_ckpter.best_model_state())
+        else:
+            epoch_callbacks = []
+        # epoch_callbacks = []
         batch_callbacks = []
+
+        opt = self.model.get_optimizer()
+        # from allennlp.training.learning_rate_schedulers import SlantedTriangular
+        # scl = SlantedTriangular(opt, num_epochs, len(self.train_data) // batch_size)
+
         trainer = AdvTrainer(
             model=self.model,
-            optimizer=self.model.get_optimizer(),
+            optimizer=opt,
+            # learning_rate_scheduler=scl,
             validation_metric='+accuracy',
             adv_policy=adv_policy,
             data_loader=DataLoader(
@@ -264,6 +287,7 @@ class Task:
         model_path = ckpter.find_latest_best_checkpoint(latest_epoch, 'validation_accuracy')[0]
         # model_path = f'saved/models/{self.config.model_name}/best.th'
         print(f'Load model from {model_path}')
+        sys.stdout.flush()
         self.model.load_state_dict(torch.load(model_path))
         self.model.eval()
 
@@ -399,19 +423,16 @@ class Task:
             attacker = BruteForce(self.predictor, **general_kwargs)
         elif self.config.attack_method == 'pwws':
             attacker = PWWS(self.predictor, **general_kwargs)
-        elif self.config.attack_method == 'genetic':
+        elif self.config.attack_method in ['genetic', 'genetic_nolm']:
+            if self.config.attack_method == "genetic":
+                lm_constraints = json.load(open(f"external_data/ibp-nbrs.{self.config.task_id}.lm.json"))
+            else:
+                lm_constraints = None
             attacker = Genetic(self.predictor,
                                num_generation=40,
                                num_population=60,
                                lm_topk=-1,
-                               lm_constraints=json.load(open(f"external_data/ibp-nbrs.{self.config.task_id}.lm.json")),
-                               **general_kwargs)
-        elif self.config.attack_method == 'genetic_nolm':
-            attacker = Genetic(self.predictor,
-                               num_generation=40,
-                               num_population=60,
-                               lm_topk=-1,
-                               lm_constraints=None,
+                               lm_constraints=lm_constraints,
                                **general_kwargs)
         else:
             raise Exception()

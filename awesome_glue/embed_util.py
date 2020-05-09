@@ -43,14 +43,14 @@ def get_bert_vocab():
     return vocab
 
 
-def build_embedding(vocab: Vocabulary, pretrain: str, cache_embed_path: str):
+def build_embedding(vocab: Vocabulary, pretrain: str, finetune: bool, cache_embed_path: str):
     return VanillaEmbedding(
         num_embeddings=vocab.get_vocab_size('tokens'),
         embedding_dim=EMBED_DIM[pretrain],
         weight=read_weight(vocab, pretrain, cache_embed_path),
         #  projection_dim=100,
         sparse=False,
-        trainable=True)
+        trainable=finetune)
 
 
 # def build_graph_embedding(vocab: Vocabulary, pretrain: str,
@@ -67,7 +67,7 @@ def build_embedding(vocab: Vocabulary, pretrain: str, cache_embed_path: str):
 #         trainable=True)
 
 
-def build_weighted_embedding(vocab: Vocabulary, pretrain: str,
+def build_weighted_embedding(vocab: Vocabulary, pretrain: str, finetune: bool,
                              cache_embed_path: str, hull):
     return WeightedEmbedding(
         num_embeddings=vocab.get_vocab_size('tokens'),
@@ -76,7 +76,7 @@ def build_weighted_embedding(vocab: Vocabulary, pretrain: str,
         hull=hull,
         #   projection_dim=100,
         sparse=False,
-        trainable=True)
+        trainable=finetune)
 
 
 def generate_neighbours(vocab, file_name, measure='euc', topk=8, rho=0.6):

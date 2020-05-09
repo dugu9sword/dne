@@ -8,7 +8,7 @@ from allennlpx.training.adv_trainer import EpochCallback, BatchCallback
 from typing import Dict, Any
 import logging
 import pandas
-from luna import batch_pad
+from luna import batch_pad, ram_set_flag, ram_reset_flag
 from collections import Counter
 from functools import lru_cache
 
@@ -126,7 +126,7 @@ class AttackMetric:
         return self._succ_num / (self._succ_num + self._fail_num + 1e-40) * 100
 
     def __repr__(self):
-        return "Accu before: {:.2f}%, after: {:.2f}%, Flip ratio {:.2f}%".format(
+        return "Accu before: {:4.2f}%, after: {:4.2f}%, Flip ratio {:4.2f}%".format(
             self.accuracy_before_attack, self.accuracy_after_attack,
             self.flip_ratio)
 
@@ -150,6 +150,20 @@ def text_diff(a_text, b_text):
         "change_num": len(a_changes),
         "change_ratio": len(a_changes) / len(a_lst)
     }
+
+class WarmupCallback(EpochCallback):
+    def __init__(self, warm_up_epochs):
+        self.warm_up_epochs = warm_up_epochs
+
+    def __call__(
+        self, trainer, metrics: Dict[str, Any], epoch: int
+    ) -> None:
+        if epoch < self.warm_up_epochs:
+            logger.warning(f'At epoch {epoch}, set warm_mode to True')
+            ram_set_flag("warm_mode")
+        else:
+            logger.warning(f'At epoch {epoch}, set warm_mode to False')
+            ram_reset_flag("warm_mode")
 
 
 # class DirichletAnnealing(BatchCallback):

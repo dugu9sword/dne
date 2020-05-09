@@ -675,6 +675,7 @@ class AdvTrainer(TrainerBase):
         """
         try:
             epoch_counter = self._restore_checkpoint()
+            logger.warning(f"Restore from epoch {epoch_counter} in checkpoint...")
         except RuntimeError:
             traceback.print_exc()
             raise ConfigurationError(

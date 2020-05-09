@@ -5,10 +5,11 @@ from torch.nn.functional import embedding
 
 from allennlp.modules.time_distributed import TimeDistributed
 from allennlp.modules.token_embedders.embedding import Embedding
-from luna import ram_write, ram_read
+from luna import ram_write, ram_read, ram_has_flag
 from allennlpx.training import adv_utils
 import torch.nn.functional as F
 from .weighted_util import WeightedHull, SameAlphaHull, DecayAlphaHull
+from allennlp.nn import util
 
 
 class WeightedEmbedding(Embedding):
@@ -22,6 +23,18 @@ class WeightedEmbedding(Embedding):
 
     @overrides
     def forward(self, tokens: torch.Tensor) -> torch.Tensor:
+        if ram_has_flag("warm_mode"):
+            embedded = embedding(
+                util.combine_initial_dims(tokens),
+                self.weight,
+                padding_idx=self.padding_index,
+                max_norm=self.max_norm,
+                norm_type=self.norm_type,
+                scale_grad_by_freq=self.scale_grad_by_freq,
+                sparse=self.sparse,
+            )
+            embedded = util.uncombine_initial_dims(embedded, tokens.size())
+            return embedded
         nbr_tokens, _coeff = self.hull.get_nbr_and_coeff(tokens.view(-1))
 
         # n_words x n_nbrs x dim
