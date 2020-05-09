@@ -14,6 +14,7 @@ from tqdm import tqdm
 import json
 import numpy as np
 import random
+import os
 
 
 def read_weight(vocab: Vocabulary, pretrain: str, cache_embed_path: str):
@@ -114,8 +115,9 @@ def generate_neighbours(vocab, file_name, measure='euc', topk=8, rho=0.6):
 
 def maybe_path(*args):
     for arg in args:
-        if pathlib.Path(arg).exists():
-            break
+        if os.access(arg, os.W_OK):
+            if pathlib.Path(arg).exists():
+                break
     return arg
 
 
