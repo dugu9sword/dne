@@ -232,7 +232,8 @@ class Predictor(Predictor_):
             probs_to_ensemble = torch.tensor(probs_to_ensemble)
         delta = probs_to_ensemble.max(dim=1, keepdims=True)[0] - probs_to_ensemble
         delta = delta ** self._ensemble_p
-        delta = delta.sum(dim=1)
+        # If prob[0] = prob[1], delta[0] = delta[1] = 0, NaN will occur...
+        delta = delta.sum(dim=1) + 1e-6
         delta = delta / delta.sum()
         ret = delta @ probs_to_ensemble
         # print(probs_to_ensemble)

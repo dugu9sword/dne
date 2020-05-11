@@ -205,7 +205,10 @@ class Genetic(Attacker):
                 else:
                     P = self.evolve(P)
         
-        adv_tokens = best['individual']
+        if len(legal_sids) != 0:
+            adv_tokens = best['individual']
+        else:
+            adv_tokens = raw_tokens
         _volatile_json_[self.f2c] = " ".join(adv_tokens)
         result = self.predictor.predict_json(_volatile_json_)
         raw_instance = self.predictor._json_to_labeled_instance(inputs)

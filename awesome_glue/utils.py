@@ -126,7 +126,7 @@ class AttackMetric:
         return self._succ_num / (self._succ_num + self._fail_num + 1e-40) * 100
 
     def __repr__(self):
-        return "Accu before: {:4.2f}%, after: {:4.2f}%, Flip ratio {:4.2f}%".format(
+        return "Accu before: {:5.2f}%, after: {:5.2f}%, Flip ratio {:5.2f}%".format(
             self.accuracy_before_attack, self.accuracy_after_attack,
             self.flip_ratio)
 
