@@ -299,12 +299,20 @@ class Task:
     @torch.no_grad()
     def evaluate_predictor(self):
         self.from_pretrained()
+        if self.config.eval_data_split == 'dev':
+            eval_data = self.dev_data
+        elif self.config.eval_data_split == 'test':
+            eval_data = self.test_data
         metric = CategoricalAccuracy()
         batch_size = 32
-        total_size = len(self.dev_data)
-        for bid in tqdm(range(0, total_size, batch_size)):
+        if self.config.eval_size == -1:
+            total_size = len(eval_data)
+        else:
+            total_size = min(len(eval_data), self.config.eval_size)
+        bar = tqdm(range(0, total_size, batch_size))
+        for bid in bar:
             instances = [
-                self.dev_data[i]
+                eval_data[i]
                 for i in range(bid, min(bid + batch_size, total_size))
             ]
             outputs = self.predictor.predict_batch_instance(instances)
@@ -317,7 +325,8 @@ class Task:
                 labels.append([label_idx])
                 metric(predictions=torch.tensor(preds),
                        gold_labels=torch.tensor(labels))
-        print(metric.get_metric())
+            bar.set_description("{:5.2f}".format(metric.get_metric()))
+        print(f"Evaluate on {self.config.eval_data_split}, the result is ", metric.get_metric())
 
     @torch.no_grad()
     def transfer_attack(self):
@@ -487,8 +496,8 @@ class Task:
                         log("[changed]", result['changed'])
                     log()
 
-                    log("Avg.change#", round(agg.mean("change_num"), 2),
-                        "Avg.change%", round(100 * agg.mean("change_ratio"), 2))
+                    log("Avg.change#", ":5.2f".format(agg.mean("change_num")),
+                        "Avg.change%", ":5.2f".format(100 * agg.mean("change_ratio")))
                     if "generation" in result:
                         log("Avg.gen#", agg.mean("generation"))
 

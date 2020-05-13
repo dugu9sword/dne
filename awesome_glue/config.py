@@ -6,9 +6,9 @@ class Config(ProgramArgs):
         super().__init__()
 
         # basic settings
-        self.task_id = "SNLI"
-        self.embed = ''   # g/w/_
-        self.arch = 'datt'
+        self.task_id = "IMDB"
+        self.embed = 'w'   # g/w/_
+        self.arch = 'cnn'
         self._pool = ''
         self.pretrain = 'glove'
         self.finetune = True
@@ -16,11 +16,11 @@ class Config(ProgramArgs):
         self._model_name = ""   # if set to tmp, existing models will be overrided
         self.model_pretrain = ""
         # self.model_pretrain = "SNLI-fix-biboe-sum"
-        self.mode = 'train'
+        self.mode = 'peval'
         
         # dirichlet settings
-        self.dir_alpha = 0.1
-        self.dir_decay = 0.05
+        self.dir_alpha = 1.0
+        self.dir_decay = 0.5
         self.nbr_num = 64
         self.nbr_2nd = '21'
         self.adjust_point = False
@@ -32,11 +32,15 @@ class Config(ProgramArgs):
         # training settings
         # self.aug_data = 'nogit/AGNEWS-lstm.pwws.aug.tsv'
         self.aug_data = ''
-        self.adv_iter = 0
+        self.adv_iter = 3
         # hot -> hotflip, rdm -> random, diy -> model do it itself
         self.adv_policy = 'diy'
         self.adv_step = 10.0
         self.adv_replace_num = 0.15
+        
+        # eval settings
+        self.eval_data_split = 'test'
+        self.eval_size = 5000
 
         # predictor settings
         self.pred_ensemble = 16
@@ -67,7 +71,7 @@ class Config(ProgramArgs):
                 return True
             elif self.nbr_2nd[0] == '1':
                 return False
-        elif self.mode == 'attack':
+        elif self.mode in ['attack', 'peval']:
             if self.nbr_2nd[1] == '2':
                 return True
             elif self.nbr_2nd[1] == '1':

@@ -2,3 +2,4 @@ nlpaug
 fastnumbers
 matplotlib
 pandas
+spacy==2.1.8
