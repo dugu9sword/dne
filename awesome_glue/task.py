@@ -305,14 +305,18 @@ class Task:
             eval_data = self.test_data
         metric = CategoricalAccuracy()
         batch_size = 32
+        
         if self.config.eval_size == -1:
             total_size = len(eval_data)
         else:
             total_size = min(len(eval_data), self.config.eval_size)
+        print(f'Shuffle the data set whose size is {total_size}')
+        idxes = np.random.permutation(len(eval_data))[:total_size]
+        
         bar = tqdm(range(0, total_size, batch_size))
         for bid in bar:
             instances = [
-                eval_data[i]
+                eval_data[idxes[i]]
                 for i in range(bid, min(bid + batch_size, total_size))
             ]
             outputs = self.predictor.predict_batch_instance(instances)
@@ -403,8 +407,6 @@ class Task:
                     self.predictor.set_max_tokens(120000)
                 else:
                     self.predictor.set_max_tokens(90000)
-            if self.config.poor_gpu:
-                self.predictor.set_max_tokens(30000)
         else:
             self.predictor.set_max_tokens(60000)
             

@@ -24,10 +24,6 @@ class Config(ProgramArgs):
         self.nbr_num = 64
         self.nbr_2nd = '21'
         self.adjust_point = False
-    
-        # graph settings
-        self.gnn_type = 'mean'
-        self.gnn_hop = 1
 
         # training settings
         # self.aug_data = 'nogit/AGNEWS-lstm.pwws.aug.tsv'
@@ -62,7 +58,6 @@ class Config(ProgramArgs):
         self.alchemist = False
         self.seed = 2
         self.cuda = 0
-        self.poor_gpu = False
 
     @property
     def second_order(self):
