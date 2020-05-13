@@ -6,8 +6,8 @@ class Config(ProgramArgs):
         super().__init__()
 
         # basic settings
-        self.task_id = "IMDB"
-        self.embed = 'w'   # g/w/_
+        self.task_id = "IMDBX"
+        self.embed = ''   # g/w/_
         self.arch = 'cnn'
         self._pool = ''
         self.pretrain = 'glove'
@@ -16,7 +16,7 @@ class Config(ProgramArgs):
         self._model_name = ""   # if set to tmp, existing models will be overrided
         self.model_pretrain = ""
         # self.model_pretrain = "SNLI-fix-biboe-sum"
-        self.mode = 'peval'
+        self.mode = 'train'
         
         # dirichlet settings
         self.dir_alpha = 1.0
@@ -28,7 +28,7 @@ class Config(ProgramArgs):
         # training settings
         # self.aug_data = 'nogit/AGNEWS-lstm.pwws.aug.tsv'
         self.aug_data = ''
-        self.adv_iter = 3
+        self.adv_iter = 0
         # hot -> hotflip, rdm -> random, diy -> model do it itself
         self.adv_policy = 'diy'
         self.adv_step = 10.0
