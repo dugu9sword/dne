@@ -18,6 +18,8 @@ class Config(ProgramArgs):
         # self.model_pretrain = "SNLI-fix-biboe-sum"
         self.mode = 'train'
         
+        self.load_ckpt = -10
+        
         # dirichlet settings
         self.dir_alpha = 1.0
         self.dir_decay = 0.5

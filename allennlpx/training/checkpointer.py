@@ -64,4 +64,4 @@ class CheckpointerX(Checkpointer):
             self._serialization_dir, "training_state_epoch_{}.th".format(epoch_to_load)
         )
 
-        return (model_path, training_state_path)
+        return (model_path, training_state_path, epoch_to_load)

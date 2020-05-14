@@ -282,11 +282,19 @@ class Task:
         trainer.train()
 
     def from_pretrained(self):
-        ckpter = CheckpointerX(f'saved/models/{self.config.model_name}')
-        latest_epoch = 3 if self.config.arch == 'bert' else 10
-        model_path = ckpter.find_latest_best_checkpoint(latest_epoch, 'validation_accuracy')[0]
-        # model_path = f'saved/models/{self.config.model_name}/best.th'
+        ckpt_path = f'saved/models/{self.config.model_name}'
+        if self.config.load_ckpt < 0:
+            ckpter = CheckpointerX(ckpt_path)
+            latest_epoch = 3 if self.config.arch == 'bert' else 10
+            model_path, _, load_epoch = ckpter.find_latest_best_checkpoint(latest_epoch, 'validation_accuracy')
+        else:
+            model_path = f'{ckpt_path}/model_state_epoch_{self.config.load_ckpt}.th'
+            load_epoch = self.config.load_ckpt
         print(f'Load model from {model_path}')
+        metric_path = f'{ckpt_path}/metrics_epoch_{load_epoch}.json'
+        metric = json.load(open(metric_path))
+        metric = list(filter(lambda item: "accu" in item[0], metric.items()))
+        print(f'The metric at epoch {load_epoch} is: {metric}')
         sys.stdout.flush()
         self.model.load_state_dict(torch.load(model_path))
         self.model.eval()
