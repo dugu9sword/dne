@@ -307,25 +307,17 @@ class Task:
     @torch.no_grad()
     def evaluate_predictor(self):
         self.from_pretrained()
-        if self.config.eval_data_split == 'dev':
-            eval_data = self.dev_data
-        elif self.config.eval_data_split == 'test':
-            eval_data = self.test_data
+        
+        eval_data = self.downsample(self.config.eval_data_split, self.config.eval_size)
         metric = CategoricalAccuracy()
         batch_size = 32
         
-        if self.config.eval_size == -1:
-            total_size = len(eval_data)
-        else:
-            total_size = min(len(eval_data), self.config.eval_size)
-        print(f'Shuffle the data set whose size is {total_size}')
-        idxes = np.random.permutation(len(eval_data))[:total_size]
         
-        bar = tqdm(range(0, total_size, batch_size))
+        bar = tqdm(range(0, len(eval_data), batch_size))
         for bid in bar:
             instances = [
-                eval_data[idxes[i]]
-                for i in range(bid, min(bid + batch_size, total_size))
+                eval_data[i]
+                for i in range(bid, min(bid + batch_size, len(eval_data)))
             ]
             outputs = self.predictor.predict_batch_instance(instances)
             preds, labels = [], []
@@ -374,32 +366,33 @@ class Task:
         print(Counter(df["label"].tolist()))
         print(attack_metric)
 
-    def downsample_data_to_attack(self):
+    def downsample(self, data_split, down_size):
         # Set up the data to attack
-        if self.config.attack_data_split == 'train':
-            data_to_attack = self.train_data
-        elif self.config.attack_data_split == 'dev':
-            data_to_attack = self.dev_data
-        elif self.config.attack_data_split == 'test':
-            data_to_attack = self.test_data
+        if data_split == 'train':
+            data_down = self.train_data
+        elif data_split == 'dev':
+            data_down = self.dev_data
+        elif data_split == 'test':
+            data_down = self.test_data
         if is_sentence_pair(self.config.task_id):
             field_to_change = 'sent2'
         else:
             field_to_change = 'sent'
-        data_to_attack = list(
+        data_down = list(
             filter(lambda x: len(x[field_to_change].tokens) < 300,
-                   data_to_attack))
+                   data_down))
 
-        if self.config.attack_size != -1:
+        if down_size != -1:
             with numpy_seed(19491001):
-                idxes = np.random.permutation(len(data_to_attack))
-                data_to_attack = [data_to_attack[i] for i in idxes[:self.config.attack_size]]
-        return data_to_attack
+                idxes = np.random.permutation(len(data_down))
+                data_down = [data_down[i] for i in idxes[:down_size]]
+        print(f'Downsample {down_size} on {data_split}')
+        return data_down
 
     def attack(self):
         self.from_pretrained()
 
-        data_to_attack = self.downsample_data_to_attack()
+        data_to_attack = self.downsample(self.config.attack_data_split, self.config.attack_size)
         if is_sentence_pair(self.config.task_id):
             field_to_change = 'sent2'
         else:

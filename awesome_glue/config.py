@@ -36,9 +36,11 @@ class Config(ProgramArgs):
         self.adv_step = 10.0
         self.adv_replace_num = 0.15
         
-        # eval settings
+        # eval/attack settings
         self.eval_data_split = 'test'
         self.eval_size = 5000
+        self.attack_data_split = 'test'
+        self.attack_size = 5000
 
         # predictor settings
         self.pred_ensemble = 16
@@ -47,8 +49,6 @@ class Config(ProgramArgs):
 
         # attack settings
         self.attack_method = 'genetic_nolm'
-        self.attack_data_split = 'test'
-        self.attack_size = 200
         # self.attack_data_split = 'train'
         # self.attack_size = -1
         self.attack_gen_adv = False
