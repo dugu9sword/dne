@@ -395,7 +395,9 @@ class Task:
         return data_down
 
     def attack(self):
-        self.from_pretrained()
+        print('Firstly, evaluate the model:')
+        self.evaluate_predictor()
+#         self.from_pretrained()
 
         data_to_attack = self.downsample(self.config.attack_data_split, self.config.attack_size)
         if is_sentence_pair(self.config.task_id):
