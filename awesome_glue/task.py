@@ -285,7 +285,8 @@ class Task:
         ckpt_path = f'saved/models/{self.config.model_name}'
         if self.config.load_ckpt < 0:
             ckpter = CheckpointerX(ckpt_path)
-            latest_epoch = 3 if self.config.arch == 'bert' else 10
+            # latest_epoch = 3 if self.config.arch == 'bert' else 10
+            latest_epoch = -self.config.load_ckpt
             model_path, _, load_epoch = ckpter.find_latest_best_checkpoint(latest_epoch, 'validation_accuracy')
         else:
             model_path = f'{ckpt_path}/model_state_epoch_{self.config.load_ckpt}.th'
