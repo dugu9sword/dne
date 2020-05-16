@@ -309,7 +309,7 @@ class Task:
     def evaluate_predictor(self):
         self.from_pretrained()
         
-        eval_data = self.downsample(self.config.eval_data_split, self.config.eval_size)
+        eval_data = self.downsample(self.config.data_split, self.config.data_downsample)
         metric = CategoricalAccuracy()
         batch_size = 32
         
@@ -331,7 +331,7 @@ class Task:
                 metric(predictions=torch.tensor(preds),
                        gold_labels=torch.tensor(labels))
             bar.set_description("{:5.2f}".format(metric.get_metric()))
-        print(f"Evaluate on {self.config.eval_data_split}, the result is ", metric.get_metric())
+        print(f"Evaluate on {self.config.data_split}, the result is ", metric.get_metric())
 
     @torch.no_grad()
     def transfer_attack(self):
@@ -385,7 +385,7 @@ class Task:
                    data_down))
 
         if down_size != -1:
-            if self.config.random_downsample:
+            if self.config.data_random:
                 with numpy_seed(19491001):
                     idxes = np.random.permutation(len(data_down))
                     data_down = [data_down[i] for i in idxes[:down_size]]
@@ -399,7 +399,7 @@ class Task:
         self.evaluate_predictor()
 #         self.from_pretrained()
 
-        data_to_attack = self.downsample(self.config.attack_data_split, self.config.attack_size)
+        data_to_attack = self.downsample(self.config.data_split, self.config.data_downsample)
         if is_sentence_pair(self.config.task_id):
             field_to_change = 'sent2'
         else:
@@ -444,7 +444,7 @@ class Task:
             attacker = PWWS(self.predictor, **general_kwargs)
         elif self.config.attack_method in ['genetic', 'genetic_nolm']:
             if self.config.attack_method == "genetic":
-                lm_constraints = json.load(open(f"external_data/ibp-nbrs.{self.config.task_id}.{self.config.attack_data_split}.lm.json"))
+                lm_constraints = json.load(open(f"external_data/ibp-nbrs.{self.config.task_id}.{self.config.data_split}.lm.json"))
             else:
                 lm_constraints = None
             attacker = Genetic(self.predictor,

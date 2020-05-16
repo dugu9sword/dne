@@ -37,11 +37,9 @@ class Config(ProgramArgs):
         self.adv_replace_num = 0.15
         
         # eval/attack settings
-        self.eval_data_split = 'test'
-        self.eval_size = 1000
-        self.attack_data_split = 'test'
-        self.attack_size = 1000
-        self.random_downsample = True
+        self.data_split = 'test'
+        self.data_downsample = 1000
+        self.data_random = True
 
         # predictor settings
         self.pred_ensemble = 16
