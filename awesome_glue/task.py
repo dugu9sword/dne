@@ -378,14 +378,18 @@ class Task:
             field_to_change = 'sent2'
         else:
             field_to_change = 'sent'
+            
         data_down = list(
             filter(lambda x: len(x[field_to_change].tokens) < 300,
                    data_down))
 
         if down_size != -1:
-            with numpy_seed(19491001):
-                idxes = np.random.permutation(len(data_down))
-                data_down = [data_down[i] for i in idxes[:down_size]]
+            if self.config.random_downsample:
+                with numpy_seed(19491001):
+                    idxes = np.random.permutation(len(data_down))
+                    data_down = [data_down[i] for i in idxes[:down_size]]
+            else:
+                data_down = [data_down[i] for i in range(down_size)]
         print(f'Downsample {down_size} on {data_split}')
         return data_down
 
