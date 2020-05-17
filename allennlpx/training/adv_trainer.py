@@ -698,7 +698,7 @@ class AdvTrainer(TrainerBase):
             metrics["best_validation_" + key] = value
             
         for callback in self._epoch_callbacks:
-            callback(self, metrics={}, epoch=-1)
+            callback(self, metrics={}, epoch=-1 if epoch_counter == 0 else epoch_counter)
 
         for epoch in range(epoch_counter, self._num_epochs):
             epoch_start_time = time.time()
