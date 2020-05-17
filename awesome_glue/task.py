@@ -309,7 +309,7 @@ class Task:
     def evaluate_predictor(self):
         self.from_pretrained()
         
-        eval_data = self.downsample(self.config.data_split, self.config.data_downsample)
+        eval_data = self.downsample()
         metric = CategoricalAccuracy()
         batch_size = 32
         
@@ -367,14 +367,13 @@ class Task:
         print(Counter(df["label"].tolist()))
         print(attack_metric)
 
-    def downsample(self, data_split, down_size):
+    def downsample(self):
         # Set up the data to attack
-        if data_split == 'train':
-            data_down = self.train_data
-        elif data_split == 'dev':
-            data_down = self.dev_data
-        elif data_split == 'test':
-            data_down = self.test_data
+        data_down = {
+            "train": self.train_data,
+            "dev": self.dev_data,
+            "test": self.test_data
+        }[self.config.data_split]
         if is_sentence_pair(self.config.task_id):
             field_to_change = 'sent2'
         else:
@@ -383,15 +382,18 @@ class Task:
         data_down = list(
             filter(lambda x: len(x[field_to_change].tokens) < 300,
                    data_down))
-
-        if down_size != -1:
-            if self.config.data_random:
-                with numpy_seed(19491001):
-                    idxes = np.random.permutation(len(data_down))
-                    data_down = [data_down[i] for i in idxes[:down_size]]
-            else:
-                data_down = [data_down[i] for i in range(down_size)]
-        print(f'Downsample {down_size} on {data_split}')
+        
+        if self.config.data_random:
+            with numpy_seed(19491001):
+                idxes = np.random.permutation(len(data_down))
+                data_down = [data_down[i] for i in idxes]
+                
+        if self.config.data_downsample != -1:
+            start = self.config.data_shard * self.config.data_downsample
+            end = start + self.config.data_downsample
+            data_down = data_down[start:end]
+            
+        print(f'Downsample {self.config.data_downsample} samples at shard {self.config.data_shard} on {self.config.data_split} set')
         return data_down
 
     def attack(self):
@@ -399,7 +401,7 @@ class Task:
         self.evaluate_predictor()
 #         self.from_pretrained()
 
-        data_to_attack = self.downsample(self.config.data_split, self.config.data_downsample)
+        data_to_attack = self.downsample()
         if is_sentence_pair(self.config.task_id):
             field_to_change = 'sent2'
         else:

@@ -39,6 +39,7 @@ class Config(ProgramArgs):
         # eval/attack settings
         self.data_split = 'test'
         self.data_downsample = 1000
+        self.data_shard = 0
         self.data_random = True
 
         # predictor settings
