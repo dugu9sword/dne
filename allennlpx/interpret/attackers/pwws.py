@@ -102,6 +102,7 @@ class PWWS(Attacker):
 
         final_tokens = [ele for ele in raw_tokens]
         sorted_pwws = sorted(pwws_dct.items(), key=lambda x: x[1], reverse=True)
+
         successful = False
         result = None
         for i in range(max_change_num):
