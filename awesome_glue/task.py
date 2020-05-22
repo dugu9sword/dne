@@ -45,6 +45,7 @@ from awesome_glue.decom_att import DecomposableAttention
 from awesome_glue.weighted_embedding import WeightedEmbedding
 from typing import Dict, Any
 from allennlpx.training.adv_trainer import EpochCallback
+from allennlp.training.learning_rate_schedulers.slanted_triangular import SlantedTriangular
 
 
 logging.getLogger('transformers').setLevel(logging.CRITICAL)
@@ -172,8 +173,8 @@ class Task:
         read_hyper_ = partial(read_hyper, self.config.task_id, self.config.arch)
         num_epochs = int(read_hyper_("num_epochs"))
         batch_size = int(read_hyper_("batch_size"))
-        if self.config.arch == 'bert' and self.config.embed == 'w':
-            num_epochs = 4
+        # if self.config.arch == 'bert' and self.config.embed == 'w':
+        #     num_epochs = 4
         logger.info(f"num_epochs: {num_epochs}, batch_size: {batch_size}")
 
         if self.config.model_name == 'tmp':
@@ -216,7 +217,7 @@ class Task:
             if is_sentence_pair(self.config.task_id):
                 policy_args['forward_order'] = 1
             adv_policy = adv_utils.HotFlipPolicy(**policy_args)
-        elif self.config.adv_policy == 'rad':
+        elif self.config.adv_policy == 'rdm':
             adv_policy = adv_utils.RandomNeighbourPolicy(**policy_args)
         elif self.config.adv_policy == 'diy':
             adv_policy = adv_utils.DoItYourselfPolicy(
@@ -255,12 +256,15 @@ class Task:
 
         opt = self.model.get_optimizer()
         # from allennlp.training.learning_rate_schedulers import SlantedTriangular
-        # scl = SlantedTriangular(opt, num_epochs, len(self.train_data) // batch_size)
+        if self.config.arch == 'bert':
+            scl = SlantedTriangular(opt, num_epochs, len(self.train_data) // batch_size)
+        else:
+            scl = None
 
         trainer = AdvTrainer(
             model=self.model,
             optimizer=opt,
-            # learning_rate_scheduler=scl,
+            learning_rate_scheduler=scl,
             validation_metric='+accuracy',
             adv_policy=adv_policy,
             data_loader=DataLoader(
