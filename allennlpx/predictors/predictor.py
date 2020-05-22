@@ -177,21 +177,24 @@ class Predictor(Predictor_):
         return self.predict_batch_json([json_dict], fast)[0]
 
     def predict_batch_instance(self, instances: List[Instance]):
-        if self._ensemble_num == 1 and self._transform_fn is None:
-            # In a normal mode, we split the instances and feed into the model
-            sent_size = len(instances[-1][self._transform_field].tokens)
-            if self._max_tokens:
-                max_batch_forward = self._max_tokens // sent_size
-            else:
-                max_batch_forward = guess_max_batch(sent_size, guess_bert(self._model))   
-            results = []
-            for group in lazy_groups_of(instances, max_batch_forward):
-                results.extend(self._model.forward_on_instances(group))
-            results = sanitize(results)
-        else:
-            # otherwise, we transform them into jsons 
-            json_dicts = list(map(self._dataset_reader.instance_to_text, instances))
-            results = self.predict_batch_json(json_dicts)
+        # if self._ensemble_num == 1 and self._transform_fn is None:
+        #     # In a normal mode, we split the instances and feed into the model
+        #     sent_size = len(instances[-1][self._transform_field].tokens)
+        #     if self._max_tokens:
+        #         max_batch_forward = self._max_tokens // sent_size
+        #     else:
+        #         max_batch_forward = guess_max_batch(sent_size, guess_bert(self._model))   
+        #     results = []
+        #     for group in lazy_groups_of(instances, max_batch_forward):
+        #         results.extend(self._model.forward_on_instances(group))
+        #     results = sanitize(results)
+        # else:
+        #     # otherwise, we transform them into jsons 
+        #     json_dicts = list(map(self._dataset_reader.instance_to_text, instances))
+        #     results = self.predict_batch_json(json_dicts)
+        json_dicts = list(map(self._dataset_reader.instance_to_text, instances))
+        results = self.predict_batch_json(json_dicts)
+
         return results
 
     def predict_instance(self, instance):

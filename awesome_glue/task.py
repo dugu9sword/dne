@@ -237,7 +237,7 @@ class Task:
         # Set callbacks
         
 
-        if self.config.task_id == 'SNLI':
+        if self.config.task_id == 'SNLI' and self.config.arch != 'bert':
             epoch_callbacks = [WarmupCallback(2)]
             # epoch_callbacks = []
             if self.config.model_pretrain != "":
