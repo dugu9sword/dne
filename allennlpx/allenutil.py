@@ -39,6 +39,23 @@ def as_json(instance: Instance):
     return ret
 
 
+def bert_instance_as_json(instance: Instance):
+    ret = {}
+    tokens = list(map(str, instance['sent'].tokens))
+    assert tokens[0] == '[CLS]'
+    sep_index = []
+    for tid, token in enumerate(tokens):
+        if token == '[SEP]':
+            sep_index.append(tid)
+    assert len(sep_index) in [1, 2]
+    assert sep_index[-1] == len(tokens) - 1
+    if len(sep_index) == 1:
+        ret['sent'] = as_sentence(tokens[1:-1])
+    else:
+        ret['sent1'] = as_sentence(tokens[1:sep_index[0]])
+        ret['sent2'] = as_sentence(tokens[sep_index[0] + 1: -1])
+    return ret
+
 def modified_copy(jsonDict: JsonDict, key, value):
     ret = jsonDict.copy()
     ret[key] = as_sentence(value)

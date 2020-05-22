@@ -91,10 +91,4 @@ class BertyTSVReader(DatasetReader):
         if label is not None:
             fields['label'] = LabelField(label, skip_indexing=self._skip_label_indexing)
         return Instance(fields)
-
-    def instance_to_text(self, instance: Instance):
-        if self._sent2_col is None:
-            return {"sent": allenutil.as_sentence(instance['sent'])}
-        else:
-            raise NotImplementedError()
         

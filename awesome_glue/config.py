@@ -6,7 +6,7 @@ class Config(ProgramArgs):
         super().__init__()
 
         # basic settings
-        self.task_id = "IMDBX"
+        self.task_id = "AGNEWS"
         self.embed = ''   # g/w/_
         self.arch = 'cnn'
         self._pool = ''
@@ -16,9 +16,9 @@ class Config(ProgramArgs):
         self._model_name = ""   # if set to tmp, existing models will be overrided
         self.model_pretrain = ""
         # self.model_pretrain = "SNLI-fix-biboe-sum"
-        self.mode = 'train'
+        self.mode = 'attack'
         
-        self.load_ckpt = -10
+        self.load_ckpt = -20
         
         # dirichlet settings
         self.dir_alpha = 1.0
@@ -59,7 +59,7 @@ class Config(ProgramArgs):
         # other settings
         self.alchemist = False
         self.seed = 2
-        self.cuda = 0
+        self.cuda = 2
 
     @property
     def second_order(self):

@@ -116,6 +116,8 @@ class Predictor(Predictor_):
                 for i in range(bsz):
                     b_en_jsons[i][self._transform_field] = tf_out[i]
             
+            if guess_bert(self._model):
+                fast = False
             if not fast:
                 b_en_insts = self._batch_json_to_instances(b_en_jsons)
                 outputs = self._model.forward_on_instances(b_en_insts)
@@ -130,22 +132,23 @@ class Predictor(Predictor_):
                 t2i = defaultdict(lambda: oov, t2i)
 
                 if 'sent' in b_en_jsons[0]:
-                    sents = []
-                    for json_dict in b_en_jsons:
-                        sents.append([t2i[x] for x in json_dict['sent'].split(' ')])
-                    tokens = torch.tensor(sents).cuda()
                     if not guess_bert(self._model):
+                        sents = []
+                        for json_dict in b_en_jsons:
+                            sents.append([t2i[x] for x in json_dict['sent'].split(' ')])
+                        tokens = torch.tensor(sents).cuda()
                         input_sent = {
                             "tokens": {"tokens": tokens}
                         }
                     else:
-                        input_sent = {
-                            "tokens": { 
-                                "token_ids": tokens,
-                                "type_ids": tokens.new_zeros(tokens.size()),
-                                "mask": (tokens != 0).byte()
-                            }
-                        }
+                        raise NotImplementedError
+                        # input_sent = {
+                        #     "tokens": { 
+                        #         "token_ids": tokens,
+                        #         "type_ids": tokens.new_zeros(tokens.size()),
+                        #         "mask": (tokens != 0).byte()
+                        #     }
+                        # }
                     model_input = {
                         'sent': input_sent
                     }

@@ -65,7 +65,7 @@ class Task:
         self.vocab: Vocabulary = loaded_data['vocab']
             
         if self.config.arch == "bert":
-            self.vocab = embed_util.get_bert_vocab()
+            self.bert_vocab = embed_util.get_bert_vocab()
 
         # Build the model
         embed_args = {
@@ -103,27 +103,28 @@ class Task:
         else:
             raise Exception()
         
-        arch_args = {
-            "vocab": self.vocab,
-            "token_embedder": token_embedder,
-            "num_labels": TASK_SPECS[config.task_id]['num_labels']
-        }
-        if config.arch in ['boe', 'cnn', 'lstm']:
-            self.model = Classifier(arch=config.arch, pool=config.pool, **arch_args)
-        elif config.arch == 'biboe':
-            self.model = BiBOE(**arch_args, pool=config.pool)
-        elif config.arch == 'datt':
-            self.model = DecomposableAttention(**arch_args)
-        elif config.arch == 'esim':
-            self.model = ESIM(**arch_args)
-        elif config.arch == 'bert':
+        if config.arch != 'bert':
+            arch_args = {
+                "vocab": self.vocab,
+                "token_embedder": token_embedder,
+                "num_labels": TASK_SPECS[config.task_id]['num_labels']
+            }
+            if config.arch in ['boe', 'cnn', 'lstm']:
+                self.model = Classifier(arch=config.arch, pool=config.pool, **arch_args)
+            elif config.arch == 'biboe':
+                self.model = BiBOE(**arch_args, pool=config.pool)
+            elif config.arch == 'datt':
+                self.model = DecomposableAttention(**arch_args)
+            elif config.arch == 'esim':
+                self.model = ESIM(**arch_args)
+        else:
             self.model = BertClassifier(
-                self.vocab,
+                self.bert_vocab,
                 num_labels=TASK_SPECS[config.task_id]['num_labels'])
             if config.embed == "w":
                 bert_embeddings = self.model.bert_embedder.transformer_model.embeddings.word_embeddings
                 bert_embeddings.word_embeddings = WeightedEmbedding(
-                    num_embeddings=self.vocab.get_vocab_size('tokens'),
+                    num_embeddings=self.bert_vocab.get_vocab_size('tokens'),
                     embedding_dim=768,
                     weight=bert_embeddings.weight,
                     hull=hull,
@@ -172,7 +173,7 @@ class Task:
         num_epochs = int(read_hyper_("num_epochs"))
         batch_size = int(read_hyper_("batch_size"))
         if self.config.arch == 'bert' and self.config.embed == 'w':
-            num_epochs = 6
+            num_epochs = 4
         logger.info(f"num_epochs: {num_epochs}, batch_size: {batch_size}")
 
         if self.config.model_name == 'tmp':
@@ -374,13 +375,13 @@ class Task:
             "dev": self.dev_data,
             "test": self.test_data
         }[self.config.data_split]
-        if is_sentence_pair(self.config.task_id):
-            field_to_change = 'sent2'
+
+        if 'sent' in data_down[0].fields:
+            main_field = 'sent'
         else:
-            field_to_change = 'sent'
-            
+            main_field = 'sent2'    
         data_down = list(
-            filter(lambda x: len(x[field_to_change].tokens) < 300,
+            filter(lambda x: len(x[main_field].tokens) < 300,
                    data_down))
         
         if self.config.data_random:
@@ -398,7 +399,7 @@ class Task:
 
     def attack(self):
         print('Firstly, evaluate the model:')
-        self.evaluate_predictor()
+        # self.evaluate_predictor()
 #         self.from_pretrained()
 
         data_to_attack = self.downsample()
@@ -469,7 +470,10 @@ class Task:
         adv_counter = Counter()
         for i in tqdm(range(len(data_to_attack))):
             log(f"Attacking instance {i}...")
-            raw_json = allenutil.as_json(data_to_attack[i])
+            if self.config.arch == 'bert':
+                raw_json = allenutil.bert_instance_as_json(data_to_attack[i])
+            else:
+                raw_json = allenutil.as_json(data_to_attack[i])
             adv_json = raw_json.copy()
 
             raw_probs = self.predictor.predict_json(raw_json)['probs']
