@@ -403,7 +403,7 @@ class Task:
 
     def attack(self):
         print('Firstly, evaluate the model:')
-        # self.evaluate_predictor()
+        self.evaluate_predictor()
 #         self.from_pretrained()
 
         data_to_attack = self.downsample()
