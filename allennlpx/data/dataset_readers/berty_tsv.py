@@ -92,3 +92,5 @@ class BertyTSVReader(DatasetReader):
             fields['label'] = LabelField(label, skip_indexing=self._skip_label_indexing)
         return Instance(fields)
         
+    def instance_to_text(self, instance: Instance):
+        return allenutil.bert_instance_as_json(instance)
