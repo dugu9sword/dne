@@ -6,9 +6,9 @@ class Config(ProgramArgs):
         super().__init__()
 
         # basic settings
-        self.task_id = "AGNEWS"
+        self.task_id = "SNLI"
         self.embed = ''   # g/w/_
-        self.arch = 'cnn'
+        self.arch = 'bert'
         self._pool = ''
         self.pretrain = 'glove'
         self.finetune = True
@@ -30,7 +30,7 @@ class Config(ProgramArgs):
         # training settings
         # self.aug_data = 'nogit/AGNEWS-lstm.pwws.aug.tsv'
         self.aug_data = ''
-        self.adv_iter = 0
+        self.adv_iter = 1
         # hot -> hotflip, rdm -> random, diy -> model do it itself
         self.adv_policy = 'diy'
         self.adv_step = 10.0
@@ -40,7 +40,7 @@ class Config(ProgramArgs):
         self.data_split = 'test'
         self.data_downsample = 1000
         self.data_shard = 0
-        self.data_random = True
+        self.data_random = False
 
         # predictor settings
         self.pred_ensemble = 16
@@ -48,7 +48,7 @@ class Config(ProgramArgs):
         self.pred_transform_args = ""
 
         # attack settings
-        self.attack_method = 'genetic_nolm'
+        self.attack_method = 'genetic'
         # self.attack_data_split = 'train'
         # self.attack_size = -1
         self.attack_gen_adv = False

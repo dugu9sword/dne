@@ -214,7 +214,7 @@ class Task:
         }
         # yapf: enable
         if self.config.adv_policy == 'hot':
-            if is_sentence_pair(self.config.task_id):
+            if is_sentence_pair(self.config.task_id) and self.config.arch != 'bert':
                 policy_args['forward_order'] = 1
             adv_policy = adv_utils.HotFlipPolicy(**policy_args)
         elif self.config.adv_policy == 'rdm':
