@@ -196,7 +196,7 @@ class Task:
         else:
             model_vocab = self.vocab
         # yapf: disable
-        adv_field = 'sent2' if is_sentence_pair(self.config.task_id) else 'sent'
+        adv_field = 'sent2' if is_sentence_pair(self.config.task_id) and self.config.arch != 'bert' else 'sent'
         policy_args = {
             "adv_iteration": self.config.adv_iter,
             "replace_num": self.config.adv_replace_num,
