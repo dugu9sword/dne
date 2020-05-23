@@ -7,7 +7,7 @@ class Config(ProgramArgs):
 
         # basic settings
         self.task_id = "SNLI"
-        self.embed = ''   # g/w/_
+        self.embed = 'w'   # g/w/_
         self.arch = 'bert'
         self._pool = ''
         self.pretrain = 'glove'
@@ -16,7 +16,7 @@ class Config(ProgramArgs):
         self._model_name = ""   # if set to tmp, existing models will be overrided
         self.model_pretrain = ""
         # self.model_pretrain = "SNLI-fix-biboe-sum"
-        self.mode = 'attack'
+        self.mode = 'train'
         
         self.load_ckpt = -20
         
@@ -59,7 +59,7 @@ class Config(ProgramArgs):
         # other settings
         self.alchemist = False
         self.seed = 2
-        self.cuda = 2
+        self.cuda = 0
 
     @property
     def second_order(self):

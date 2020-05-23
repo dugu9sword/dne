@@ -123,11 +123,11 @@ class Task:
                 bert_vocab,
                 num_labels=TASK_SPECS[config.task_id]['num_labels'])
             if config.embed == "w":
-                bert_embeddings = self.model.bert_embedder.transformer_model.embeddings.word_embeddings
+                bert_embeddings = self.model.bert_embedder.transformer_model.embeddings
                 bert_embeddings.word_embeddings = WeightedEmbedding(
                     num_embeddings=bert_vocab.get_vocab_size('tokens'),
                     embedding_dim=768,
-                    weight=bert_embeddings.weight,
+                    weight=bert_embeddings.word_embeddings.weight,
                     hull=hull,
                     sparse=False,
                     trainable=True
