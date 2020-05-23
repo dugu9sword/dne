@@ -66,7 +66,7 @@ class Task:
         self.vocab: Vocabulary = loaded_data['vocab']
             
         if self.config.arch == "bert":
-            self.bert_vocab = embed_util.get_bert_vocab()
+            bert_vocab = embed_util.get_bert_vocab()
 
         # Build the model
         embed_args = {
@@ -83,7 +83,7 @@ class Task:
             hull_args = {
                 "alpha": config.dir_alpha,
                 "nbr_file": "external_data/ibp-nbrs.json",
-                "vocab": self.vocab,
+                "vocab": self.vocab if self.config.arch != 'bert' else bert_vocab,
                 "nbr_num": config.nbr_num,
                 "second_order": config.second_order
             }
@@ -120,12 +120,12 @@ class Task:
                 self.model = ESIM(**arch_args)
         else:
             self.model = BertClassifier(
-                self.bert_vocab,
+                bert_vocab,
                 num_labels=TASK_SPECS[config.task_id]['num_labels'])
             if config.embed == "w":
                 bert_embeddings = self.model.bert_embedder.transformer_model.embeddings.word_embeddings
                 bert_embeddings.word_embeddings = WeightedEmbedding(
-                    num_embeddings=self.bert_vocab.get_vocab_size('tokens'),
+                    num_embeddings=bert_vocab.get_vocab_size('tokens'),
                     embedding_dim=768,
                     weight=bert_embeddings.weight,
                     hull=hull,
