@@ -5,7 +5,7 @@ from torch.nn.functional import embedding
 
 from allennlp.modules.time_distributed import TimeDistributed
 from allennlp.modules.token_embedders.embedding import Embedding
-from luna import ram_write, ram_read, ram_has_flag
+from luna import ram_write, ram_read, ram_has_flag, ram_set_flag
 from allennlpx.training import adv_utils
 import torch.nn.functional as F
 from .weighted_util import WeightedHull, SameAlphaHull, DecayAlphaHull
@@ -23,6 +23,12 @@ class WeightedEmbedding(Embedding):
 
     @overrides
     def forward(self, tokens: torch.Tensor) -> torch.Tensor:
+        if not ram_has_flag("EXE_ONCE.weighted_embedding"):
+            print("The weighted embedding is working")
+            import sys
+            sys.stdout.flush()
+            ram_set_flag("EXE_ONCE.weighted_embedding")
+            
         if ram_has_flag("warm_mode"):
             embedded = embedding(
                 util.combine_initial_dims(tokens),

@@ -42,7 +42,7 @@ def numpy_seed(seed):
         yield
     finally:
         np.random.set_state(state)
-
+        
 
 def lazy_property(func):
     attr_name = "_lazy_" + func.__name__
