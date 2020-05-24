@@ -157,7 +157,6 @@ class Task:
         transform_fn = parse_transform_fn_from_args(
             self.config.pred_transform, self.config.pred_transform_args)
 
-        self.predictor._dataset_reader._tokenizer = WhitespaceTokenizer()
         self.predictor.set_ensemble_num(self.config.pred_ensemble)
         self.predictor.set_transform_fn(transform_fn)
         if is_sentence_pair(self.config.task_id):
@@ -374,13 +373,21 @@ class Task:
         print(Counter(df["label"].tolist()))
         print(attack_metric)
 
-    def downsample(self):
+    def downsample(self, tokenizer=None):
         # Set up the data to attack
-        data_down = {
-            "train": self.train_data,
-            "dev": self.dev_data,
-            "test": self.test_data
-        }[self.config.data_split]
+        if tokenizer is None:
+            data_down = {
+                "train": self.train_data,
+                "dev": self.dev_data,
+                "test": self.test_data
+            }[self.config.data_split]
+        else:
+            train_data, dev_data, test_data = load_data(self.config.task_id, tokenizer)
+            data_down = {
+                "train": train_data,
+                "dev": dev_data,
+                "test": test_data
+            }[self.config.data_split]
 
         if 'sent' in data_down[0].fields:
             main_field = 'sent'
@@ -408,7 +415,7 @@ class Task:
         self.evaluate_predictor()
 #         self.from_pretrained()
 
-        data_to_attack = self.downsample()
+        data_to_attack = self.downsample(tokenizer='spacy')
         if is_sentence_pair(self.config.task_id):
             field_to_change = 'sent2'
         else:
