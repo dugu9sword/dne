@@ -483,10 +483,11 @@ class Task:
         adv_counter = Counter()
         for i in tqdm(range(len(data_to_attack))):
             log(f"Attacking instance {i}...")
-            if self.config.arch == 'bert':
-                raw_json = allenutil.bert_instance_as_json(data_to_attack[i])
-            else:
-                raw_json = allenutil.as_json(data_to_attack[i])
+#             if self.config.arch == 'bert':
+#                 raw_json = allenutil.bert_instance_as_json(data_to_attack[i])
+#             else:
+#                 raw_json = allenutil.as_json(data_to_attack[i])
+            raw_json = allenutil.as_json(data_to_attack[i])
             adv_json = raw_json.copy()
 
             raw_probs = self.predictor.predict_json(raw_json)['probs']
