@@ -46,6 +46,7 @@ from awesome_glue.weighted_embedding import WeightedEmbedding
 from typing import Dict, Any
 from allennlpx.training.adv_trainer import EpochCallback
 from allennlp.training.learning_rate_schedulers.slanted_triangular import SlantedTriangular
+from allennlp.data.tokenizers.whitespace_tokenizer import WhitespaceTokenizer
 
 
 logging.getLogger('transformers').setLevel(logging.CRITICAL)
@@ -156,6 +157,7 @@ class Task:
         transform_fn = parse_transform_fn_from_args(
             self.config.pred_transform, self.config.pred_transform_args)
 
+        self.predictor._dataset_reader._tokenizer = WhitespaceTokenizer()
         self.predictor.set_ensemble_num(self.config.pred_ensemble)
         self.predictor.set_transform_fn(transform_fn)
         if is_sentence_pair(self.config.task_id):
