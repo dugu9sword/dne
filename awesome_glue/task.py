@@ -382,7 +382,7 @@ class Task:
                 "test": self.test_data
             }[self.config.data_split]
         else:
-            train_data, dev_data, test_data = load_data(self.config.task_id, tokenizer)
+            train_data, dev_data, test_data = load_data(self.config.task_id, tokenizer)['data']
             data_down = {
                 "train": train_data,
                 "dev": dev_data,
