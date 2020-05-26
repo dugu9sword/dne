@@ -6,9 +6,9 @@ class Config(ProgramArgs):
         super().__init__()
 
         # basic settings
-        self.task_id = "SNLI"
+        self.task_id = "IMDBX"
         self.embed = 'w'   # g/w/_
-        self.arch = 'bert'
+        self.arch = 'cnn'
         self._pool = ''
         self.pretrain = 'glove'
         self.finetune = True
@@ -16,9 +16,11 @@ class Config(ProgramArgs):
         self._model_name = ""   # if set to tmp, existing models will be overrided
         self.model_pretrain = ""
         # self.model_pretrain = "SNLI-fix-biboe-sum"
-        self.mode = 'train'
+        self.mode = 'attack'
         
         self.load_ckpt = -20
+
+        self.weighted_off = False
         
         # dirichlet settings
         self.dir_alpha = 1.0
@@ -30,7 +32,7 @@ class Config(ProgramArgs):
         # training settings
         # self.aug_data = 'nogit/AGNEWS-lstm.pwws.aug.tsv'
         self.aug_data = ''
-        self.adv_iter = 1
+        self.adv_iter = 3
         # hot -> hotflip, rdm -> random, diy -> model do it itself
         self.adv_policy = 'diy'
         self.adv_step = 10.0
@@ -43,12 +45,12 @@ class Config(ProgramArgs):
         self.data_random = False
 
         # predictor settings
-        self.pred_ensemble = 16
+        self.pred_ensemble = 1
         self.pred_transform = ""
         self.pred_transform_args = ""
 
         # attack settings
-        self.attack_method = 'genetic'
+        self.attack_method = 'genetic_nolm'
         # self.attack_data_split = 'train'
         # self.attack_size = -1
         self.attack_gen_adv = False
