@@ -167,9 +167,12 @@ class Task:
         if self.config.task_id == 'SST':
             self.train_data = self.dev_data
             self.config.attack_data_split = 'dev'
+        if self.config.weighted_off:
+            ram_set_flag("weighted_off")
 
     def train(self):
-        ram_write("adjust_point", self.config.adjust_point)
+        if self.config.adjust_point:
+            ram_set_flag("adjust_point")
         # ram_write('dist_reg', self.config.dist_reg)
         read_hyper_ = partial(read_hyper, self.config.task_id, self.config.arch)
         num_epochs = int(read_hyper_("num_epochs"))

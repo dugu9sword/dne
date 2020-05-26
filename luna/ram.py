@@ -40,17 +40,25 @@ def ram_has(k):
     return k in __global_ram
 
 
+def flag_name(k):
+    return f"RAM_FLAG_{k}"
+
+
 def ram_set_flag(k):
-    ram_write(f"RAM_FLAG_{k}", True)
+    ram_write(flag_name(k), True)
 
 
 def ram_reset_flag(k):
-    if ram_has(f"RAM_FLAG_{k}"):
-        ram_pop(f"RAM_FLAG_{k}")
+    if ram_has(flag_name(k)):
+        ram_pop(flag_name(k))
 
 
-def ram_has_flag(k):
-    return ram_has(f"RAM_FLAG_{k}") and ram_read(f"RAM_FLAG_{k}") is True
+def ram_has_flag(k, verbose_once=False):
+    ret = ram_has(flag_name(k)) and ram_read(flag_name(k)) is True
+    if verbose_once and not ram_has_flag(f"VERBOSE_ONCE_{flag_name(k)}"):
+        print(f"INFO: check the flag {k}={ret}, the information only occurs once.")
+        ram_set_flag(f"VERBOSE_ONCE_{flag_name(k)}")
+    return ret
 
 
 def ram_globalize(name=None):

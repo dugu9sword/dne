@@ -29,7 +29,7 @@ class WeightedEmbedding(Embedding):
             sys.stdout.flush()
             ram_set_flag("EXE_ONCE.weighted_embedding")
             
-        if ram_has_flag("warm_mode"):
+        if ram_has_flag("warm_mode", True) or ram_has_flag("weighted_off", True):
             embedded = embedding(
                 util.combine_initial_dims(tokens),
                 self.weight,

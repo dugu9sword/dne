@@ -95,7 +95,8 @@ class Predictor(Predictor_):
             hook.remove()
 
     def predict_batch_json(self, json_dicts: List[JsonDict], fast=False):
-        sent_size = len(json_dicts[-1][self._transform_field].split(" "))
+        sent_size = sum(map(lambda x: len(x.split(" ")), json_dicts[-1].values()))
+        # sent_size = len(json_dicts[-1][self._transform_field].split(" "))
         if self._max_tokens:
             max_batch_forward = self._max_tokens // sent_size
         else:
