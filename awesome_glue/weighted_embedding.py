@@ -78,7 +78,7 @@ class WeightedEmbedding(Embedding):
         embedded = (embedded * coeff.unsqueeze(-1)).sum(-2)
         embedded = embedded.view(*tokens.size(), self.weight.size(1))
         if adv_utils.is_adv_mode():
-            if ram_read("adjust_point"):
+            if ram_has_flag("adjust_point"):
                 raw_embedded = embedding(
                     tokens,
                     self.weight,
