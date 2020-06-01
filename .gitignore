@@ -25,3 +25,5 @@ universal-triggers-master/
 glue_data/* 
 awesome_siamese/*
 ipynbs/*
+fshub.py
+hack_fairseq.py
