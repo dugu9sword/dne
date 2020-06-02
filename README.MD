@@ -8,6 +8,8 @@ pip install -r luna/requirements
 pip install git+https://github.com/allenai/allennlp.git@bdb29a831ed68cb948b18b42fa61646b9ec11bf8
 ```
 
+You can download the processed dataset from `https://drive.google.com/file/d/1xMqj3cHN7B6bgfnM6rZg6N6eZPPJ_TGy/view?usp=sharing`, and unzip it into `datasets/`.
+
 ## Usage
 
 Here are some important args for the program:
