@@ -1,12 +1,28 @@
 # Manual
 
+
+This repository contains code for the paper:
+
+```
+@misc{zhou2020defense,
+    title={Defense against Adversarial Attacks in NLP via Dirichlet Neighborhood Ensemble},
+    author={Yi Zhou, Xiaoqing Zheng, Cho-Jui Hsieh, Kai-wei Chang and Xuanjing Huang},
+    year={2020},
+    eprint={2006.11627},
+    archivePrefix={arXiv},
+    primaryClass={cs.CL}
+}
+```
+
 ## Dependencies
 
 ```
-pip install -r requirements
-pip install -r luna/requirements
+pip install -r requirements.txt
+pip install -r luna/requirements.txt
 pip install git+https://github.com/allenai/allennlp.git@bdb29a831ed68cb948b18b42fa61646b9ec11bf8
 ```
+
+Maybe you should create a virtual python environment since the `allennlp` requires `pytorch==1.4.0`, which may be conflicted with your version.
 
 You can download the pre-processed data set from `https://drive.google.com/file/d/1xMqj3cHN7B6bgfnM6rZg6N6eZPPJ_TGy/view?usp=sharing`, and unzip it into `datasets/`.
 
@@ -79,12 +95,12 @@ python play_with_glue.py --mode=attack --task_id=IMDB --arch=cnn --embed='' --ad
 If you want to train a CNN model on the IMDB dataset with DNE, you can run the following command:
 
 ```
-python play_with_glue.py --mode=train --task_id=IMDB --arch=cnn --embed=w --adv_iter=3 --adv_policy=diy
+python play_with_glue.py --mode=train --task_id=IMDB --arch=cnn --embed=w --adv_iter=3 --adv_policy=diy --dir_alpha=1.0 --dir_decay=0.5
 ```
 
 Then, you can run an attacking algorithm (e.g., PWWS) on 500 samples randomly sampled from the develop set by the following command:
 
 ```
-python play_with_glue.py --mode=attack --task_id=IMDB --arch=cnn --embed=w --adv_iter=3 --adv_policy=diy --attack_method=pwws --data_split=dev --data_downsample=500 --data_random=True --pred_ensemble=16
+python play_with_glue.py --mode=attack --task_id=IMDB --arch=cnn --embed=w --adv_iter=3 --adv_policy=diy --attack_method=pwws --data_split=dev --data_downsample=500 --data_random=True --pred_ensemble=16 --dir_alpha=1.0 --dir_decay=0.5
 ```
 

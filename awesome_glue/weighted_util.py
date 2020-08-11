@@ -122,12 +122,16 @@ _cache_dirichlet_size = 10000
 def _cache_dirichlet(alpha, vertex_num, max_vertex_num, v0_num=None, decay=None):
     if vertex_num == 0:
         return None
-    if v0_num is None:
-        alphas = [alpha] * vertex_num
+    # import pdb; pdb.set_trace()
+    if alpha > 0.0:
+        if v0_num is None:
+            alphas = [alpha] * vertex_num
+        else:
+            alphas = [alpha] * v0_num + [alpha * decay] * (vertex_num - v0_num)
+        diri = np.random.dirichlet(alphas, _cache_dirichlet_size).astype(np.float32)
     else:
-        alphas = [alpha] * v0_num + [alpha * decay] * (vertex_num - v0_num)
-    diri = np.random.dirichlet(alphas,
-                               _cache_dirichlet_size).astype(np.float32)
+        # if alpha == 0, generate a random one-hot matrix
+        diri = np.eye(vertex_num)[np.random.choice(vertex_num, _cache_dirichlet_size)].astype(np.float32)
     zero = np.zeros((_cache_dirichlet_size, max_vertex_num - vertex_num),
                     dtype=np.float32)
     ret = np.concatenate((diri, zero), axis=1).tolist()
