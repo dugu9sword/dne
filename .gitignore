@@ -14,6 +14,7 @@ nogit/*
 **/__pycache__/*
 *.logs/*
 *.pstat
+*.log
 *.prof
 *.tbz
 *.tgz

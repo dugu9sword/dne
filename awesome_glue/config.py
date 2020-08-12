@@ -112,8 +112,8 @@ class Config(ProgramArgs):
                 model_name += f'-{self.nbr_num}'
                 if self.nbr_2nd[0] == '2':
                     model_name += '-2nd'
-                if 0.0 < self.dir_decay < 1.0:
-                    model_name += f'-{self.dir_decay}'
+                    if 0.0 < self.dir_decay < 1.0:
+                        model_name += f'-{self.dir_decay}'
             if self.embed == 'g':
                 model_name += f'-{self.gnn_type}-{self.gnn_hop}'
             if self.adv_iter != 0:
