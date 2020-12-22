@@ -6,9 +6,9 @@ class Config(ProgramArgs):
         super().__init__()
 
         # basic settings
-        self.task_id = "IMDBX"
-        self.embed = 'w'   # g/w/_
-        self.arch = 'cnn'
+        self.task_id = "AGNEWS"
+        self.weighted_embed = True
+        self.arch = 'boe'
         self._pool = ''
         self.pretrain = 'glove'
         self.finetune = True
@@ -24,16 +24,18 @@ class Config(ProgramArgs):
         
         # dirichlet settings
         self.dir_alpha = 1.0
-        self.dir_decay = 0.5
+        self.dir_decay = 1.0
+        self.hard_prob = True
         self.nbr_num = 64
         self.nbr_2nd = '21'
         self.adjust_point = False
+        self.big_nbrs = False
 
         # training settings
         # self.aug_data = 'nogit/AGNEWS-lstm.pwws.aug.tsv'
         self.aug_data = ''
         self.adv_iter = 3
-        # hot -> hotflip, rdm -> random, diy -> model do it itself
+        # hot -> hotflip, rdm -> random, diy -> dne
         self.adv_policy = 'diy'
         self.adv_step = 10.0
         self.adv_replace_num = 0.15
@@ -45,15 +47,16 @@ class Config(ProgramArgs):
         self.data_random = False
 
         # predictor settings
-        self.pred_ensemble = 1
+        self.pred_ensemble = 13
         self.pred_transform = ""
         self.pred_transform_args = ""
 
         # attack settings
-        self.attack_method = 'genetic_nolm'
-        # self.attack_data_split = 'train'
-        # self.attack_size = -1
+        self.attack_method = 'PWWS'
         self.attack_gen_adv = False
+
+        # attack_pro settings
+        # self.attack_pro_method = 'fooler'
 
         # transfer settings
         self.adv_data = ''
@@ -101,21 +104,24 @@ class Config(ProgramArgs):
             model_name = f"{self.task_id}"
             if not self.finetune:
                 model_name += "-fix"
-            model_name += f"-{self.embed + self.arch}"
+            if self.weighted_embed:
+                model_name += f"-w{self.arch}"
+            else:
+                model_name += f'-{self.arch}'
             if self.pool:
                 model_name += f"-{self.pool}"
             assert not (self.aug_data != '' and self.adv_iter != 0)
             if self.aug_data != '':
                 model_name += '-aug'
-            if self.embed in ['w']:
+            if self.weighted_embed:
                 model_name += f'-{self.dir_alpha}'
                 model_name += f'-{self.nbr_num}'
                 if self.nbr_2nd[0] == '2':
                     model_name += '-2nd'
-                    if 0.0 < self.dir_decay < 1.0:
+                    if 0.0 < self.dir_decay <= 1.0:
                         model_name += f'-{self.dir_decay}'
-            if self.embed == 'g':
-                model_name += f'-{self.gnn_type}-{self.gnn_hop}'
+                if self.big_nbrs:
+                    model_name += f'-big'
             if self.adv_iter != 0:
                 if self.adv_policy in ['hot', 'rdm']:
                     model_name += f'-{self.adv_policy}.{self.adv_iter}.{self.adv_replace_num}'
@@ -127,9 +133,3 @@ class Config(ProgramArgs):
         else:
             return self._model_name
 
-    def _check_args(self):
-        pass
-        # assert self.arch in ['glstm', 'lstm', 'bert', 'mlstm', "dlstm", "cnn"]
-        # assert self.tokenizer in ['spacy', 'bert']
-        # assert self.pretrain in ['glove', 'fasttext']
-        # assert self.mode in ['train', 'evaluate']

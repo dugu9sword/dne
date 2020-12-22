@@ -24,7 +24,7 @@ class BertyTSVReader(DatasetReader):
             sent2_col: str = None,
             label_col: str = 'label',
             bert_model: str = 'bert-base-uncased',
-            max_sequence_length: int = 512,
+            max_sequence_length: int = 500,
             skip_label_indexing: bool = False,
             lower: bool = True,
             lazy: bool = False,
@@ -35,9 +35,9 @@ class BertyTSVReader(DatasetReader):
         self._label_col = label_col
         self._tokenizer = PretrainedTransformerTokenizer(
             bert_model,
-            add_special_tokens=True, 
+            add_special_tokens=False, 
             max_length=max_sequence_length
-        )
+        ) # type: PretrainedTransformerTokenizer
         self._max_sequence_length = max_sequence_length
         self._skip_label_indexing = skip_label_indexing
         self._lower = lower
@@ -51,7 +51,7 @@ class BertyTSVReader(DatasetReader):
             # without the quoting arg, errors will occur with line having quoting characters "/'
             df = pandas.read_csv(data_file, sep='\t', quoting=csv.QUOTE_NONE)
             has_label = self._label_col in df.columns
-            for rid in range(1, df.shape[0]):
+            for rid in range(0, df.shape[0]):
                 sent1 = df.iloc[rid][self._sent1_col]
                 if self._lower:
                     sent1 = sent1.lower()
@@ -82,9 +82,13 @@ class BertyTSVReader(DatasetReader):
         fields: Dict[str, Field] = {}
 
         if sent2:
-            tokens = self._tokenizer.tokenize_sentence_pair(sent1, sent2)
+            # tokens = self._tokenizer.tokenize_sentence_pair(sent1, sent2)
+            tokens1 = self._tokenizer.tokenize(sent1)
+            tokens2 = self._tokenizer.tokenize(sent2)
+            tokens = self._tokenizer.add_special_tokens(tokens1, tokens2)
         else:
             tokens = self._tokenizer.tokenize(sent1)
+            tokens = self._tokenizer.add_special_tokens(tokens)
 
         fields['sent'] = TextField(tokens, self._token_indexers)
         

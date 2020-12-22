@@ -41,7 +41,7 @@ class SpacyTSVReader(DatasetReader):
             # without the quoting arg, errors will occur with line having quoting characters "/'
             df = pandas.read_csv(data_file, sep='\t', quoting=csv.QUOTE_NONE)
             has_label = self._label_col in df.columns
-            for rid in range(1, df.shape[0]):
+            for rid in range(0, df.shape[0]):
                 sent1 = df.iloc[rid][self._sent1_col]
                 if self._lower:
                     sent1 = sent1.lower()

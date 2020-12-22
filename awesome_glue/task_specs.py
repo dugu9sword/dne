@@ -26,15 +26,6 @@ TASK_SPECS = {
 #         "banned_words": "external_data/sentiment.txt",
         "num_labels": 2,
     },
-    "IMDBX": {
-        "path": "datasets/imdbx",
-        "sent1_col": "sentence",
-        "sent2_col": None,
-        "label_col": "label",
-        "skip_label_indexing": True,
-#         "banned_words": "external_data/sentiment.txt",
-        "num_labels": 2,
-    },
     "SNLI": {
         "path": "datasets/snli",
         "sent1_col": "sentence1",
@@ -51,28 +42,6 @@ TASK_SPECS = {
         "skip_label_indexing": False,
         "num_labels": 3,
     },
-    # "RTE": {
-    #     "path": "datasets/glue_data/RTE/",
-    #     "sent1_col": "sentence1",
-    #     "sent2_col": "sentence2",
-    #     "label_col": "label",
-    #     "skip_label_indexing": False,
-    #     "num_labels": 2,
-    # },
-    # "CoLA": {
-    #     "path": "datasets/glue_data/CoLA/transformed",
-    #     "sent1_col": "sentence",
-    #     "sent2_col": None,
-    #     "label_col": "label",
-    #     "skip_label_indexing": True,
-    # },
-    # "QNLI": {
-    #     "path": "datasets/glue_data/QNLI",
-    #     "sent1_col": "question",
-    #     "sent2_col": "sentence",
-    #     "label_col": "label",
-    #     "skip_label_indexing": False,
-    # }
 }
 TASK_SPECS['TOY'] = TASK_SPECS['SST']
 # yapf:enable

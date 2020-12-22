@@ -2,7 +2,6 @@ import csv
 import random
 from typing import Callable, Dict, List, Union
 
-import nlpaug.augmenter.word as naw
 import nltk
 import torch
 from allennlp.data import Instance
@@ -45,59 +44,6 @@ class WordTransform(Transform):
         else:
             change_num = min(self.change_num_or_ratio, x_len)
         return change_num
-
-
-@register('bt')
-class BackTrans(Transform):
-    def __init__(self):
-        import hack_fairseq
-        hack_fairseq.use_fairseq_9()
-        self.en2z = torch.hub.load('pytorch/fairseq',
-                                   'transformer.wmt19.en-de',
-                                   checkpoint_file='model1.pt',
-                                   tokenizer='moses',
-                                   bpe='fastbpe',
-                                   verbose=True).cuda()
-        self.z2en = torch.hub.load('pytorch/fairseq',
-                                   'transformer.wmt19.de-en',
-                                   checkpoint_file='model1.pt',
-                                   tokenizer='moses',
-                                   bpe='fastbpe',
-                                   verbose=True).cuda()
-        self.en2z.eval()
-        self.z2en.eval()
-
-    def __call__(self, xs: List[str]) -> List[str]:
-        with torch.no_grad():
-            ys = self.en2z.translate(xs, beam=5)
-            ys = self.z2en.translate(ys, beam=5)
-        return ys
-    
-
-@register('dae')
-class DAE(Transform):
-    def __init__(self):
-        import hack_fairseq
-        hack_fairseq.use_fairseq_6()
-        from fsgec.dae_hub import load_model
-        self.translate = load_model()
-#         import hack_fairseq
-#         hack_fairseq.use_fairseq_9()
-#         from fshub import from_pretrained, GeneratorHubInterface
-#         self.tokenizer = SpacyTokenizer()
-#         self.dae = GeneratorHubInterface(**from_pretrained("advdae/checkpoints/", 
-#                                 checkpoint_file='checkpoint_best.pt',
-#                                 data_name_or_path = 'advdae/wikitext-bin/'))
-#         self.dae.cuda()
-#         self.dae.eval()
-        
-    @overrides
-    def __call__(self, xs):
-        with torch.no_grad():
-            return self.translate(xs)
-#         with torch.no_grad():
-#             xs = [" ".join([x.text for x in self.tokenizer.tokenize(x)]) for x in xs]
-#             return self.dae.translate(xs, no_unk=False)
 
         
 @register('crop')
@@ -148,11 +94,6 @@ class RandDrop(WordTransform):
 class EmbedAug(WordTransform):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        #         self.aug = naw.WordEmbsAug(
-        #             model_type = 'glove',
-        #             top_k=10,
-        #             model_path = '/home/zhouyi/counter-fitting/word_vectors/counter-fitted-vectors.txt',
-        #         )
         self.searcher = CachedWordSearcher(
             "external_data/ibp-nbrs.json",
             None,
@@ -164,8 +105,6 @@ class EmbedAug(WordTransform):
         ys = []
         for x in xs:
             x_split = x.split(" ")
-            #             self.aug.aug_min = self.aug.aug_max = self.change_num(len(x_split))
-            #             ys.append(self.aug.substitute(x))
             for cid in random.sample(range(len(x_split)), k=self.change_num(len(x_split))):
                 word = x_split[cid]
                 nbrs = self.searcher.search(word)
@@ -175,40 +114,40 @@ class EmbedAug(WordTransform):
         return ys
 
 
-@register('syn_aug')
-class SynAug(WordTransform):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        nltk.download('wordnet')
-        nltk.download('averaged_perceptron_tagger')
-        self.aug = naw.SynonymAug()
+# @register('syn_aug')
+# class SynAug(WordTransform):
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#         nltk.download('wordnet')
+#         nltk.download('averaged_perceptron_tagger')
+#         self.aug = naw.SynonymAug()
 
-    @overrides
-    def __call__(self, xs):
-        ys = []
-        for x in xs:
-            x_split = x.split(" ")
-            self.aug.aug_min = self.aug.aug_max = self.change_num(len(x_split))
-            ys.append(self.aug.substitute(x))
-        return ys
+#     @overrides
+#     def __call__(self, xs):
+#         ys = []
+#         for x in xs:
+#             x_split = x.split(" ")
+#             self.aug.aug_min = self.aug.aug_max = self.change_num(len(x_split))
+#             ys.append(self.aug.substitute(x))
+#         return ys
 
 
-@register('bert_aug')
-class BertAug(WordTransform):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.aug = naw.ContextualWordEmbsAug(model_path='bert-base-uncased',
-                                             top_k=10,
-                                             action="substitute")
+# @register('bert_aug')
+# class BertAug(WordTransform):
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#         self.aug = naw.ContextualWordEmbsAug(model_path='bert-base-uncased',
+#                                              top_k=10,
+#                                              action="substitute")
 
-    @overrides
-    def __call__(self, xs):
-        ys = []
-        for x in xs:
-            x_split = x.split(" ")
-            self.aug.aug_min = self.aug.aug_max = self.change_num(len(x_split))
-            ys.append(self.aug.substitute(x))
-        return ys
+#     @overrides
+#     def __call__(self, xs):
+#         ys = []
+#         for x in xs:
+#             x_split = x.split(" ")
+#             self.aug.aug_min = self.aug.aug_max = self.change_num(len(x_split))
+#             ys.append(self.aug.substitute(x))
+#         return ys
 
 
 def parse_transform_fn_from_args(tf_names, tf_args):

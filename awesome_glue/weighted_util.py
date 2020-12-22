@@ -1,11 +1,8 @@
 import os
 from overrides import overrides
-from allennlp.data import Vocabulary
 import random
 import numpy as np
-from typing import Dict, Any
 from luna import batch_pad
-from collections import Counter
 from functools import lru_cache
 from allennlpx.interpret.attackers.searchers import CachedWordSearcher
 import torch
@@ -84,6 +81,7 @@ class DecayAlphaHull(WeightedHull):
         first_order_lens_lst = self.first_order_lens[tokens].tolist()
         nbr_num_lst = (nbr_tokens != 0).sum(dim=1).tolist()
         max_nbr_num = max(nbr_num_lst)
+        # try:
         nbr_tokens = nbr_tokens[:, :max_nbr_num]
         if require_coeff:
             coeffs = dirichlet_sampling_fast_2nd(
@@ -92,6 +90,8 @@ class DecayAlphaHull(WeightedHull):
             coeffs = torch.Tensor(coeffs)[:, :max_nbr_num].to(tokens.device)
         else:
             coeffs = None
+        # except:
+        #     import pdb; pdb.set_trace()
         return nbr_tokens, coeffs
 
     @classmethod

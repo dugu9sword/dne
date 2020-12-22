@@ -1,16 +1,13 @@
+from allennlpx import allenutil
 import os
 
-from allennlp.data import Vocabulary
-from tabulate import tabulate
 import torch
-import numpy as np
-from allennlpx.training.adv_trainer import EpochCallback, BatchCallback
+from allennlpx.training.adv_trainer import EpochCallback
 from typing import Dict, Any
 import logging
 import pandas
 from luna import batch_pad, ram_set_flag, ram_reset_flag
-from collections import Counter
-from functools import lru_cache
+
 
 logger = logging.getLogger(__name__)
 
@@ -43,47 +40,6 @@ def get_neighbour_matrix(vocab, searcher):
         nbr_matrix.append(nbrs)
     nbr_matrix = batch_pad(nbr_matrix)
     return torch.tensor(nbr_matrix)
-
-
-class FreqUtil:
-    @staticmethod
-    def print_statistics(vocab: Vocabulary):
-        tokens_with_counts = list(vocab._retained_counter['tokens'].items())
-        tokens_with_counts.sort(key=lambda x: x[1], reverse=True)
-        num = len(tokens_with_counts)
-
-        tables = []
-        for i in range(1, 11):
-            before = min(num // 10 * i, num - 1)
-            tables.append([before, tokens_with_counts[before][1]])
-        print(tabulate(tables, headers=['top-k', 'min frequency']))
-
-    @staticmethod
-    def get_group_by_frequency(vocab: Vocabulary, group_id, num_groups):
-        tokens_with_counts = list(vocab._retained_counter['tokens'].items())
-        tokens_with_counts.sort(key=lambda x: x[1], reverse=True)
-        num = len(tokens_with_counts)
-
-        start_idx = int(num / num_groups * group_id)
-        end_idx = min(int(num / num_groups * (group_id + 1)), num)
-        selected = tokens_with_counts[start_idx:end_idx]
-        return list(map(lambda x: x[0], selected))
-
-    @staticmethod
-    def topk_frequency(vocab: Vocabulary,
-                       number,
-                       order='most',
-                       exclude_words=[]):
-        assert order in ['most', 'least']
-        tokens_with_counts = list(vocab._retained_counter['tokens'].items())
-        tokens_with_counts.sort(key=lambda x: x[1], reverse=order == 'most')
-        ret = []
-        for tok, cou in tokens_with_counts:
-            if tok not in exclude_words:
-                ret.append(tok)
-            if len(ret) == number:
-                break
-        return ret
 
 
 class AttackMetric:
@@ -166,65 +122,8 @@ class WarmupCallback(EpochCallback):
             ram_reset_flag("warm_mode")
 
 
-# class DirichletAnnealing(BatchCallback):
-#     def __init__(self, anneal_epoch_num=3, batch_per_epoch=None):
-#         self.anneal_epoch_num = anneal_epoch_num
-#         self.batch_per_epoch = batch_per_epoch
-#         self.total_steps = anneal_epoch_num * batch_per_epoch
-#         self.start_alpha = 10.0
-
-#     def __call__(self, trainer, epoch: int, batch_number: int,
-#                  is_training: bool):
-#         if hasattr(trainer.model, "word_embedders"):
-#             dir_embed = trainer.model.word_embedders.token_embedder_tokens
-#         elif hasattr(trainer.model, "bert_embedder"):
-#             dir_embed = trainer.model.bert_embedder.transformer_model.embeddings.word_embeddings
-#         if dir_embed.alpha > self.start_alpha:
-#             return
-#         cur_step = epoch * self.batch_per_epoch + batch_number
-#         if epoch >= self.anneal_epoch_num:
-#             cur_alpha = dir_embed.alpha
-#         else:
-#             cur_ratio = cur_step / self.total_steps
-#             cur_alpha = cur_ratio * dir_embed.alpha + (
-#                 1 - cur_ratio) * self.start_alpha
-#         dir_embed.current_alpha = cur_alpha
-#         if batch_number % (self.batch_per_epoch // 4) == 0:
-#             logger.info(
-#                 f'At epoch-{epoch} batch-{batch_number},' +
-#                 f'alpha is set to {cur_alpha}({dir_embed.alpha})'
-#             )
-
-# def get_neighbours(vec, return_edges=False):
-#     """
-#     Given an embedding matrix, find the 10 closest words in the space.
-#     Normally, the first word is itself, but since some words may not be
-#     pretrained, thus the first found maybe zero.
-#     """
-#     index = faiss.IndexFlatL2(vec.shape[1])
-#     res = faiss.StandardGpuResources()  # use a single GPU
-#     index = faiss.index_cpu_to_gpu(res, 0, index)
-#     embed = vec.cpu().numpy()
-#     index.add(embed)
-#     _, I = index.search(embed, k=10)
-
-#     if return_edges:
-#         edges = []
-#         for idx in range(len(I)):
-#             if I[idx][0] == 0:
-#                 edges.append([idx, idx])
-#                 continue
-#             else:
-#                 edges.extend([[idx, ele] for ele in I[idx]])
-#         edges = torch.tensor(edges)
-#         return edges
-#     else:
-#         I = torch.tensor(I)
-#         mask = vec.sum(1) != 0.0
-#         I = torch.arange(I.shape[0]).masked_fill(
-#             mask, 0).unsqueeze(1) + I.masked_fill(~mask.unsqueeze(1), 0)
-#         # test code
-#         for _ in range(10):
-#             some_idx = random.choice(range(I.shape[0]))
-#             assert I[some_idx][0] == some_idx
-#         return I, mask
+def allen_instances_for_attack(instances):
+    ret = []
+    for inst in instances:
+        ret.append((allenutil.as_sentence(inst), inst['label'].label))
+    return ret

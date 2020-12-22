@@ -7,7 +7,8 @@ import json
 import numpy as np
 import pandas
 import torch
-from allennlp.data.dataloader import DataLoader, allennlp_collate
+from allennlp.data.dataloader import PyTorchDataLoader as DataLoader
+from allennlp.data.dataloader import allennlp_collate
 from allennlp.data.samplers import BucketBatchSampler
 from allennlp.data.vocabulary import Vocabulary
 from allennlpx.training.adv_trainer import AdvTrainer
@@ -28,8 +29,9 @@ from awesome_glue.bert_classifier import BertClassifier
 from awesome_glue.task_specs import TASK_SPECS, is_sentence_pair
 from awesome_glue.transforms import (transform_collate,
                                      parse_transform_fn_from_args)
-from awesome_glue.utils import (AttackMetric, FreqUtil, set_environments, WarmupCallback,
-                                text_diff, get_neighbour_matrix, read_hyper)
+from awesome_glue.utils import (AttackMetric, set_environments, WarmupCallback,
+                                text_diff, read_hyper,
+                                allen_instances_for_attack)
 from luna import flt2str, ram_write, ram_set_flag, ram_reset_flag
 from luna.logging import log
 from luna.public import Aggregator, auto_create, numpy_seed
@@ -44,10 +46,7 @@ from awesome_glue.biboe import BiBOE
 from awesome_glue.decom_att import DecomposableAttention
 from awesome_glue.weighted_embedding import WeightedEmbedding
 from typing import Dict, Any
-from allennlpx.training.adv_trainer import EpochCallback
 from allennlp.training.learning_rate_schedulers.slanted_triangular import SlantedTriangular
-from allennlp.data.tokenizers.whitespace_tokenizer import WhitespaceTokenizer
-
 
 logging.getLogger('transformers').setLevel(logging.CRITICAL)
 
@@ -65,7 +64,7 @@ class Task:
         self.reader = loaded_data['reader']
         self.train_data, self.dev_data, self.test_data = loaded_data['data']
         self.vocab: Vocabulary = loaded_data['vocab']
-            
+
         if self.config.arch == "bert":
             bert_vocab = embed_util.get_bert_vocab()
 
@@ -76,35 +75,33 @@ class Task:
             "finetune": config.finetune,
             "cache_embed_path": f"{config.task_id}-{config.pretrain}.vec"
         }
-        
-        if config.embed == "":
+        # import pdb; pdb.set_trace()
+
+        if not config.weighted_embed:
             if self.config.arch != "bert":
                 token_embedder = embed_util.build_embedding(**embed_args)
-        elif config.embed == "w":
+        else:
             hull_args = {
                 "alpha": config.dir_alpha,
-                "nbr_file": "external_data/ibp-nbrs.json",
+                "nbr_file": "external_data/ibp-nbrs.json" if not config.big_nbrs else "external_data/euc-top8.json",
                 "vocab": self.vocab if self.config.arch != 'bert' else bert_vocab,
                 "nbr_num": config.nbr_num,
                 "second_order": config.second_order
             }
-            if config.second_order and 0.0 < config.dir_decay < 1.0:
+            if config.second_order and 0.0 < config.dir_decay <= 1.0:
                 hull = DecayAlphaHull.build(
                     **hull_args,
                     decay=config.dir_decay,
                 )
             else:
                 hull = SameAlphaHull.build(**hull_args)
-            print(f'Using {type(hull)} with second_order={config.second_order}')             
-            
+            print(
+                f'Using {type(hull)} with second_order={config.second_order}')
+
             if self.config.arch != "bert":
                 token_embedder = embed_util.build_weighted_embedding(
-                    **embed_args,
-                    hull=hull
-                )
-        else:
-            raise Exception()
-        
+                    **embed_args, hull=hull)
+
         if config.arch != 'bert':
             arch_args = {
                 "vocab": self.vocab,
@@ -112,7 +109,9 @@ class Task:
                 "num_labels": TASK_SPECS[config.task_id]['num_labels']
             }
             if config.arch in ['boe', 'cnn', 'lstm']:
-                self.model = Classifier(arch=config.arch, pool=config.pool, **arch_args)
+                self.model = Classifier(arch=config.arch,
+                                        pool=config.pool,
+                                        **arch_args)
             elif config.arch == 'biboe':
                 self.model = BiBOE(**arch_args, pool=config.pool)
             elif config.arch == 'datt':
@@ -123,7 +122,7 @@ class Task:
             self.model = BertClassifier(
                 bert_vocab,
                 num_labels=TASK_SPECS[config.task_id]['num_labels'])
-            if config.embed == "w":
+            if config.weighted_embed:
                 bert_embeddings = self.model.bert_embedder.transformer_model.embeddings
                 bert_embeddings.word_embeddings = WeightedEmbedding(
                     num_embeddings=bert_vocab.get_vocab_size('tokens'),
@@ -131,8 +130,7 @@ class Task:
                     weight=bert_embeddings.word_embeddings.weight,
                     hull=hull,
                     sparse=False,
-                    trainable=True
-                )
+                    trainable=True)
         self.model.cuda()
 
         # The predictor is a wrapper of the model.
@@ -158,6 +156,10 @@ class Task:
             self.config.pred_transform, self.config.pred_transform_args)
 
         self.predictor.set_ensemble_num(self.config.pred_ensemble)
+        if self.config.hard_prob:
+            self.predictor.set_ensemble_p(-1)
+        else:
+            self.predictor.set_ensemble_p(3)
         self.predictor.set_transform_fn(transform_fn)
         if is_sentence_pair(self.config.task_id):
             self.predictor.set_transform_field("sent2")
@@ -174,11 +176,10 @@ class Task:
         if self.config.adjust_point:
             ram_set_flag("adjust_point")
         # ram_write('dist_reg', self.config.dist_reg)
-        read_hyper_ = partial(read_hyper, self.config.task_id, self.config.arch)
+        read_hyper_ = partial(read_hyper, self.config.task_id,
+                              self.config.arch)
         num_epochs = int(read_hyper_("num_epochs"))
         batch_size = int(read_hyper_("batch_size"))
-        # if self.config.arch == 'bert' and self.config.embed == 'w':
-        #     num_epochs = 4
         logger.info(f"num_epochs: {num_epochs}, batch_size: {batch_size}")
 
         if self.config.model_name == 'tmp':
@@ -207,7 +208,7 @@ class Task:
             "replace_num": self.config.adv_replace_num,
             "searcher": WordIndexSearcher(
                 CachedWordSearcher(
-                    "external_data/ibp-nbrs.json",
+                    "external_data/ibp-nbrs.json" if not self.config.big_nbrs else "external_data/euc-top8.json",
                     model_vocab.get_token_to_index_vocabulary("tokens"),
                     second_order=False
                 ),
@@ -218,14 +219,16 @@ class Task:
         }
         # yapf: enable
         if self.config.adv_policy == 'hot':
-            if is_sentence_pair(self.config.task_id) and self.config.arch != 'bert':
+            if is_sentence_pair(
+                    self.config.task_id) and self.config.arch != 'bert':
                 policy_args['forward_order'] = 1
             adv_policy = adv_utils.HotFlipPolicy(**policy_args)
         elif self.config.adv_policy == 'rdm':
             adv_policy = adv_utils.RandomNeighbourPolicy(**policy_args)
         elif self.config.adv_policy == 'diy':
-            adv_policy = adv_utils.DoItYourselfPolicy(
-                self.config.adv_iter, adv_field, self.config.adv_step)
+            adv_policy = adv_utils.DoItYourselfPolicy(self.config.adv_iter,
+                                                      adv_field,
+                                                      self.config.adv_step)
         else:
             adv_policy = adv_utils.NoPolicy
 
@@ -239,7 +242,6 @@ class Task:
             batch_size=batch_size,
         )
         # Set callbacks
-        
 
         if self.config.task_id == 'SNLI' and self.config.arch != 'bert':
             epoch_callbacks = [WarmupCallback(2)]
@@ -250,8 +252,11 @@ class Task:
                         "biboe": "SNLI-fix-biboe-sum",
                         "datt": "SNLI-fix-datt"
                     }[self.config.arch]
-                logger.warning(f"Try loading weights from pretrained model {self.config.model_pretrain}")
-                pretrain_ckpter = CheckpointerX(f"saved/models/{self.config.model_pretrain}")
+                logger.warning(
+                    f"Try loading weights from pretrained model {self.config.model_pretrain}"
+                )
+                pretrain_ckpter = CheckpointerX(
+                    f"saved/models/{self.config.model_pretrain}")
                 self.model.load_state_dict(pretrain_ckpter.best_model_state())
         else:
             epoch_callbacks = []
@@ -259,9 +264,9 @@ class Task:
         batch_callbacks = []
 
         opt = self.model.get_optimizer()
-        # from allennlp.training.learning_rate_schedulers import SlantedTriangular
         if self.config.arch == 'bert':
-            scl = SlantedTriangular(opt, num_epochs, len(self.train_data) // batch_size)
+            scl = SlantedTriangular(opt, num_epochs,
+                                    len(self.train_data) // batch_size)
         else:
             scl = None
 
@@ -296,7 +301,8 @@ class Task:
             ckpter = CheckpointerX(ckpt_path)
             # latest_epoch = 3 if self.config.arch == 'bert' else 10
             latest_epoch = -self.config.load_ckpt
-            model_path, _, load_epoch = ckpter.find_latest_best_checkpoint(latest_epoch, 'validation_accuracy')
+            model_path, _, load_epoch = ckpter.find_latest_best_checkpoint(
+                latest_epoch, 'validation_accuracy')
         else:
             model_path = f'{ckpt_path}/model_state_epoch_{self.config.load_ckpt}.th'
             load_epoch = self.config.load_ckpt
@@ -317,12 +323,11 @@ class Task:
     @torch.no_grad()
     def evaluate_predictor(self):
         self.from_pretrained()
-        
+
         eval_data = self.downsample()
         metric = CategoricalAccuracy()
         batch_size = 32
-        
-        
+
         bar = tqdm(range(0, len(eval_data), batch_size))
         for bid in bar:
             instances = [
@@ -337,10 +342,11 @@ class Task:
                 if isinstance(inst.fields['label'].label, str):
                     label_idx = self.vocab.get_token_index(label_idx, 'labels')
                 labels.append([label_idx])
-                metric(predictions=torch.tensor(preds),
-                       gold_labels=torch.tensor(labels))
+            metric(predictions=torch.tensor(preds),
+                   gold_labels=torch.tensor(labels))
             bar.set_description("{:5.2f}".format(metric.get_metric()))
-        print(f"Evaluate on {self.config.data_split}, the result is ", metric.get_metric())
+        print(f"Evaluate on {self.config.data_split}, the result is ",
+              metric.get_metric())
 
     @torch.no_grad()
     def transfer_attack(self):
@@ -385,7 +391,8 @@ class Task:
                 "test": self.test_data
             }[self.config.data_split]
         else:
-            train_data, dev_data, test_data = load_data(self.config.task_id, tokenizer)['data']
+            train_data, dev_data, test_data = load_data(
+                self.config.task_id, tokenizer)['data']
             data_down = {
                 "train": train_data,
                 "dev": dev_data,
@@ -395,28 +402,29 @@ class Task:
         if 'sent' in data_down[0].fields:
             main_field = 'sent'
         else:
-            main_field = 'sent2'    
+            main_field = 'sent2'
         data_down = list(
-            filter(lambda x: len(x[main_field].tokens) < 300,
-                   data_down))
-        
+            filter(lambda x: len(x[main_field].tokens) < 300, data_down))
+
         if self.config.data_random:
             with numpy_seed(19491001):
                 idxes = np.random.permutation(len(data_down))
                 data_down = [data_down[i] for i in idxes]
-                
+
         if self.config.data_downsample != -1:
             start = self.config.data_shard * self.config.data_downsample
             end = start + self.config.data_downsample
             data_down = data_down[start:end]
-            
-        print(f'Downsample {self.config.data_downsample} samples at shard {self.config.data_shard} on {self.config.data_split} set')
+
+        print(
+            f'Downsample {self.config.data_downsample} samples at shard {self.config.data_shard} on {self.config.data_split} set'
+        )
         return data_down
 
     def attack(self):
         print('Firstly, evaluate the model:')
         self.evaluate_predictor()
-#         self.from_pretrained()
+        #         self.from_pretrained()
 
         data_to_attack = self.downsample(tokenizer='spacy')
         if is_sentence_pair(self.config.task_id):
@@ -436,14 +444,14 @@ class Task:
                     self.predictor.set_max_tokens(90000)
         else:
             self.predictor.set_max_tokens(60000)
-            
+
         # Set up the attacker
         # Whatever bert/non-bert model, we use the spacy vocab
         spacy_vocab = load_data(self.config.task_id, "spacy")['vocab']
         searcher = CachedWordSearcher(
-            "external_data/ibp-nbrs.json",
-            spacy_vocab.get_token_to_index_vocabulary("tokens")
-        )
+            "external_data/ibp-nbrs.json"
+            if not self.config.big_nbrs else "external_data/euc-top8.json",
+            spacy_vocab.get_token_to_index_vocabulary("tokens"))
         forbidden_words = load_banned_words(self.config.task_id)
         # forbidden_words += stopwords.words("english")
         general_kwargs = {
@@ -459,11 +467,14 @@ class Task:
             attacker = HotFlip(self.predictor, **general_kwargs)
         elif self.config.attack_method == 'bruteforce':
             attacker = BruteForce(self.predictor, **general_kwargs)
-        elif self.config.attack_method == 'pwws':
+        elif self.config.attack_method == 'PWWS':
             attacker = PWWS(self.predictor, **general_kwargs)
-        elif self.config.attack_method in ['genetic', 'genetic_nolm']:
-            if self.config.attack_method == "genetic":
-                lm_constraints = json.load(open(f"external_data/ibp-nbrs.{self.config.task_id}.{self.config.data_split}.lm.json"))
+        elif self.config.attack_method in ['GA-LM', 'GA']:
+            if self.config.attack_method == "GA-LM":
+                lm_constraints = json.load(
+                    open(
+                        f"external_data/ibp-nbrs.{self.config.task_id}.{self.config.data_split}.lm.json"
+                    ))
             else:
                 lm_constraints = None
             attacker = Genetic(self.predictor,
@@ -477,19 +488,20 @@ class Task:
 
         # Start attacking
         if self.config.attack_gen_adv:
-            f_adv = open(f"nogit/{self.config.model_name}.{self.config.attack_method}.adv.tsv", 'w')
+            f_adv = open(
+                f"nogit/{self.config.model_name}.{self.config.attack_method}.adv.tsv",
+                'w')
             f_adv.write("raw\tadv\tlabel\n")
-        strict_metric = AttackMetric()
-        loose_metric = AttackMetric()
+        metric = AttackMetric()
         agg = Aggregator()
         raw_counter = Counter()
         adv_counter = Counter()
         for i in tqdm(range(len(data_to_attack))):
             log(f"Attacking instance {i}...")
-#             if self.config.arch == 'bert':
-#                 raw_json = allenutil.bert_instance_as_json(data_to_attack[i])
-#             else:
-#                 raw_json = allenutil.as_json(data_to_attack[i])
+            #             if self.config.arch == 'bert':
+            #                 raw_json = allenutil.bert_instance_as_json(data_to_attack[i])
+            #             else:
+            #                 raw_json = allenutil.as_json(data_to_attack[i])
             raw_json = allenutil.as_json(data_to_attack[i])
             adv_json = raw_json.copy()
 
@@ -504,7 +516,7 @@ class Task:
                 # yapf:disable
                 result = attacker.attack_from_json(raw_json)
                 adv_json[field_to_change] = allenutil.as_sentence(result['adv'])
-                
+
                 if "generation" in result:
                     print("stop at generation", result['generation'])
                 # sanity check: in case of failure, the changed num should be close to
@@ -529,33 +541,23 @@ class Task:
                         log("[changed]", result['changed'])
                     log()
 
-                    log("Avg.change#", ":5.2f".format(agg.mean("change_num")),
-                        "Avg.change%", ":5.2f".format(100 * agg.mean("change_ratio")))
+                    log("Avg.change#", "{:5.2f}".format(agg.mean("change_num")),
+                        "Avg.change%", "{:5.2f}".format(100 * agg.mean("change_ratio")))
                     if "generation" in result:
                         log("Avg.gen#", agg.mean("generation"))
 
-                # Strict metric: An attacker thinks that it attacks successfully.
                 if result['success']:
-                    strict_metric.succeed()
+                    metric.succeed()
                 else:
-                    strict_metric.fail()
+                    metric.fail()
 
-                # Loose metric: Passing the adversarial example to the model will
-                # have a different result. (Since there may be randomness in the model.)
-                adv_probs = self.predictor.predict_json(adv_json)['probs']
-                adv_pred = np.argmax(adv_probs)
-                if raw_pred != adv_pred:
-                    loose_metric.succeed()
-                else:
-                    loose_metric.fail()
-                log(f"Aggregated metric: " +  
-                    # "[loose] {loose_metric}" +
-                    f"[strict] {strict_metric}")
+
+                log(f"Aggregated metric: {metric}")
                 # yapf:enable
             else:
-                log("Skipping the current instance since the predicted label is wrong.")
-                loose_metric.escape()
-                strict_metric.escape()
+                log("Skipping the current instance since the predicted label is wrong."
+                    )
+                metric.escape()
 
             if self.config.attack_gen_adv:
                 f_adv.write(
@@ -573,67 +575,55 @@ class Task:
         print("Overall:")
         print("Avg.change#:", round(agg.mean("change_num"), 2) if agg.has_key("change_num") else '-',
               "Avg.change%:", round(100 * agg.mean("change_ratio"), 2) if agg.has_key("change_ratio") else '-',
-              "[loose] Accu.before%:", round(loose_metric.accuracy_before_attack, 2),
-              "Accu.after%:", round(loose_metric.accuracy_after_attack, 2),
-              "[strict] Accu.before%:", round(strict_metric.accuracy_before_attack, 2),
-              "Accu.after%:", round(strict_metric.accuracy_after_attack, 2))
+              "Accu.before%:", round(metric.accuracy_before_attack, 2),
+              "Accu.after%:", round(metric.accuracy_after_attack, 2))
         # yapf:enable
 
-#     def build_manifold(self):
-#         spacy_data = load_data(self.config.task_id, "spacy")
-#         train_data, dev_data, _ = spacy_data['data']
-#         if self.config.task_id == 'SST':
-#             train_data = list(filter(lambda x: len(x["sent"].tokens) > 15, train_data))
-#         spacy_vocab: Vocabulary = spacy_data['vocab']
+    def attack_pro(self):
+        print('Firstly, evaluate the model:')
+        self.evaluate_predictor()
 
-#         embedder = SentenceTransformer('bert-base-nli-stsb-mean-tokens')
+        from textattack.attack_results import SuccessfulAttackResult, SkippedAttackResult, FailedAttackResult
+        from textattack.models.wrappers import ModelWrapper
+        from textattack.attack_recipes import TextFoolerJin2019
+        from textattack.attack_recipes import PWWSRen2019
 
-#         collector = H5pyCollector(f'{self.config.task_id}.train.h5py', 768)
+        dataset = allen_instances_for_attack(
+            self.downsample(tokenizer='spacy'))
 
-#         batch_size = 32
-#         total_size = len(train_data)
-#         for i in range(0, total_size, batch_size):
-#             sents = []
-#             for j in range(i, min(i + batch_size, total_size)):
-#                 sents.append(allenutil.as_sentence(train_data[j]))
-#             collector.collect(np.array(embedder.encode(sents)))
-#         collector.close()
+        class AllenModel(ModelWrapper):
+            def __init__(self, predictor):
+                self.predictor = predictor
+                # self.predictor._model.cuda()
 
-#     def test_distance(self):
-#         embedder = SentenceTransformer('bert-base-nli-stsb-mean-tokens')
-#         index = build_faiss_index(f'{self.config.task_id}.train.h5py')
+            def __call__(self, text_input_list):
+                with torch.no_grad():
+                    outputs = self.predictor.predict_batch_json([{
+                        "sent":
+                        text_input
+                    } for text_input in text_input_list])
+                outputs = [output['probs'] for output in outputs]
+                return outputs
 
-#         df = pandas.read_csv(self.config.adv_data, sep='\t', quoting=csv.QUOTE_NONE)
-#         agg_D = []
-#         for rid in tqdm(range(df.shape[0])):
-#             raw = df.iloc[rid]['raw']
-#             adv = df.iloc[rid]['adv']
-#             if raw != adv:
-#                 sent_embed = embedder.encode([raw, adv])
-#                 D, _ = index.search(np.array(sent_embed), 3)
-#                 agg_D.append(D.mean(axis=1))
-#         agg_D = np.array(agg_D)
-#         print(agg_D.mean(axis=0), agg_D.std(axis=0))
-#         print(sum(agg_D[:, 0] < agg_D[:, 1]), 'of', agg_D.shape[0])
+        model = AllenModel(self.predictor)
 
-#     def test_ppl(self):
-#         en_lm = torch.hub.load('pytorch/fairseq',
-#                                'transformer_lm.wmt19.en',
-#                                tokenizer='moses',
-#                                bpe='fastbpe')
-#         en_lm.eval()
-#         en_lm.cuda()
+        attack_cls = {
+            "pwws": PWWSRen2019,
+            "textfooler": TextFoolerJin2019
+        }[self.config.attack_pro_method]
+        attack = attack_cls.build(model)
+        results = attack.attack_dataset(dataset)
 
-#         df = pandas.read_csv(self.config.adv_data, sep='\t', quoting=csv.QUOTE_NONE)
-#         agg_ppls = []
-#         for rid in tqdm(range(df.shape[0])):
-#             raw = df.iloc[rid]['raw']
-#             adv = df.iloc[rid]['adv']
-#             if raw != adv:
-#                 scores = en_lm.score([raw, adv])
-#                 ppls = np.array(
-#                     [ele['positional_scores'].mean().neg().exp().item() for ele in scores])
-#                 agg_ppls.append(ppls)
-#         agg_ppls = np.array(agg_ppls)
-#         print(agg_ppls.mean(axis=0), agg_ppls.std(axis=0))
-#         print(sum(agg_ppls[:, 0] < agg_ppls[:, 1]), 'of', agg_ppls.shape[0])
+        metric = AttackMetric()
+        bar = tqdm(results)
+        for i, result in enumerate(bar):
+            print(f'[sentence] >>> {i}')
+            sys.stdout.flush()
+            if isinstance(result, SuccessfulAttackResult):
+                metric.succeed()
+            elif isinstance(result, SkippedAttackResult):
+                metric.escape()
+            else:
+                metric.fail()
+            bar.set_description(f'{metric}')
+        print(metric)

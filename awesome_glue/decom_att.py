@@ -1,4 +1,4 @@
-from typing import Dict, Optional, List, Any
+from typing import Dict, List, Any
 
 import torch
 
@@ -11,7 +11,7 @@ from allennlp.nn.util import get_text_field_mask, masked_softmax, weighted_sum
 from allennlp.training.metrics import CategoricalAccuracy
 from allennlp.modules.token_embedders import TokenEmbedder
 from allennlp.modules.text_field_embedders import BasicTextFieldEmbedder
-from allennlp.training.optimizers import DenseSparseAdam, AdagradOptimizer, AdadeltaOptimizer
+from allennlp.training.optimizers import DenseSparseAdam
 from allennlpx.training import adv_utils
 
 

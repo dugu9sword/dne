@@ -210,6 +210,9 @@ class Predictor(Predictor_):
     def set_ensemble_num(self, ensemble_num):
         self._ensemble_num = ensemble_num
 
+    def set_ensemble_p(self, ensemble_p):
+        self._ensemble_p = ensemble_p
+
     def set_transform_fn(self, transform_fn):
         if not check_identity(transform_fn):
             self._transform_fn = transform_fn
@@ -237,15 +240,16 @@ class Predictor(Predictor_):
         # tensor([0.7384, 0.2616])
         if isinstance(probs_to_ensemble, list):
             probs_to_ensemble = torch.tensor(probs_to_ensemble)
-        delta = probs_to_ensemble.max(dim=1, keepdims=True)[0] - probs_to_ensemble
-        delta = delta ** self._ensemble_p
-        # If prob[0] = prob[1], delta[0] = delta[1] = 0, NaN will occur...
-        delta = delta.sum(dim=1) + 1e-6
-        delta = delta / delta.sum()
-        ret = delta @ probs_to_ensemble
-        # print(probs_to_ensemble)
-        # print(probs_to_ensemble.mean(dim=0))
-        # print(ret)
+        if self._ensemble_p != -1:
+            delta = probs_to_ensemble.max(dim=1, keepdims=True)[0] - probs_to_ensemble
+            delta = delta ** self._ensemble_p
+            # If prob[0] = prob[1], delta[0] = delta[1] = 0, NaN will occur...
+            delta = delta.sum(dim=1) + 1e-6
+            delta = delta / delta.sum()
+            ret = delta @ probs_to_ensemble
+        else:
+            labels = torch.argmax(probs_to_ensemble, axis=1)
+            ret = torch.eye(len(probs_to_ensemble[0]))[labels].mean(0)
         return ret
 
 

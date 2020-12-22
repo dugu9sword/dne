@@ -16,19 +16,21 @@ from allennlp.data import DataLoader
 from allennlp.data.dataloader import TensorDict
 from allennlp.models.model import Model
 from allennlp.nn import util as nn_util
-from allennlp.training import util as training_util
-from allennlp.training.checkpointer import Checkpointer
+from allennlpx.training import util as training_util
+from allennlpx.training.checkpointer import Checkpointer
 from allennlp.training.learning_rate_schedulers import LearningRateScheduler
 from allennlp.training.metric_tracker import MetricTracker
 from allennlp.training.momentum_schedulers import MomentumScheduler
 from allennlp.training.moving_average import MovingAverage
 from allennlp.training.optimizers import Optimizer
 from allennlp.training.tensorboard_writer import TensorboardWriter
-from allennlp.training.trainer_base import TrainerBase
+# from allennlp.training.trainer_base import TrainerBase
 from torch.nn.parallel import DistributedDataParallel
 from allennlp.nn import util
 from allennlpx.training import adv_utils
 from luna import ram_append, ram_read, ram_reset
+from allennlpx.training.trainer_base import TrainerBase
+
 
 try:
     from apex import amp
@@ -347,7 +349,7 @@ class AdvTrainer(TrainerBase):
 
         try:
             loss = output_dict["loss"]
-            if for_training:
+            if for_training and self.model.get_regularization_penalty():
                 loss += self.model.get_regularization_penalty()
         except KeyError:
             if for_training:
@@ -362,10 +364,10 @@ class AdvTrainer(TrainerBase):
         Trains one epoch and returns metrics.
         """
         logger.info("Epoch %d/%d", epoch, self._num_epochs - 1)
-        peak_cpu_usage = common_util.peak_memory_mb()
-        logger.info(f"Peak CPU memory usage MB: {peak_cpu_usage}")
+        # peak_cpu_usage = common_util.peak_memory_mb()
+        # logger.info(f"Peak CPU memory usage MB: {peak_cpu_usage}")
         gpu_usage = []
-        for gpu, memory in common_util.gpu_memory_mb().items():
+        for gpu, memory in common_util.peak_gpu_memory().items():
             gpu_usage.append((gpu, memory))
             logger.info(f"GPU {gpu} memory usage MB: {memory}")
 
@@ -588,7 +590,7 @@ class AdvTrainer(TrainerBase):
             world_size=self._world_size,
             cuda_device=[self.cuda_device],
         )
-        metrics["cpu_memory_MB"] = peak_cpu_usage
+        # metrics["cpu_memory_MB"] = peak_cpu_usage
         for (gpu_num, memory) in gpu_usage:
             metrics["gpu_" + str(gpu_num) + "_memory_MB"] = memory
         return metrics
@@ -774,9 +776,9 @@ class AdvTrainer(TrainerBase):
             # The Scheduler API is agnostic to whether your schedule requires a validation metric -
             # if it doesn't, the validation metric passed here is ignored.
             if self._learning_rate_scheduler:
-                self._learning_rate_scheduler.step(this_epoch_val_metric, epoch)
+                self._learning_rate_scheduler.step(this_epoch_val_metric)
             if self._momentum_scheduler:
-                self._momentum_scheduler.step(this_epoch_val_metric, epoch)
+                self._momentum_scheduler.step(this_epoch_val_metric)
 
             if self._master:
                 self._save_checkpoint(epoch)

@@ -12,7 +12,7 @@ class BertClassifier(Model):
     def __init__(self, vocab, num_labels):
         super().__init__(vocab)
         self.bert_embedder = PretrainedTransformerEmbedder('bert-base-uncased')
-        self.pooler = ClsPooler()
+        self.pooler = ClsPooler(self.bert_embedder.get_output_dim())
 
         self.linear = torch.nn.Sequential(
             torch.nn.Dropout(0.1),
