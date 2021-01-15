@@ -114,7 +114,7 @@ class Predictor(Predictor_):
             if self._transform_fn:
                 tf_in = list(map(lambda x: x[self._transform_field], b_en_jsons))
                 tf_out = self._transform_fn(tf_in)
-                for i in range(bsz):
+                for i in range(len(tf_out)):
                     b_en_jsons[i][self._transform_field] = tf_out[i]
             
             if guess_bert(self._model):

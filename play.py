@@ -30,6 +30,5 @@ task = Task(config)
     'meval': task.evaluate_model,
     'peval': task.evaluate_predictor,
     'attack': task.attack,
-    'transfer': task.transfer_attack,
     # 'attack_pro': task.attack_pro
 }[config.mode]()

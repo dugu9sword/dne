@@ -11,26 +11,34 @@ from allennlp.nn.util import get_text_field_mask, masked_softmax, weighted_sum
 from allennlp.training.metrics import CategoricalAccuracy
 from allennlp.modules.token_embedders import TokenEmbedder
 from allennlp.modules.text_field_embedders import BasicTextFieldEmbedder
-from allennlp.training.optimizers import DenseSparseAdam
+from allennlp.training.optimizers import AdadeltaOptimizer, DenseSparseAdam
+from allennlp.nn.activations import Activation
 from allennlpx.training import adv_utils
 
 
+class PassThrough(Activation):
+    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        return tensor
+
+
 class DecomposableAttention(Model):
-    def __init__(
-        self,
-        vocab: Vocabulary,
-        token_embedder: TokenEmbedder,
-        num_labels: int
-    ) -> None:
+    def __init__(self, vocab: Vocabulary, token_embedder: TokenEmbedder,
+                 num_labels: int) -> None:
         super().__init__(vocab)
 
         self._text_field_embedder = BasicTextFieldEmbedder(
             {"tokens": token_embedder})
         dim = token_embedder.get_output_dim()
-        self._attend_feedforward = TimeDistributed(FeedForward(dim, 1, 100, torch.nn.ReLU(), 0.2))
+        self._attend_feedforward = TimeDistributed(
+            FeedForward(dim, 1, 100, torch.nn.ReLU(), 0.2))
         self._matrix_attention = DotProductMatrixAttention()
-        self._compare_feedforward = TimeDistributed(FeedForward(dim * 2, 1, 100, torch.nn.ReLU(), 0.2))
-        self._aggregate_feedforward = FeedForward(200, 1, num_labels, torch.nn.ReLU(), 0.2)
+        self._compare_feedforward = TimeDistributed(
+            FeedForward(dim * 2, 1, 100, torch.nn.ReLU(), 0.2))
+
+        # linear denotes "lambda x: x"
+
+        self._aggregate_feedforward = FeedForward(200, 1, num_labels,
+                                                  PassThrough(), 0.0)
 
         self._num_labels = num_labels
 
@@ -53,7 +61,8 @@ class DecomposableAttention(Model):
         projected_sent1 = self._attend_feedforward(embedded_sent1)
         projected_sent2 = self._attend_feedforward(embedded_sent2)
         # Shape: (batch_size, sent1_length, sent2_length)
-        similarity_matrix = self._matrix_attention(projected_sent1, projected_sent2)
+        similarity_matrix = self._matrix_attention(projected_sent1,
+                                                   projected_sent2)
 
         # Shape: (batch_size, sent1_length, sent2_length)
         p2h_attention = masked_softmax(similarity_matrix, sent2_mask)
@@ -61,12 +70,15 @@ class DecomposableAttention(Model):
         attended_sent2 = weighted_sum(embedded_sent2, p2h_attention)
 
         # Shape: (batch_size, sent2_length, sent1_length)
-        h2p_attention = masked_softmax(similarity_matrix.transpose(1, 2).contiguous(), sent1_mask)
+        h2p_attention = masked_softmax(
+            similarity_matrix.transpose(1, 2).contiguous(), sent1_mask)
         # Shape: (batch_size, sent2_length, embedding_dim)
         attended_sent1 = weighted_sum(embedded_sent1, h2p_attention)
 
-        sent1_compare_input = torch.cat([embedded_sent1, attended_sent2], dim=-1)
-        sent2_compare_input = torch.cat([embedded_sent2, attended_sent1], dim=-1)
+        sent1_compare_input = torch.cat([embedded_sent1, attended_sent2],
+                                        dim=-1)
+        sent2_compare_input = torch.cat([embedded_sent2, attended_sent1],
+                                        dim=-1)
 
         compared_sent1 = self._compare_feedforward(sent1_compare_input)
         compared_sent1 = compared_sent1 * sent1_mask.unsqueeze(-1)

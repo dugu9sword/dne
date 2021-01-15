@@ -6,17 +6,17 @@ class Config(ProgramArgs):
         super().__init__()
 
         # basic settings
-        self.task_id = "AGNEWS"
-        self.weighted_embed = True
-        self.arch = 'boe'
+        self.task_id = "SNLI"
+        self.weighted_embed = False
+        self.arch = 'bert'
         self._pool = ''
         self.pretrain = 'glove'
         self.finetune = True
 #         self._model_name = "AGNEWS-lstm-hot.1.5.con"
         self._model_name = ""   # if set to tmp, existing models will be overrided
         self.model_pretrain = ""
-        # self.model_pretrain = "SNLI-fix-biboe-sum"
-        self.mode = 'attack'
+        # self.model_pretrain = "SNLI-fix-datt"
+        self.mode = 'peval'
         
         self.load_ckpt = -20
 
@@ -25,7 +25,7 @@ class Config(ProgramArgs):
         # dirichlet settings
         self.dir_alpha = 1.0
         self.dir_decay = 1.0
-        self.hard_prob = True
+        self.hard_prob = False
         self.nbr_num = 64
         self.nbr_2nd = '21'
         self.adjust_point = False
@@ -34,7 +34,7 @@ class Config(ProgramArgs):
         # training settings
         # self.aug_data = 'nogit/AGNEWS-lstm.pwws.aug.tsv'
         self.aug_data = ''
-        self.adv_iter = 3
+        self.adv_iter = 0
         # hot -> hotflip, rdm -> random, diy -> dne
         self.adv_policy = 'diy'
         self.adv_step = 10.0
@@ -42,7 +42,7 @@ class Config(ProgramArgs):
         
         # eval/attack settings
         self.data_split = 'test'
-        self.data_downsample = 1000
+        self.data_downsample = -1
         self.data_shard = 0
         self.data_random = False
 

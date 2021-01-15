@@ -244,9 +244,9 @@ class Task:
         # Set callbacks
 
         if self.config.task_id == 'SNLI' and self.config.arch != 'bert':
-            epoch_callbacks = [WarmupCallback(2)]
-            # epoch_callbacks = []
+            epoch_callbacks = []
             if self.config.model_pretrain != "":
+                epoch_callbacks = [WarmupCallback(2)]
                 if self.config.model_pretrain == 'auto':
                     self.config.model_pretrain = {
                         "biboe": "SNLI-fix-biboe-sum",
@@ -348,40 +348,6 @@ class Task:
         print(f"Evaluate on {self.config.data_split}, the result is ",
               metric.get_metric())
 
-    @torch.no_grad()
-    def transfer_attack(self):
-        self.from_pretrained()
-        set_seed(11221)
-        df = pandas.read_csv(self.config.adv_data,
-                             sep='\t',
-                             quoting=csv.QUOTE_NONE)
-        attack_metric = AttackMetric()
-
-        for rid in tqdm(range(df.shape[0])):
-            raw = df.iloc[rid]['raw']
-            adv = df.iloc[rid]['adv']
-
-            results = self.predictor.predict_batch_instance([
-                self.reader.text_to_instance(raw),
-                self.reader.text_to_instance(adv)
-            ])
-
-            raw_pred = np.argmax(results[0]['probs'])
-            adv_pred = np.argmax(results[1]['probs'])
-
-            label = df.iloc[rid]['label']
-
-            if raw_pred == label:
-                if adv_pred != raw_pred:
-                    attack_metric.succeed()
-                else:
-                    attack_metric.fail()
-            else:
-                attack_metric.escape()
-            print('Agg metric', attack_metric)
-        print(Counter(df["label"].tolist()))
-        print(attack_metric)
-
     def downsample(self, tokenizer=None):
         # Set up the data to attack
         if tokenizer is None:
@@ -412,6 +378,7 @@ class Task:
                 data_down = [data_down[i] for i in idxes]
 
         if self.config.data_downsample != -1:
+            # self.config.data_downsample = 1000
             start = self.config.data_shard * self.config.data_downsample
             end = start + self.config.data_downsample
             data_down = data_down[start:end]
