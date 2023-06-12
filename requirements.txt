@@ -3,5 +3,5 @@ matplotlib
 pandas
 spacy==2.1.8
 allennlp==1.2
-transformers==3.4.0
+transformers==4.30.0
 # git+https://github.com/allenai/allennlp.git@bdb29a831ed68cb948b18b42fa61646b9ec11bf8
